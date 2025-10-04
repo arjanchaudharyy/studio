@@ -113,6 +113,17 @@ export function Canvas({ className }: CanvasProps) {
     setSelectedNode(null)
   }, [])
 
+  // Handle node data update from config panel
+  const handleUpdateNode = useCallback((nodeId: string, data: Partial<NodeData>) => {
+    setNodes((nds) =>
+      nds.map((node) =>
+        node.id === nodeId
+          ? { ...node, data: { ...node.data, ...data } }
+          : node
+      )
+    )
+  }, [setNodes])
+
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
@@ -190,6 +201,7 @@ export function Canvas({ className }: CanvasProps) {
           <ConfigPanel
             selectedNode={selectedNode}
             onClose={() => setSelectedNode(null)}
+            onUpdateNode={handleUpdateNode}
           />
         )}
       </div>

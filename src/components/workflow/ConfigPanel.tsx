@@ -3,12 +3,14 @@ import * as LucideIcons from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useComponentStore } from '@/store/componentStore'
 import { ComponentBadges } from './ComponentBadge'
+import { ParameterFieldWrapper } from './ParameterField'
 import type { Node } from 'reactflow'
 import type { NodeData } from '@/schemas/node'
 
 interface ConfigPanelProps {
   selectedNode: Node<NodeData> | null
   onClose: () => void
+  onUpdateNode?: (nodeId: string, data: Partial<NodeData>) => void
 }
 
 /**
@@ -16,8 +18,21 @@ interface ConfigPanelProps {
  *
  * Shows component information and allows editing node parameters
  */
-export function ConfigPanel({ selectedNode, onClose }: ConfigPanelProps) {
+export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanelProps) {
   const { getComponent } = useComponentStore()
+
+  const handleParameterChange = (paramId: string, value: any) => {
+    if (!selectedNode || !onUpdateNode) return
+
+    const updatedParameters = {
+      ...selectedNode.data.parameters,
+      [paramId]: value,
+    }
+
+    onUpdateNode(selectedNode.id, {
+      parameters: updatedParameters,
+    })
+  }
 
   if (!selectedNode) {
     return null
@@ -129,31 +144,12 @@ export function ConfigPanel({ selectedNode, onClose }: ConfigPanelProps) {
               </h5>
               <div className="space-y-3">
                 {component.parameters.map((param) => (
-                  <div
+                  <ParameterFieldWrapper
                     key={param.id}
-                    className="p-3 rounded-lg border bg-background"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-sm font-medium" htmlFor={param.id}>
-                        {param.label}
-                      </label>
-                      {param.required && (
-                        <span className="text-xs text-red-500">*required</span>
-                      )}
-                    </div>
-                    {param.description && (
-                      <p className="text-xs text-muted-foreground mb-2">
-                        {param.description}
-                      </p>
-                    )}
-                    {/* Parameter input will be rendered here in next checkpoint */}
-                    <div className="text-xs text-muted-foreground italic">
-                      Type: {param.type}
-                      {param.default !== undefined && (
-                        <> • Default: {String(param.default)}</>
-                      )}
-                    </div>
-                  </div>
+                    parameter={param}
+                    value={selectedNode.data.parameters?.[param.id]}
+                    onChange={(value) => handleParameterChange(param.id, value)}
+                  />
                 ))}
               </div>
             </div>
