@@ -61,7 +61,7 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
   const IconComponent = (LucideIcons[component.icon as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>) || LucideIcons.Box
 
   return (
-    <div className="w-[400px] border-l bg-background flex flex-col h-full overflow-hidden">
+    <div className="config-panel w-[400px] border-l bg-background flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <h3 className="font-semibold">Configuration</h3>

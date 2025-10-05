@@ -64,3 +64,26 @@
     color: hsl(var(--foreground));
   }
 }
+
+/* Fix for React Flow pointer events - ensure interactive elements in config panel are clickable */
+.react-flow__panel {
+  pointer-events: all !important;
+}
+
+/* Ensure all input elements and buttons have proper pointer events */
+input, textarea, select, button, label {
+  pointer-events: auto !important;
+  cursor: pointer;
+}
+
+input[type="text"],
+input[type="number"],
+textarea {
+  cursor: text;
+}
+
+/* Ensure config panel has higher z-index and pointer events */
+.config-panel {
+  z-index: 100;
+  pointer-events: auto !important;
+}
