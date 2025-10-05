@@ -1,6 +1,7 @@
 import { X, ExternalLink } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { useComponentStore } from '@/store/componentStore'
 import { ComponentBadges } from './ComponentBadge'
 import { ParameterFieldWrapper } from './ParameterField'
@@ -74,7 +75,22 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
       <div className="p-4 border-b bg-muted/30">
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-lg bg-background border">
-            <IconComponent className="h-6 w-6" />
+            {component.logo ? (
+              <img 
+                src={component.logo} 
+                alt={component.name}
+                className="h-6 w-6 object-contain"
+                onError={(e) => {
+                  // Fallback to icon if image fails to load
+                  e.currentTarget.style.display = 'none'
+                  e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                }}
+              />
+            ) : null}
+            <IconComponent className={cn(
+              "h-6 w-6",
+              component.logo && "hidden"
+            )} />
           </div>
           <div className="flex-1 min-w-0">
             <h4 className="font-semibold text-sm mb-1">{component.name}</h4>

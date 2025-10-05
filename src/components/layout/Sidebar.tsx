@@ -37,7 +37,22 @@ function ComponentItem({ component }: ComponentItemProps) {
       onDragStart={onDragStart}
       title={component.description}
     >
-      <IconComponent className="h-5 w-5 mt-0.5 flex-shrink-0 text-foreground" />
+      {component.logo ? (
+        <img 
+          src={component.logo} 
+          alt={component.name}
+          className="h-5 w-5 mt-0.5 flex-shrink-0 object-contain"
+          onError={(e) => {
+            // Fallback to icon if image fails to load
+            e.currentTarget.style.display = 'none'
+            e.currentTarget.nextElementSibling?.classList.remove('hidden')
+          }}
+        />
+      ) : null}
+      <IconComponent className={cn(
+        "h-5 w-5 mt-0.5 flex-shrink-0 text-foreground",
+        component.logo && "hidden"
+      )} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2 mb-1">
           <span className="text-sm font-medium truncate">{component.name}</span>

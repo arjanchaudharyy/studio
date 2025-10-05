@@ -135,6 +135,89 @@ Testing is handled in phases:
 3. End-to-end tests for complete workflow execution
 4. Manual testing guides for UI features
 
+## Recent Changes and Fixes
+
+### Component Parameter State Management Fix (2025-01)
+**Issue**: Parameter inputs (checkboxes, dropdowns, etc.) in ConfigPanel were not updating their visual state when changed.
+
+**Root Cause**: ConfigPanel was using a stale `selectedNode` reference that wasn't synchronized with the updated node data in the Canvas state.
+
+**Solution**: Added a `useEffect` hook in `Canvas.tsx` that syncs `selectedNode` with the latest node data from the nodes array whenever nodes are updated:
+```typescript
+// Sync selectedNode with the latest node data from nodes array
+useEffect(() => {
+  if (selectedNode) {
+    const updatedNode = nodes.find(n => n.id === selectedNode.id)
+    if (updatedNode && updatedNode !== selectedNode) {
+      setSelectedNode(updatedNode as Node<NodeData>)
+    }
+  }
+}, [nodes, selectedNode])
+```
+
+**Files Modified**: `src/components/workflow/Canvas.tsx`
+
+### Documentation Links Feature (2025-01)
+**Feature**: Added support for external documentation links in component specifications.
+
+**Implementation**:
+- Added optional `documentationUrl` field to `ComponentMetadataSchema` with URL validation
+- Enhanced ConfigPanel to display "View docs" link with external link icon when URL is provided
+- Opens in new tab with security attributes (`noopener noreferrer`)
+
+**Schema Changes**:
+```typescript
+documentationUrl: z.string().url().optional()
+```
+
+**UI Enhancement**: Added subtle link with hover states that appears next to Documentation heading.
+
+**Files Modified**: 
+- `src/schemas/component.ts`
+- `src/components/workflow/ConfigPanel.tsx`
+- `src/components/workflow/nodes/security-tools/Subfinder/Subfinder.spec.json`
+
+### Component Logo Support (2025-01)
+**Feature**: Added support for component logos alongside existing Lucide icons.
+
+**Key Design Decision**: Chose co-located asset approach over public folder for better component encapsulation and contributor experience.
+
+**Implementation Strategy**:
+1. **Schema Enhancement**: Modified logo field from `z.string().url()` to `z.string()` to support both URLs and local paths
+2. **Asset Co-location**: Logos stored in component folders (e.g., `Subfinder/subfinder.png`)
+3. **Registry Import System**: Logo assets imported via Vite's asset handling and URLs overridden at registration time
+4. **Graceful Fallback**: If logo fails to load, automatically falls back to Lucide icon
+
+**Technical Details**:
+```typescript
+// Registry imports and overrides
+import subfinderLogo from './security-tools/Subfinder/subfinder.png'
+
+function registerComponent(spec: unknown, logoOverride?: string): void {
+  const component = ComponentMetadataSchema.parse(spec)
+  if (logoOverride) {
+    component.logo = logoOverride
+  }
+  COMPONENT_REGISTRY[component.slug] = component
+}
+```
+
+**Sizing Strategy**: Used `object-contain` with fixed dimensions (h-5 w-5 for nodes, h-6 w-6 for ConfigPanel) to ensure consistent UI regardless of original image dimensions.
+
+**Files Modified**:
+- `src/schemas/component.ts` - Schema relaxation
+- `src/components/workflow/nodes/registry.ts` - Import and override logic
+- `src/components/workflow/WorkflowNode.tsx` - Logo display with fallback
+- `src/components/workflow/ConfigPanel.tsx` - Logo in component info
+- `src/components/layout/Sidebar.tsx` - Logo in draggable items
+- Component specs updated to use local filenames
+
+**Benefits Achieved**:
+- Self-contained components for easier contributions
+- Vite-optimized assets with proper caching
+- Type-safe imports with build-time validation
+- Backwards compatibility with external URLs
+
 ## Outstanding Tasks
 
 1. Implement actual API integration for workflow execution

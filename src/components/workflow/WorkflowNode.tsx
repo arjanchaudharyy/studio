@@ -35,7 +35,7 @@ export const WorkflowNode = memo(({ data, selected }: NodeProps<NodeData>) => {
     )
   }
 
-  // Get icon component from Lucide
+  // Get icon component from Lucide (only if no logo)
   const IconComponent = (LucideIcons[component.icon as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>) || LucideIcons.Box
 
   // Get styling based on execution status
@@ -60,7 +60,22 @@ export const WorkflowNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       {/* Header */}
       <div className="px-3 py-2 border-b border-border/50">
         <div className="flex items-start gap-2">
-          <IconComponent className="h-5 w-5 mt-0.5 flex-shrink-0 text-foreground" />
+          {component.logo ? (
+            <img 
+              src={component.logo} 
+              alt={component.name}
+              className="h-5 w-5 mt-0.5 flex-shrink-0 object-contain"
+              onError={(e) => {
+                // Fallback to icon if image fails to load
+                e.currentTarget.style.display = 'none'
+                e.currentTarget.nextElementSibling?.classList.remove('hidden')
+              }}
+            />
+          ) : null}
+          <IconComponent className={cn(
+            "h-5 w-5 mt-0.5 flex-shrink-0 text-foreground",
+            component.logo && "hidden"
+          )} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold truncate">{displayLabel}</h3>

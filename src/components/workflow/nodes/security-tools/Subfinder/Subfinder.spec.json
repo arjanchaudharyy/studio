@@ -15,6 +15,7 @@
   "documentation": "Subfinder is a subdomain discovery tool that discovers valid subdomains using passive online sources.",
   "documentationUrl": "https://github.com/projectdiscovery/subfinder",
   "icon": "Network",
+  "logo": "subfinder.png",
 
   "isLatest": true,
   "deprecated": false,

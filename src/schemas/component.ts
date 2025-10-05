@@ -94,6 +94,7 @@ export const ComponentMetadataSchema = z.object({
   documentation: z.string().optional(),
   documentationUrl: z.string().url().optional(),
   icon: z.string(), // Lucide icon name
+  logo: z.string().optional(), // Logo path or URL
 
   // Status
   isLatest: z.boolean(),
