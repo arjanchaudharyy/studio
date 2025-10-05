@@ -1,5 +1,6 @@
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import type { Parameter } from '@/schemas/component'
 
 interface ParameterFieldProps {
@@ -55,18 +56,19 @@ export function ParameterField({ parameter, value, onChange }: ParameterFieldPro
 
     case 'boolean':
       return (
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
+        <div className="flex items-center gap-2">
+          <Checkbox
             id={parameter.id}
-            type="checkbox"
             checked={currentValue || false}
-            onChange={(e) => onChange(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300"
+            onCheckedChange={(checked) => onChange(checked)}
           />
-          <span className="text-sm text-muted-foreground">
+          <label
+            htmlFor={parameter.id}
+            className="text-sm text-muted-foreground cursor-pointer select-none"
+          >
             {currentValue ? 'Enabled' : 'Disabled'}
-          </span>
-        </label>
+          </label>
+        </div>
       )
 
     case 'select':
@@ -95,24 +97,27 @@ export function ParameterField({ parameter, value, onChange }: ParameterFieldPro
           {parameter.options?.map((option) => {
             const isSelected = selectedValues.includes(option.value)
             return (
-              <label
+              <div
                 key={option.value}
-                className="flex items-center gap-2 cursor-pointer"
+                className="flex items-center gap-2 hover:bg-muted/50 p-2 rounded transition-colors"
               >
-                <input
-                  type="checkbox"
+                <Checkbox
+                  id={`${parameter.id}-${option.value}`}
                   checked={isSelected}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      onChange([...selectedValues, option.value])
-                    } else {
-                      onChange(selectedValues.filter((v) => v !== option.value))
-                    }
+                  onCheckedChange={(checked) => {
+                    const newValues = checked
+                      ? [...selectedValues, option.value]
+                      : selectedValues.filter((v) => v !== option.value)
+                    onChange(newValues)
                   }}
-                  className="w-4 h-4 rounded border-gray-300"
                 />
-                <span className="text-sm">{option.label}</span>
-              </label>
+                <label
+                  htmlFor={`${parameter.id}-${option.value}`}
+                  className="text-sm select-none cursor-pointer flex-1"
+                >
+                  {option.label}
+                </label>
+              </div>
             )
           })}
           {selectedValues.length > 0 && (

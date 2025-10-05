@@ -146,6 +146,16 @@ export function Canvas({ className }: CanvasProps) {
     )
   }, [setNodes])
 
+  // Sync selectedNode with the latest node data from nodes array
+  useEffect(() => {
+    if (selectedNode) {
+      const updatedNode = nodes.find(n => n.id === selectedNode.id)
+      if (updatedNode && updatedNode !== selectedNode) {
+        setSelectedNode(updatedNode as Node<NodeData>)
+      }
+    }
+  }, [nodes, selectedNode])
+
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {

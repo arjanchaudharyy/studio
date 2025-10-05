@@ -73,6 +73,9 @@
 /* Ensure all input elements and buttons have proper pointer events */
 input, textarea, select, button, label {
   pointer-events: auto !important;
+}
+
+button, label, input[type="checkbox"], select {
   cursor: pointer;
 }
 
