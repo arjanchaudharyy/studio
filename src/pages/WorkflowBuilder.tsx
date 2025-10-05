@@ -7,7 +7,7 @@ import { BottomPanel } from '@/components/layout/BottomPanel'
 import { Canvas } from '@/components/workflow/Canvas'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
-import { api } from '@/services/api'
+import { api, API_BASE_URL } from '@/services/api'
 import {
   serializeWorkflowForCreate,
   serializeWorkflowForUpdate,
@@ -65,7 +65,7 @@ function WorkflowBuilderContent() {
           (error.message.includes('Network Error') || error.message.includes('ECONNREFUSED'))
 
         if (isNetworkError) {
-          alert('Cannot connect to backend server. Please ensure the backend is running at http://localhost:8080')
+          alert(`Cannot connect to backend server. Please ensure the backend is running at ${API_BASE_URL}`)
         } else {
           alert(`Failed to load workflow: ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
@@ -148,7 +148,7 @@ function WorkflowBuilderContent() {
         (error.message.includes('Network Error') || error.message.includes('ECONNREFUSED'))
 
       if (isNetworkError) {
-        alert('Cannot connect to backend server. Please ensure the backend is running at http://localhost:8080\n\nYour workflow is still available in the browser.')
+        alert(`Cannot connect to backend server. Please ensure the backend is running at ${API_BASE_URL}\n\nYour workflow is still available in the browser.`)
       } else {
         alert(`Failed to save workflow: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
