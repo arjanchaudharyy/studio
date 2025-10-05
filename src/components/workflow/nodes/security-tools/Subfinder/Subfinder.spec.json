@@ -44,14 +44,43 @@
       "label": "Data Sources",
       "type": "multi-select",
       "required": false,
-      "default": ["all"],
+      "default": [],
       "options": [
         { "label": "All Sources", "value": "all" },
         { "label": "CertSpotter", "value": "certspotter" },
         { "label": "VirusTotal", "value": "virustotal" },
-        { "label": "Shodan", "value": "shodan" }
+        { "label": "Shodan", "value": "shodan" },
+        { "label": "CrtSh", "value": "crtsh" },
+        { "label": "GitHub", "value": "github" },
+        { "label": "AlienVault", "value": "alienvault" },
+        { "label": "Chaos", "value": "chaos" },
+        { "label": "DNSDumpster", "value": "dnsdumpster" },
+        { "label": "HackerTarget", "value": "hackertarget" }
       ],
-      "description": "Which passive sources to query"
+      "description": "Specific sources to use for discovery (-s flag). Leave empty to use default sources.",
+      "helpText": "Select specific sources or choose 'All Sources' for comprehensive enumeration"
+    },
+    {
+      "id": "excludeSources",
+      "label": "Exclude Sources",
+      "type": "multi-select",
+      "required": false,
+      "default": [],
+      "options": [
+        { "label": "AlienVault", "value": "alienvault" },
+        { "label": "ZoomEye API", "value": "zoomeyeapi" },
+        { "label": "Shodan", "value": "shodan" },
+        { "label": "VirusTotal", "value": "virustotal" }
+      ],
+      "description": "Sources to exclude from enumeration (-es flag)",
+      "helpText": "Useful to skip sources that require API keys or are slow"
+    },
+    {
+      "id": "recursive",
+      "label": "Recursive Mode",
+      "type": "boolean",
+      "default": false,
+      "description": "Use only sources that can handle subdomains recursively (-recursive flag)"
     },
     {
       "id": "timeout",
@@ -61,14 +90,94 @@
       "default": 30,
       "min": 5,
       "max": 300,
-      "description": "Maximum execution time"
+      "description": "Seconds to wait before timing out (-timeout flag)"
     },
     {
-      "id": "recursive",
-      "label": "Recursive Enumeration",
+      "id": "maxTime",
+      "label": "Max Time (minutes)",
+      "type": "number",
+      "required": false,
+      "default": 10,
+      "min": 1,
+      "max": 60,
+      "description": "Minutes to wait for enumeration results (-max-time flag)"
+    },
+    {
+      "id": "threads",
+      "label": "Concurrent Threads",
+      "type": "number",
+      "required": false,
+      "default": 10,
+      "min": 1,
+      "max": 50,
+      "description": "Number of concurrent goroutines for resolving (-t flag, requires -active)"
+    },
+    {
+      "id": "rateLimit",
+      "label": "Rate Limit (requests/sec)",
+      "type": "number",
+      "required": false,
+      "min": 1,
+      "max": 100,
+      "description": "Maximum number of HTTP requests to send per second (-rl flag)"
+    },
+    {
+      "id": "outputFormat",
+      "label": "Output Format",
+      "type": "select",
+      "required": false,
+      "default": "json",
+      "options": [
+        { "label": "JSON Lines", "value": "json" },
+        { "label": "Plain Text", "value": "text" }
+      ],
+      "description": "Output format (-oJ for JSON)"
+    },
+    {
+      "id": "active",
+      "label": "Active Mode",
       "type": "boolean",
       "default": false,
-      "description": "Recursively enumerate discovered subdomains"
+      "description": "Display active subdomains only (-active flag)"
+    },
+    {
+      "id": "collectSources",
+      "label": "Collect Sources",
+      "type": "boolean",
+      "default": false,
+      "description": "Include all sources in the output (-cs flag, JSON only)"
+    },
+    {
+      "id": "includeIP",
+      "label": "Include IP Addresses",
+      "type": "boolean",
+      "default": false,
+      "description": "Include host IP in output (-oI flag, requires -active)"
+    },
+    {
+      "id": "silent",
+      "label": "Silent Mode",
+      "type": "boolean",
+      "default": false,
+      "description": "Show only subdomains in output (-silent flag)"
+    },
+    {
+      "id": "verbose",
+      "label": "Verbose Output",
+      "type": "boolean",
+      "default": false,
+      "description": "Show verbose output (-v flag)"
+    },
+    {
+      "id": "customOptions",
+      "label": "Custom CLI Options",
+      "type": "textarea",
+      "required": false,
+      "default": "",
+      "rows": 4,
+      "placeholder": "-proxy http://proxy:8080\n-r 8.8.8.8,1.1.1.1\n-match subdomain1.example.com",
+      "description": "Additional custom options (one per line). These will be appended to the command.",
+      "helpText": "Enter any additional subfinder flags not covered above. Example: -proxy, -r, -match, -filter, etc."
     }
   ],
 

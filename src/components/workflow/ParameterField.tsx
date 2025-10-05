@@ -27,6 +27,18 @@ export function ParameterField({ parameter, value, onChange }: ParameterFieldPro
         />
       )
 
+    case 'textarea':
+      return (
+        <textarea
+          id={parameter.id}
+          placeholder={parameter.placeholder}
+          value={currentValue || ''}
+          onChange={(e) => onChange(e.target.value)}
+          rows={parameter.rows || 3}
+          className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-y font-mono"
+        />
+      )
+
     case 'number':
       return (
         <Input

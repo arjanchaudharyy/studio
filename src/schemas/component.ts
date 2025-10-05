@@ -36,7 +36,7 @@ export type OutputPort = z.infer<typeof OutputPortSchema>
 export const ParameterSchema = z.object({
   id: z.string(),
   label: z.string(),
-  type: z.enum(['text', 'number', 'boolean', 'select', 'multi-select', 'file']),
+  type: z.enum(['text', 'textarea', 'number', 'boolean', 'select', 'multi-select', 'file']),
 
   required: z.boolean().default(false),
   default: z.any().optional(),
@@ -50,6 +50,9 @@ export const ParameterSchema = z.object({
   // For number type
   min: z.number().optional(),
   max: z.number().optional(),
+
+  // For textarea type
+  rows: z.number().optional(),
 
   placeholder: z.string().optional(),
   description: z.string().optional(),
