@@ -412,10 +412,171 @@ if (connection) {
 - Reduces confusion about node configuration status
 - Improves overall workflow comprehension at a glance
 
+### Save and Load Workflow API Integration (2025-01)
+**Feature**: Complete save/load workflow functionality with backend API integration and state management.
+
+**User Impact**: Users can now persist their workflow designs to the backend, reload them later, and track unsaved changes in real-time.
+
+**Architecture Overview**:
+
+**1. Workflow Store** (`src/store/workflowStore.ts`):
+- Centralized Zustand store for workflow metadata (id, name, description)
+- Tracks `isDirty` flag for unsaved changes indicator
+- Actions: setWorkflowId, setWorkflowName, setWorkflowDescription, markDirty, markClean, resetWorkflow
+
+**2. Workflow Serialization** (`src/utils/workflowSerializer.ts`):
+- **Serialization**: Converts React Flow state (nodes, edges) to backend API format
+- **Deserialization**: Converts API format back to React Flow state
+- Strips runtime execution state before sending (status, error, executionTime)
+- Validates payloads with Zod schemas (CreateWorkflowSchema, UpdateWorkflowSchema)
+
+**Implementation Details**:
+
+**API Payload Structure**:
+```json
+{
+  "name": "Security Workflow",
+  "description": "Subdomain enumeration",
+  "nodes": [
+    {
+      "id": "subfinder-1234",
+      "type": "scan",
+      "position": { "x": 100, "y": 100 },
+      "data": {
+        "componentSlug": "subfinder",
+        "componentVersion": "1.0.0",
+        "parameters": { "outputFormat": "json" },
+        "inputs": {
+          "domain": {
+            "source": "file-loader-5678",
+            "output": "fileContents"
+          }
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-123",
+      "source": "file-loader-5678",
+      "target": "subfinder-1234",
+      "sourceHandle": "fileContents",
+      "targetHandle": "domain",
+      "type": "smoothstep"
+    }
+  ]
+}
+```
+
+**Key Technical Decisions**:
+
+1. **Input Mappings Preserved**: The `data.inputs` object is serialized to preserve connection information, allowing the backend to understand data flow
+2. **Component Type Inference**: Node type (input/scan/process/output) is inferred from componentSlug during serialization
+3. **Clean State Separation**: Runtime state (execution status) is completely separated from persisted state
+4. **Automatic Dirty Tracking**: Canvas operations automatically mark workflow as dirty:
+   - Adding/removing nodes
+   - Adding/removing edges
+   - Updating node parameters
+   - Changing connections
+
+**Save Workflow Flow** (`src/pages/WorkflowBuilder.tsx`):
+```typescript
+// 1. Get current canvas state
+const nodes = getNodes()
+const edges = getEdges()
+
+// 2. Determine create vs update
+if (!workflowId || isNewWorkflow) {
+  // Create new workflow
+  const payload = serializeWorkflowForCreate(name, description, nodes, edges)
+  const savedWorkflow = await api.workflows.create(payload)
+  setWorkflowId(savedWorkflow.id)
+  navigate(`/workflows/${savedWorkflow.id}`)
+} else {
+  // Update existing workflow
+  const payload = serializeWorkflowForUpdate(workflowId, name, description, nodes, edges)
+  await api.workflows.update(workflowId, payload)
+}
+
+// 3. Mark as clean
+markClean()
+```
+
+**Load Workflow Flow**:
+```typescript
+// 1. Fetch from API
+const workflow = await api.workflows.get(id)
+
+// 2. Update store metadata
+setMetadata({
+  id: workflow.id,
+  name: workflow.name,
+  description: workflow.description
+})
+
+// 3. Deserialize and restore canvas
+const nodes = deserializeNodes(workflow.nodes)
+const edges = deserializeEdges(workflow.edges)
+setNodes(nodes)
+setEdges(edges)
+
+// 4. Mark as clean
+markClean()
+```
+
+**UI Enhancements**:
+
+1. **TopBar** (`src/components/layout/TopBar.tsx`):
+   - Workflow name input bound to workflowStore
+   - "Unsaved changes" indicator when isDirty === true
+   - Save button triggers create or update based on workflow.id
+
+2. **Loading State**:
+   - Spinner displayed while fetching workflow from API
+   - Error handling redirects to home page on load failure
+
+3. **Auto-navigation**:
+   - After creating new workflow, URL updates from `/workflows/new` to `/workflows/{uuid}`
+   - Browser history updated with `replace: true` to avoid back button confusion
+
+**Dirty State Management** (`src/components/workflow/Canvas.tsx`):
+- `onConnect`: Mark dirty when edges are created
+- `onDrop`: Mark dirty when nodes are added
+- `handleUpdateNode`: Mark dirty when parameters change
+- `Delete/Backspace`: Mark dirty when nodes/edges are deleted
+
+**Error Handling**:
+- Validation errors caught with Zod during serialization
+- API errors displayed with alert() (TODO: replace with toast notifications)
+- Load errors redirect user to home page
+- All errors logged to console for debugging
+
+**Files Modified**:
+- `src/store/workflowStore.ts` (new)
+- `src/utils/workflowSerializer.ts` (new)
+- `src/components/layout/TopBar.tsx`
+- `src/components/workflow/Canvas.tsx`
+- `src/pages/WorkflowBuilder.tsx`
+
+**Benefits**:
+- Complete workflow persistence with backend integration
+- Real-time unsaved changes indicator improves UX
+- Clean separation of execution state and persisted state
+- Type-safe serialization/deserialization with Zod validation
+- Seamless create/update flow with auto-navigation
+- Connection data preserved in input mappings for backend execution
+
+**Testing Notes**:
+- Requires backend running at http://localhost:8080
+- Create workflow: Navigate to /workflows/new, add nodes, click Save
+- Update workflow: Load existing workflow, modify, click Save
+- Dirty state: Make changes and verify "Unsaved changes" appears
+- Load workflow: Refresh page or navigate to workflow URL directly
+
 ## Outstanding Tasks
 
 1. Implement actual API integration for workflow execution
 2. Add component version management
-3. Implement save workflow functionality with API persistence
+3. ~~Implement save workflow functionality with API persistence~~ ✅ COMPLETED
 4. Add execution results/history tabs in BottomPanel
-5. Add toast notifications for connection validation errors
+5. Add toast notifications for connection validation errors and save confirmations
