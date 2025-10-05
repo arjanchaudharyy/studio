@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Handle, Position, type NodeProps } from 'reactflow'
+import { Handle, Position, type NodeProps, useReactFlow } from 'reactflow'
 import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -19,8 +19,9 @@ const STATUS_ICONS = {
 /**
  * WorkflowNode - Visual representation of a workflow component
  */
-export const WorkflowNode = memo(({ data, selected }: NodeProps<NodeData>) => {
+export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) => {
   const { getComponent } = useComponentStore()
+  const { getNodes, getEdges } = useReactFlow()
 
   // Get component metadata
   const component = getComponent(data.componentSlug)
@@ -114,23 +115,47 @@ export const WorkflowNode = memo(({ data, selected }: NodeProps<NodeData>) => {
         {/* Input Ports */}
         {component.inputs.length > 0 && (
           <div className="space-y-1.5">
-            {component.inputs.map((input, index) => (
-              <div key={input.id} className="flex items-center gap-2 text-xs">
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={input.id}
-                  className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white"
-                  style={{ top: `${60 + index * 28}px` }}
-                />
-                <div className="flex-1">
-                  <div className="text-muted-foreground font-medium">{input.label}</div>
-                  {input.required && (
-                    <span className="text-red-500 text-[10px]">*required</span>
-                  )}
+            {component.inputs.map((input, index) => {
+              // Check if this input has a connection
+              const edges = getEdges()
+              const connection = edges.find(edge => edge.target === id && edge.targetHandle === input.id)
+
+              // Get source node and output info if connected
+              let sourceInfo: string | null = null
+              if (connection) {
+                const sourceNode = getNodes().find(n => n.id === connection.source)
+                if (sourceNode) {
+                  const sourceComponent = getComponent(sourceNode.data.componentSlug)
+                  if (sourceComponent) {
+                    const sourceOutput = sourceComponent.outputs.find(o => o.id === connection.sourceHandle)
+                    sourceInfo = sourceOutput?.label || 'Connected'
+                  }
+                }
+              }
+
+              return (
+                <div key={input.id} className="flex items-center gap-2 text-xs">
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={input.id}
+                    className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white"
+                    style={{ top: `${60 + index * 28}px` }}
+                  />
+                  <div className="flex-1">
+                    <div className="text-muted-foreground font-medium">{input.label}</div>
+                    {input.required && !sourceInfo && (
+                      <span className="text-red-500 text-[10px]">*required</span>
+                    )}
+                    {sourceInfo && (
+                      <span className="text-green-600 text-[10px] italic" title={`Connected to: ${sourceInfo}`}>
+                        {sourceInfo}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 

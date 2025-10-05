@@ -354,6 +354,64 @@ const TYPE_HIERARCHY: Record<string, string[]> = {
 - Maintains all functionality while improving visual clarity
 - Separates concerns: connection ports in one place, parameter values in another
 
+### Connected Input Source Display (2025-01)
+**Issue**: When a required input field was connected to an output from another node, it continued to display "*required" in red, which was misleading since the requirement was actually fulfilled by the connection.
+
+**User Impact**: Users were confused because connected inputs still showed validation warnings, making it unclear whether the node was properly configured or not.
+
+**Solution**: Enhanced the WorkflowNode component to dynamically detect connections and display the source information instead of "*required" when an input is connected.
+
+**Implementation**:
+1. **Connection Detection**: Added React Flow hooks (`useReactFlow`) to access edges data within the node component
+2. **Source Information Lookup**: For each input, check if there's an incoming edge connection and retrieve the source node and output label
+3. **Dynamic Display Logic**:
+   - **Not Connected**: Show "*required" in red (existing behavior)
+   - **Connected**: Show source output label (e.g., "File Contents") in green italic text with tooltip
+
+**Technical Details** (`src/components/workflow/WorkflowNode.tsx`):
+```typescript
+// Import React Flow hooks
+import { useReactFlow } from 'reactflow'
+
+// Inside component
+const { getNodes, getEdges } = useReactFlow()
+
+// For each input, check for connection
+const edges = getEdges()
+const connection = edges.find(edge => edge.target === id && edge.targetHandle === input.id)
+
+// Get source information
+if (connection) {
+  const sourceNode = getNodes().find(n => n.id === connection.source)
+  const sourceComponent = getComponent(sourceNode.data.componentSlug)
+  const sourceOutput = sourceComponent.outputs.find(o => o.id === connection.sourceHandle)
+  sourceInfo = sourceOutput?.label || 'Connected'
+}
+
+// Display logic
+{input.required && !sourceInfo && (
+  <span className="text-red-500 text-[10px]">*required</span>
+)}
+{sourceInfo && (
+  <span className="text-green-600 text-[10px] italic" title={`Connected to: ${sourceInfo}`}>
+    {sourceInfo}
+  </span>
+)}
+```
+
+**Visual Result**:
+- **Before**: Subfinder "Target Domain" shows "*required" even when connected to File Loader
+- **After**: Shows "File Contents" in green when connected, clearly indicating the source of data
+
+**Files Modified**:
+- `src/components/workflow/WorkflowNode.tsx` (lines 1-2, 22-24, 115-160)
+
+**Benefits**:
+- Clear visual feedback that required inputs are fulfilled via connections
+- Users can immediately see what data source is feeding each input
+- Reduces confusion about node configuration status
+- Improves overall workflow comprehension at a glance
+
 ## Outstanding Tasks
 
 1. Implement actual API integration for workflow execution
