@@ -75,7 +75,7 @@
       "id": "outputFormat",
       "label": "Output Format",
       "type": "select",
-      "required": false,
+      "required": true,
       "default": "json",
       "options": [
         { "label": "JSON Lines", "value": "json" },

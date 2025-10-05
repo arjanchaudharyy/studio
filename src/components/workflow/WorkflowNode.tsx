@@ -48,13 +48,22 @@ export const WorkflowNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   // Display label (custom or component name)
   const displayLabel = data.label || component.name
 
+  // Check if there are unfilled required parameters
+  const requiredParams = component.parameters.filter(param => param.required)
+  const hasUnfilledRequired = requiredParams.some(param => {
+    const value = data.parameters?.[param.id]
+    const effectiveValue = value !== undefined ? value : param.default
+    return effectiveValue === undefined || effectiveValue === null || effectiveValue === ''
+  })
+
   return (
     <div
       className={cn(
         'shadow-lg rounded-lg border-2 min-w-[240px] max-w-[280px] bg-background transition-all',
         data.status ? nodeStyle.border : typeBorderColor,
         data.status && data.status !== 'idle' ? nodeStyle.bg : 'bg-background',
-        selected && 'ring-2 ring-blue-500 ring-offset-2'
+        selected && 'ring-2 ring-blue-500 ring-offset-2',
+        hasUnfilledRequired && !data.status && 'border-red-300 shadow-red-100'
       )}
     >
       {/* Header */}
@@ -79,9 +88,14 @@ export const WorkflowNode = memo(({ data, selected }: NodeProps<NodeData>) => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold truncate">{displayLabel}</h3>
-              {StatusIcon && (
-                <StatusIcon className={cn('h-4 w-4 flex-shrink-0', nodeStyle.iconClass)} />
-              )}
+              <div className="flex items-center gap-1">
+                {hasUnfilledRequired && !data.status && (
+                  <span className="text-red-500 text-xs" title="Required fields missing">!</span>
+                )}
+                {StatusIcon && (
+                  <StatusIcon className={cn('h-4 w-4 flex-shrink-0', nodeStyle.iconClass)} />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -129,6 +143,48 @@ export const WorkflowNode = memo(({ data, selected }: NodeProps<NodeData>) => {
                 />
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Required Parameters Display */}
+        {component.parameters.filter(param => param.required).length > 0 && (
+          <div className="pt-2 border-t border-border/50">
+            <div className="space-y-1">
+              {component.parameters
+                .filter(param => param.required)
+                .map((param) => {
+                  const value = data.parameters?.[param.id]
+                  const effectiveValue = value !== undefined ? value : param.default
+                  const hasValue = effectiveValue !== undefined && effectiveValue !== null && effectiveValue !== ''
+                  const displayValue = hasValue ? effectiveValue : ''
+                  const isDefault = value === undefined && param.default !== undefined
+                  
+                  return (
+                    <div key={param.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground font-medium truncate">
+                        {param.label}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {hasValue ? (
+                          <span 
+                            className={cn(
+                              "font-mono px-1 py-0.5 rounded text-[10px] truncate max-w-[80px]",
+                              isDefault 
+                                ? "text-muted-foreground bg-muted/50 italic" 
+                                : "text-foreground bg-muted"
+                            )}
+                            title={isDefault ? `Default: ${String(displayValue)}` : String(displayValue)}
+                          >
+                            {String(displayValue)}
+                          </span>
+                        ) : (
+                          <span className="text-red-500 text-[10px]">*required</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
           </div>
         )}
 
