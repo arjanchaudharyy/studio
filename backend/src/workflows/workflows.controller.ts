@@ -50,6 +50,14 @@ export class WorkflowsController {
     return this.workflowsService.commit(id);
   }
 
+  @Post(':id/run')
+  async run(
+    @Param('id') id: string,
+    @Body() body: { inputs?: Record<string, unknown> } = {},
+  ) {
+    return this.workflowsService.run(id, body);
+  }
+
   @Get()
   async findAll() {
     return this.workflowsService.list();

@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 
 import { WorkflowGraphSchema } from '../dto/workflow-graph.dto';
 import '../../components/register-default-components';
+import { compileWorkflowGraph } from '../../dsl/compiler';
 import { WorkflowDefinition } from '../../dsl/types';
 import { WorkflowRepository } from '../repository/workflow.repository';
 import { WorkflowsService } from '../workflows.service';
@@ -16,8 +17,20 @@ const sampleGraph = WorkflowGraphSchema.parse({
       label: 'Trigger',
       position: { x: 0, y: 0 },
     },
+    {
+      id: 'loader',
+      type: 'core.file.loader',
+      label: 'Loader',
+      position: { x: 0, y: 100 },
+    },
   ],
-  edges: [],
+  edges: [
+    {
+      id: 'e1',
+      source: 'trigger',
+      target: 'loader',
+    },
+  ],
   viewport: { x: 0, y: 0, zoom: 1 },
 });
 
@@ -31,8 +44,8 @@ describe('WorkflowsService', () => {
       createCalls += 1;
       return {
         id: 'workflow-id',
-        createdAt: now,
-        updatedAt: now,
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
         name: sampleGraph.name,
         description: sampleGraph.description ?? null,
         graph: sampleGraph,
@@ -42,8 +55,8 @@ describe('WorkflowsService', () => {
     async update() {
       return {
         id: 'workflow-id',
-        createdAt: now,
-        updatedAt: now,
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
         name: sampleGraph.name,
         description: sampleGraph.description ?? null,
         graph: sampleGraph,
@@ -53,8 +66,8 @@ describe('WorkflowsService', () => {
     async findById() {
       return {
         id: 'workflow-id',
-        createdAt: now,
-        updatedAt: now,
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
         name: sampleGraph.name,
         description: sampleGraph.description ?? null,
         graph: sampleGraph,
@@ -71,8 +84,8 @@ describe('WorkflowsService', () => {
       savedDefinition = definition;
       return {
         id: 'workflow-id',
-        createdAt: now,
-        updatedAt: now,
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
         name: sampleGraph.name,
         description: sampleGraph.description ?? null,
         graph: sampleGraph,
@@ -110,5 +123,22 @@ describe('WorkflowsService', () => {
     const definition = await service.commit('workflow-id');
     expect(definition.actions.length).toBeGreaterThan(0);
     expect(savedDefinition).toEqual(definition);
+  });
+
+  it('runs a workflow definition', async () => {
+    const definition = compileWorkflowGraph(sampleGraph);
+    repositoryMock.findById = async () => ({
+      id: 'workflow-id',
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
+      name: sampleGraph.name,
+      description: sampleGraph.description ?? null,
+      graph: sampleGraph,
+      compiledDefinition: definition,
+    });
+
+    const result = await service.run('workflow-id');
+    expect(result.outputs).toHaveProperty('trigger');
+    expect(result.outputs).toHaveProperty('loader');
   });
 });
