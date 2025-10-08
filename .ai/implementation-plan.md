@@ -65,10 +65,10 @@ This plan is written for an LLM coding agent (“Agent”). Each phase ends with
 
 **Goal:** Capture and expose component execution events.
 
-- [ ] **Step 1:** Define trace event types (`NODE_STARTED`, `NODE_COMPLETED`, etc.).
-- [ ] **Step 2:** Implement in-memory trace collector.
-- [ ] **Step 3:** Emit trace events around component execution in SDK/workflow.
-- [ ] **Step 4:** Add `GET /workflow-runs/:id/trace` endpoint.
+- [x] **Step 1:** Define trace event types (`NODE_STARTED`, `NODE_COMPLETED`, etc.).
+- [x] **Step 2:** Implement in-memory trace collector.
+- [x] **Step 3:** Emit trace events around component execution in SDK/workflow.
+- [x] **Step 4:** Add `GET /workflow-runs/:id/trace` endpoint.
 - [ ] **Step 5:** Commit `feat: add execution trace foundation`. ➜ **Human review before next phase**
 
 ---

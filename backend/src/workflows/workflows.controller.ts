@@ -16,11 +16,15 @@ import {
   WorkflowGraphDto,
   WorkflowGraphSchema,
 } from './dto/workflow-graph.dto';
+import { TraceService } from '../trace/trace.service';
 import { WorkflowsService } from './workflows.service';
 
 @Controller('workflows')
 export class WorkflowsController {
-  constructor(private readonly workflowsService: WorkflowsService) {}
+  constructor(
+    private readonly workflowsService: WorkflowsService,
+    private readonly traceService: TraceService,
+  ) {}
 
   @Post()
   @UsePipes(new ZodValidationPipe(WorkflowGraphSchema))
@@ -56,6 +60,11 @@ export class WorkflowsController {
     @Body() body: { inputs?: Record<string, unknown> } = {},
   ) {
     return this.workflowsService.run(id, body);
+  }
+
+  @Get('/runs/:runId/trace')
+  async trace(@Param('runId') runId: string) {
+    return { runId, events: this.traceService.list(runId) };
   }
 
   @Get()

@@ -5,6 +5,7 @@ import { WorkflowGraphSchema } from '../dto/workflow-graph.dto';
 import '../../components/register-default-components';
 import { compileWorkflowGraph } from '../../dsl/compiler';
 import { WorkflowDefinition } from '../../dsl/types';
+import { traceCollector } from '../../trace/collector';
 import { WorkflowRepository } from '../repository/workflow.repository';
 import { WorkflowsService } from '../workflows.service';
 
@@ -99,6 +100,7 @@ describe('WorkflowsService', () => {
   beforeEach(async () => {
     createCalls = 0;
     savedDefinition = null;
+    traceCollector.clear();
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -138,7 +140,12 @@ describe('WorkflowsService', () => {
     });
 
     const result = await service.run('workflow-id');
+    expect(result.runId).toBeDefined();
     expect(result.outputs).toHaveProperty('trigger');
     expect(result.outputs).toHaveProperty('loader');
+
+    const events = traceCollector.list(result.runId);
+    expect(events.length).toBeGreaterThan(0);
+    expect(events[0].type).toBe('NODE_STARTED');
   });
 });

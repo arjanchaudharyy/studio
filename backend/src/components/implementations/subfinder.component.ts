@@ -23,7 +23,11 @@ const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.subfinder.run',
   label: 'Subfinder',
   category: 'discovery',
-  runner: { kind: 'docker', image: 'TODO/subfinder', command: [] },
+  runner: {
+    kind: 'docker',
+    image: 'projectdiscovery/subfinder:latest',
+    command: ['subfinder'],
+  },
   inputSchema,
   outputSchema,
   docs: 'Runs projectdiscovery/subfinder. Stubbed to return example subdomains.',
