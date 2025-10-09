@@ -35,7 +35,7 @@ export class FileStorageAdapter implements IFileStorageService {
     }
 
     // Download from MinIO
-    const stream = await this.minioClient.getObject(this.bucketName, file.objectKey);
+    const stream = await this.minioClient.getObject(this.bucketName, file.storageKey);
 
     // Convert stream to buffer
     const chunks: Buffer[] = [];
