@@ -17,6 +17,7 @@ export interface WorkflowRunResult {
 
 interface ExecuteWorkflowOptions {
   runId?: string;
+  services?: Record<string, unknown>;
 }
 
 export type { ExecuteWorkflowOptions };
@@ -48,7 +49,7 @@ export async function executeWorkflow(
     }
 
     const parsedParams = component.inputSchema.parse(params);
-    const context = createDefaultExecutionContext(runId, action.ref);
+    const context = createDefaultExecutionContext(runId, action.ref, options.services);
     try {
       const output = await runComponentWithRunner(
         component.runner,

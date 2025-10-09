@@ -1,6 +1,7 @@
 import '../../components/register-default-components';
 
 import { executeWorkflow } from '../workflow-runner';
+import { getServiceContainer } from '../service-container';
 import type { RunWorkflowActivityInput, RunWorkflowActivityOutput } from '../types';
 
 export async function runWorkflowActivity(
@@ -10,6 +11,7 @@ export async function runWorkflowActivity(
   console.log(`🔧 [ACTIVITY] Workflow: ${input.workflowId}, Actions: ${input.definition.actions.length}`);
   
   try {
+    const services = getServiceContainer();
     const result = await executeWorkflow(
       input.definition,
       {
@@ -17,6 +19,7 @@ export async function runWorkflowActivity(
       },
       {
         runId: input.runId,
+        services,
       },
     );
     

@@ -4,6 +4,7 @@ import { ExecutionContext } from './types';
 export function createDefaultExecutionContext(
   runId: string,
   componentRef: string,
+  services?: Record<string, unknown>,
 ): ExecutionContext {
   return {
     runId,
@@ -22,5 +23,6 @@ export function createDefaultExecutionContext(
         message,
       });
     },
+    services,
   };
 }

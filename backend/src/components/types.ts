@@ -34,6 +34,7 @@ export interface ExecutionContext {
     error: (...args: unknown[]) => void;
   };
   emitProgress: (message: string) => void;
+  services?: Record<string, unknown>; // Dependency injection for components
 }
 
 export interface ComponentDefinition<I, O> {
