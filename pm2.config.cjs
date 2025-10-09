@@ -10,7 +10,7 @@ module.exports = {
     {
       name: 'shipsec-worker',
       cwd: __dirname + '/backend',
-      script: 'bun',
+      script: 'npm',
       args: 'run worker:dev',
       env_file: './backend/.env',
     },
