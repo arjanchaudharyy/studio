@@ -6,7 +6,9 @@
   "workspaces": [
     "frontend",
     "backend",
-    "packages/backend-client"
+    "worker",
+    "packages/backend-client",
+    "packages/component-sdk"
   ],
   "scripts": {
     "dev:frontend": "bun --cwd frontend dev",

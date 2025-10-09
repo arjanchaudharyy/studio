@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import './components/register-default-components';
 import { ComponentsModule } from './components/components.module';
 import { StorageModule } from './storage/storage.module';
 import { TraceModule } from './trace/trace.module';

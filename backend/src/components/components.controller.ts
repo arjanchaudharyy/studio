@@ -1,7 +1,8 @@
 import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 
-import { componentRegistry } from './registry';
+// Import component registry from worker (this triggers component registration)
+import { componentRegistry } from '@shipsec/worker';
 
 @ApiTags('components')
 @Controller('components')
@@ -46,8 +47,8 @@ export class ComponentsController {
     // Transform to frontend-friendly format
     return components.map((component) => ({
       id: component.id,
-      name: component.name,
-      description: component.description,
+      name: component.label,
+      description: component.docs,
       category: component.category,
       runner: component.runner,
       inputSchema: component.inputSchema,
@@ -68,8 +69,8 @@ export class ComponentsController {
 
     return {
       id: component.id,
-      name: component.name,
-      description: component.description,
+      name: component.label,
+      description: component.docs,
       category: component.category,
       runner: component.runner,
       inputSchema: component.inputSchema,

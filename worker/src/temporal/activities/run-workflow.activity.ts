@@ -1,0 +1,44 @@
+import '../../components'; // Register all components
+import { executeWorkflow } from '../workflow-runner';
+import type { RunWorkflowActivityInput, RunWorkflowActivityOutput } from '../types';
+import type { IFileStorageService, ITraceService } from '@shipsec/component-sdk';
+
+// Global service container (set by worker initialization)
+let globalStorage: IFileStorageService | undefined;
+let globalTrace: ITraceService | undefined;
+
+export function initializeActivityServices(
+  storage: IFileStorageService,
+  trace: ITraceService,
+) {
+  globalStorage = storage;
+  globalTrace = trace;
+}
+
+export async function runWorkflowActivity(
+  input: RunWorkflowActivityInput,
+): Promise<RunWorkflowActivityOutput> {
+  console.log(`🔧 [ACTIVITY] runWorkflow started for run: ${input.runId}`);
+  console.log(`🔧 [ACTIVITY] Workflow: ${input.workflowId}, Actions: ${input.definition.actions.length}`);
+
+  try {
+    const result = await executeWorkflow(
+      input.definition,
+      {
+        inputs: input.inputs,
+      },
+      {
+        runId: input.runId,
+        storage: globalStorage,
+        trace: globalTrace,
+      },
+    );
+
+    console.log(`✅ [ACTIVITY] runWorkflow completed for run: ${input.runId}`);
+    return result;
+  } catch (error) {
+    console.error(`❌ [ACTIVITY] runWorkflow failed for run: ${input.runId}`, error);
+    throw error;
+  }
+}
+

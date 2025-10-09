@@ -1,0 +1,9 @@
+/**
+ * Service Adapters
+ * Concrete implementations of SDK interfaces
+ */
+
+export { FileStorageAdapter } from './file-storage.adapter';
+export { TraceAdapter } from './trace.adapter';
+
+

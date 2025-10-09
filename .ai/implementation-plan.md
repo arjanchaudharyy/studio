@@ -106,17 +106,18 @@ This plan is written for an LLM coding agent (“Agent”). Each phase ends with
 
 **Goal:** Extract component SDK into separate worker package with clean interfaces, eliminating backend coupling.
 
-- [ ] **Step 1:** Create `worker/` package with its own `package.json` and TypeScript config.
-- [ ] **Step 2:** Define SDK interfaces (`IFileStorageService`, `ISecretsService`, etc.) in `worker/src/sdk/interfaces.ts`.
-- [ ] **Step 3:** Move component registry, types, context, and runner to `worker/src/sdk/`.
-- [ ] **Step 4:** Move all component implementations to `worker/src/components/` (core, security categories).
-- [ ] **Step 5:** Create service adapters in `worker/src/adapters/` that implement SDK interfaces using backend services.
-- [ ] **Step 6:** Move Temporal worker code to `worker/src/temporal/workers/` and update to use adapters.
-- [ ] **Step 7:** Update root `package.json` to use npm/bun workspaces for monorepo structure.
-- [ ] **Step 8:** Update backend to remove component code and adjust imports where needed.
-- [ ] **Step 9:** Test end-to-end workflow execution with new architecture.
-- [ ] **Step 10:** Update documentation (README, architecture diagrams).
-- [ ] **Step 11:** Commit `refactor: extract component SDK to separate worker package`. ➜ **Human review before next phase**
+- [x] **Step 1:** Create `worker/` package with its own `package.json` and TypeScript config.
+- [x] **Step 2:** Define SDK interfaces (`IFileStorageService`, `ISecretsService`, etc.) in `packages/component-sdk/src/interfaces.ts`.
+- [x] **Step 3:** Move component registry, types, context, and runner to `packages/component-sdk/src/`.
+- [x] **Step 4:** Move all component implementations to `worker/src/components/` (core, security categories).
+- [x] **Step 5:** Create service adapters in `worker/src/adapters/` that implement SDK interfaces using backend services.
+- [x] **Step 6:** Move Temporal worker code to `worker/src/temporal/workers/` and update to use adapters.
+- [x] **Step 7:** Update root `package.json` to use bun workspaces for monorepo structure.
+- [x] **Step 8:** Update backend to remove component code and adjust imports where needed.
+- [x] **Step 9:** Fix all typecheck errors and remove duplicate code.
+- [ ] **Step 10:** Test end-to-end workflow execution with new architecture.
+- [ ] **Step 11:** Update documentation (README, architecture diagrams).
+- [ ] **Step 12:** Commit `refactor: extract component SDK to separate worker package`. ➜ **Human review before next phase**
 
 ---
 ## Phase 6 – Execution Trace Foundation (Temporal-backed)

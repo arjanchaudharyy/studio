@@ -9,8 +9,7 @@
     "build": "bun build src/main.ts --outdir build --target bun",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "generate:openapi": "bun scripts/generate-openapi.ts",
-    "worker:dev": "tsx src/temporal/workers/dev.worker.ts"
+    "generate:openapi": "bun scripts/generate-openapi.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
@@ -21,12 +20,14 @@
     "@temporalio/client": "^1.11.3",
     "@temporalio/worker": "^1.11.3",
     "@temporalio/workflow": "^1.11.3",
+    "@types/express": "^5.0.3",
     "@types/minio": "^7.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.44.6",
     "minio": "^8.0.6",
+    "multer": "^2.0.2",
     "nestjs-zod": "^5.0.1",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@nestjs/testing": "^10.4.0",
+    "@types/multer": "^2.0.0",
     "@types/node": "^20.16.11",
     "@types/pg": "^8.15.5",
     "bun-types": "^1.2.23",

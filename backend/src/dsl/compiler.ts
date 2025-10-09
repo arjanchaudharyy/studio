@@ -1,5 +1,6 @@
 import { WorkflowGraph } from '../workflows/dto/workflow-graph.dto';
-import { componentRegistry } from '../components/registry';
+// Import component registry from worker package
+import { componentRegistry } from '@shipsec/component-sdk';
 import { WorkflowAction, WorkflowDefinition, WorkflowDefinitionSchema } from './types';
 
 function topoSort(nodes: string[], edges: Array<{ source: string; target: string }>): string[] {

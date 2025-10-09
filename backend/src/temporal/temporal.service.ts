@@ -11,8 +11,9 @@ import {
   type WorkflowHandle,
 } from '@temporalio/client';
 
-// Import workflow functions
-import { shipsecWorkflowRun, testMinimalWorkflow, minimalWorkflow } from './workflows';
+// Import workflow functions (for type safety during client.start())
+// Note: Actual implementation runs in the worker
+import { shipsecWorkflowRun, testMinimalWorkflow, minimalWorkflow } from '@shipsec/worker/workflows';
 
 export interface StartWorkflowOptions {
   workflowType: string;
@@ -81,7 +82,7 @@ export class TemporalService implements OnModuleDestroy {
     const handle = await client.start(workflowFn, {
       workflowId,
       taskQueue,
-      args: options.args ?? [],
+      args: (options.args ?? []) as any,
       memo: options.memo,
       searchAttributes: options.searchAttributes as any,
     });
