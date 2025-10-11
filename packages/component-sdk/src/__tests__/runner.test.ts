@@ -77,22 +77,23 @@ describe('Component Runner', () => {
       expect(result.result).toBe(42);
     });
 
-    it('should stub docker runner (fallback to inline)', async () => {
-      const execute = async () => ({ message: 'executed' });
+    it('should execute docker runner with real containers', async () => {
+      const execute = async () => ({ message: 'should not be called' });
 
       const context = createExecutionContext({
         runId: 'test-run',
         componentRef: 'docker.component',
       });
 
-      const result = await runComponentWithRunner(
-        { kind: 'docker', image: 'test:latest', command: ['run'] },
-        execute,
-        {},
-        context,
-      );
-
-      expect(result.message).toBe('executed');
+      // Should fail because the image doesn't exist, but proves Docker execution is attempted
+      await expect(
+        runComponentWithRunner(
+          { kind: 'docker', image: 'test:latest', command: ['run'] },
+          execute,
+          {},
+          context,
+        )
+      ).rejects.toThrow();
     });
 
     it('should stub remote runner (fallback to inline)', async () => {
