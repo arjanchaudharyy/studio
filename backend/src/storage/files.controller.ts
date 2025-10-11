@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiConsumes, ApiBody, ApiOkResponse } from '@nestjs/swagger';
-import { Response } from 'express';
+import type { Response } from 'express-serve-static-core';
 
 import { FilesService } from './files.service';
 
