@@ -312,3 +312,38 @@ We follow a bottom-up testing approach with increasing integration complexity:
 - [ ] **Step 1:** Human-led review of entire codebase vs design docs.
 - [ ] **Step 2:** Document remaining TODOs (real Docker/K8s runner, Temporal connection, secrets, artifacts).
 - [ ] **Step 3:** Produce roadmap for subsequent sprints.
+
+---
+## Phase 5.11 Progress Update
+
+**Docker Runner Implementation - COMPLETE** ✅
+
+Successfully implemented real Docker container execution for components:
+
+**Key Features:**
+- ✅ Container lifecycle management (spawn, execute, cleanup)
+- ✅ JSON I/O via stdin/stdout
+- ✅ Entrypoint override support
+- ✅ Network mode configuration (none/bridge/host)
+- ✅ Environment variable injection
+- ✅ Timeout handling with automatic termination
+- ✅ Error propagation and cleanup
+
+**Real Subfinder Integration:**
+- ✅ Uses `projectdiscovery/subfinder:latest` Docker image
+- ✅ Shell script wrapper for JSON parsing
+- ✅ Successfully tested with real domains
+- ✅ Found 16 subdomains for hackerone.com
+- ✅ Proper error handling for non-existent domains
+
+**Test Coverage:**
+- ✅ 6 Docker runner unit tests (alpine/busybox)
+- ✅ 2 Subfinder integration tests
+- ✅ Total: 78 tests passing (72 previously + 6 new)
+
+**Next Steps for Phase 5.11:**
+- [ ] Implement Webhook component with real HTTP POST
+- [ ] Add trace persistence to PostgreSQL
+- [ ] (Optional) Implement remote runner protocol
+
+**Commit:** `c6c9d8f - feat: implement real Docker runner with subfinder integration`
