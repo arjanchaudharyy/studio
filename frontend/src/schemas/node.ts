@@ -1,10 +1,11 @@
 import { z } from 'zod'
 
 export const NodeTypeEnum = z.enum([
+  'trigger',
   'input',
   'scan',
   'process',
-  'output'
+  'output',
 ])
 
 export type NodeType = z.infer<typeof NodeTypeEnum>
@@ -31,27 +32,14 @@ export type InputMapping = z.infer<typeof InputMappingSchema>
 
 /**
  * Node data contains component configuration and state
+ * Backend structure: { label: string, config: Record<string, any> }
+ * Frontend extends with: { componentSlug, componentVersion, parameters, status, etc. }
  */
 export const NodeDataSchema = z.object({
-  // Component identification
-  componentSlug: z.string(),
-  componentVersion: z.string(),
-  label: z.string().optional(), // Display label (defaults to component name)
-
-  // User-configured parameters
-  parameters: z.record(z.string(), z.any()).default({}),
-
-  // Input mappings (which output connects to which input)
-  inputs: z.record(z.string(), InputMappingSchema).optional(),
-
-  // Execution state
-  status: NodeStatusEnum.default('idle'),
-  executionTime: z.number().optional(),
-  error: z.string().optional(),
-
-  // Legacy support
-  config: z.record(z.string(), z.any()).optional(),
-})
+  // Backend fields (required from backend)
+  label: z.string(),
+  config: z.record(z.string(), z.any()).default({}),
+}).passthrough() // Allow additional frontend fields like componentSlug, status, etc.
 
 export type NodeData = z.infer<typeof NodeDataSchema>
 
@@ -62,11 +50,30 @@ export const NodePositionSchema = z.object({
 
 export type NodePosition = z.infer<typeof NodePositionSchema>
 
+/**
+ * Node schema matching backend structure exactly
+ * Backend: { id, type, position, data: { label, config } }
+ */
 export const NodeSchema = z.object({
   id: z.string(),
-  type: NodeTypeEnum,
+  type: z.string(),
   position: NodePositionSchema,
   data: NodeDataSchema,
 })
 
 export type Node = z.infer<typeof NodeSchema>
+
+/**
+ * Extended frontend node data type for React Flow
+ * Includes additional frontend-specific fields
+ */
+export interface FrontendNodeData extends NodeData {
+  componentId?: string
+  componentSlug?: string
+  componentVersion?: string
+  parameters?: Record<string, any>
+  inputs?: Record<string, InputMapping>
+  status?: NodeStatus
+  executionTime?: number
+  error?: string
+}

@@ -67,6 +67,84 @@ const definition: ComponentDefinition<Input, Output> = {
   inputSchema,
   outputSchema,
   docs: 'Sends payload to an external webhook via HTTP POST/PUT/PATCH with retry logic and auth support.',
+  metadata: {
+    slug: 'webhook',
+    version: '1.0.0',
+    type: 'output',
+    category: 'input-output',
+    description: 'Send JSON payloads to external HTTP endpoints with retries and timeouts.',
+    icon: 'Webhook',
+    author: {
+      name: 'ShipSecAI',
+      type: 'shipsecai',
+    },
+    isLatest: true,
+    deprecated: false,
+    inputs: [],
+    outputs: [
+      {
+        id: 'result',
+        label: 'Webhook Result',
+        type: 'object',
+        description: 'Status information returned after sending the webhook.',
+      },
+    ],
+    parameters: [
+      {
+        id: 'url',
+        label: 'Endpoint URL',
+        type: 'text',
+        required: true,
+        placeholder: 'https://example.com/webhook',
+        description: 'Destination endpoint that will receive the payload.',
+      },
+      {
+        id: 'method',
+        label: 'HTTP Method',
+        type: 'select',
+        required: true,
+        default: 'POST',
+        options: [
+          { label: 'POST', value: 'POST' },
+          { label: 'PUT', value: 'PUT' },
+          { label: 'PATCH', value: 'PATCH' },
+        ],
+      },
+      {
+        id: 'payload',
+        label: 'Payload',
+        type: 'json',
+        description: 'JSON payload body to send to the endpoint.',
+        helpText: 'Leave empty to send an empty object.',
+        default: {},
+      },
+      {
+        id: 'headers',
+        label: 'Headers',
+        type: 'json',
+        description: 'Optional HTTP headers (e.g. {"Authorization":"Bearer ..."}).',
+        default: {},
+      },
+      {
+        id: 'timeoutMs',
+        label: 'Timeout (ms)',
+        type: 'number',
+        default: 30000,
+        min: 1000,
+        max: 600000,
+        description: 'Abort the request if it takes longer than this duration.',
+      },
+      {
+        id: 'retries',
+        label: 'Retries',
+        type: 'number',
+        default: 3,
+        min: 0,
+        max: 5,
+        description: 'Number of retry attempts for transient failures.',
+      },
+    ],
+  },
   async execute(params, context) {
     const {
       url,
@@ -166,4 +244,3 @@ const definition: ComponentDefinition<Input, Output> = {
 };
 
 componentRegistry.register(definition);
-

@@ -48,7 +48,13 @@ export async function executeWorkflow(
       // Merge params with inputs for entrypoint
       const params = { ...action.params } as Record<string, unknown>;
       if (definition.entrypoint.ref === action.ref && request.inputs) {
-        Object.assign(params, request.inputs);
+        // For Manual Trigger, pass runtime inputs in __runtimeData key
+        if (action.componentId === 'core.trigger.manual') {
+          params.__runtimeData = request.inputs;
+        } else {
+          // For other components, merge directly
+          Object.assign(params, request.inputs);
+        }
       }
 
       const parsedParams = component.inputSchema.parse(params);

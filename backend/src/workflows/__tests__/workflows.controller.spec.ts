@@ -51,6 +51,8 @@ describe('WorkflowsController', () => {
         description: input.description ?? null,
         graph: input,
         compiledDefinition: null,
+        lastRun: null,
+        runCount: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
       };

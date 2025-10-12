@@ -7,25 +7,24 @@ import { CreateWorkflowSchema, UpdateWorkflowSchema } from '@/schemas/workflow'
 /**
  * Serialize React Flow nodes to API format
  * Strips runtime execution state and React Flow metadata
+ * Frontend: { id, type: 'workflow', position, data: { componentId, componentSlug, label, parameters, status, ... } }
+ * Backend: { id, type: componentId, position, data: { label, config } }
  */
 export function serializeNodes(reactFlowNodes: ReactFlowNode<NodeData>[]): Node[] {
   return reactFlowNodes.map((node) => {
-    // Strip execution state from node data
-    const { status, executionTime, error, config, ...cleanData } = node.data
+    const componentId =
+      (node.data as any).componentId ||
+      (node.data as any).componentSlug ||
+      node.type
 
-    // Create clean node structure
     const cleanNode = {
       id: node.id,
-      type: node.data.componentSlug.includes('file-loader')
-        ? 'input'
-        : node.data.componentSlug.includes('subfinder') ||
-          node.data.componentSlug.includes('nuclei')
-        ? 'scan'
-        : node.data.componentSlug.includes('merge')
-        ? 'process'
-        : 'output', // Infer type from component slug
+      type: componentId,
       position: node.position,
-      data: cleanData,
+      data: {
+        label: node.data.label || '',
+        config: (node.data as any).parameters || node.data.config || {},
+      },
     }
 
     // Validate with schema
@@ -65,12 +64,21 @@ export function serializeWorkflowForCreate(
   nodes: ReactFlowNode<NodeData>[],
   edges: ReactFlowEdge[]
 ) {
+  console.log('[serializeWorkflowForCreate] Input:', { name, description, nodesCount: nodes?.length, edgesCount: edges?.length })
+  
+  const serializedNodes = serializeNodes(nodes)
+  const serializedEdges = serializeEdges(edges)
+  
+  console.log('[serializeWorkflowForCreate] Serialized:', { serializedNodesCount: serializedNodes?.length, serializedEdgesCount: serializedEdges?.length })
+  
   const payload = {
     name,
     description: description || '',
-    nodes: serializeNodes(nodes),
-    edges: serializeEdges(edges),
+    nodes: serializedNodes,
+    edges: serializedEdges,
   }
+
+  console.log('[serializeWorkflowForCreate] Payload:', payload)
 
   // Validate with schema
   return CreateWorkflowSchema.parse(payload)
@@ -101,6 +109,8 @@ export function serializeWorkflowForUpdate(
 
 /**
  * Deserialize workflow nodes from API to React Flow format
+ * Backend sends: { id, type: componentId, position, data: { label, config } }
+ * Frontend needs: { id, type: 'workflow', position, data: { componentId, componentSlug, label, parameters, status, config } }
  */
 export function deserializeNodes(nodes: Node[]): ReactFlowNode<NodeData>[] {
   return nodes.map((node) => ({
@@ -108,7 +118,14 @@ export function deserializeNodes(nodes: Node[]): ReactFlowNode<NodeData>[] {
     type: 'workflow', // All nodes use the same React Flow type
     position: node.position,
     data: {
-      ...node.data,
+      // Backend's data.label and data.config (required)
+      label: node.data.label,
+      config: node.data.config,
+      // Frontend extensions
+      componentId: node.type,
+      componentSlug: node.type,
+      componentVersion: '1.0.0', // Default version if not specified
+      parameters: node.data.config || {}, // Map config to parameters for frontend
       status: 'idle', // Reset execution state
     },
   }))

@@ -69,22 +69,41 @@ export const api = {
       edges: Edge[]
       viewport?: { x: number; y: number; zoom: number }
     }): Promise<Workflow> => {
+      console.log('[api.workflows.create] Input workflow:', { 
+        name: workflow.name,
+        nodesCount: workflow.nodes?.length,
+        edgesCount: workflow.edges?.length,
+        nodes: workflow.nodes,
+        edges: workflow.edges
+      })
+      
       // Transform frontend Node format to backend API format
-      const backendNodes = workflow.nodes.map((node) => ({
-        id: node.id,
-        type: node.type,
-        label: node.data.label || '',
-        position: node.position,
-        config: node.data.parameters,
-      }))
+      const backendNodes = workflow.nodes.map((node) => {
+        const nodeData: any = node.data
+        const componentRef = nodeData?.componentId || nodeData?.componentSlug || node.type
 
-      const response = await apiClient.createWorkflow({
+        return {
+          id: node.id,
+          type: componentRef as string,
+          position: node.position,
+          data: {
+            label: node.data.label || '',
+            config: nodeData?.parameters || node.data.config || {},
+          },
+        }
+      })
+
+      const payload = {
         name: workflow.name,
         description: workflow.description,
         nodes: backendNodes,
         edges: workflow.edges,
         viewport: workflow.viewport || { x: 0, y: 0, zoom: 1 },
-      })
+      }
+      
+      console.log('[api.workflows.create] Backend payload:', payload)
+
+      const response = await apiClient.createWorkflow(payload)
       if (response.error) throw new Error('Failed to create workflow')
       return WorkflowSchema.parse(response.data)
     },
@@ -94,13 +113,20 @@ export const api = {
      */
     update: async (id: string, workflow: Partial<Workflow>): Promise<Workflow> => {
       // Transform frontend Node format to backend API format
-      const backendNodes = (workflow.nodes || []).map((node) => ({
-        id: node.id,
-        type: node.type,
-        label: node.data.label || '',
-        position: node.position,
-        config: node.data.parameters,
-      }))
+      const backendNodes = (workflow.nodes || []).map((node) => {
+        const nodeData: any = node.data
+        const componentRef = nodeData?.componentId || nodeData?.componentSlug || node.type
+
+        return {
+          id: node.id,
+          type: componentRef as string,
+          position: node.position,
+          data: {
+            label: node.data.label || '',
+            config: nodeData?.parameters || node.data.config || {},
+          },
+        }
+      })
 
       const response = await apiClient.updateWorkflow(id, {
         name: workflow.name || '',
@@ -133,8 +159,8 @@ export const api = {
     /**
      * Run workflow
      */
-    run: async (id: string) => {
-      const response = await apiClient.runWorkflow(id)
+    run: async (id: string, body?: { inputs?: Record<string, unknown> }) => {
+      const response = await apiClient.runWorkflow(id, body)
       if (response.error) throw new Error('Failed to run workflow')
       return response.data
     },

@@ -1,5 +1,11 @@
 import { z } from 'zod'
 
+export const ComponentRunnerSchema = z
+  .object({
+    kind: z.enum(['inline', 'docker', 'remote']),
+  })
+  .passthrough()
+
 /**
  * Defines input ports for a component
  */
@@ -7,12 +13,8 @@ export const InputPortSchema = z.object({
   id: z.string(),
   label: z.string(),
   type: z.enum(['string', 'array', 'object', 'file', 'any']),
-  required: z.boolean().default(false),
+  required: z.boolean().optional(),
   description: z.string().optional(),
-
-  // Type-specific constraints
-  accepts: z.array(z.string()).optional(), // ["text/plain", "application/json"]
-  maxItems: z.number().optional(),         // For arrays
 })
 
 export type InputPort = z.infer<typeof InputPortSchema>
@@ -25,7 +27,6 @@ export const OutputPortSchema = z.object({
   label: z.string(),
   type: z.enum(['string', 'array', 'object', 'file', 'any']),
   description: z.string().optional(),
-  format: z.string().optional(), // "application/json"
 })
 
 export type OutputPort = z.infer<typeof OutputPortSchema>
@@ -36,27 +37,23 @@ export type OutputPort = z.infer<typeof OutputPortSchema>
 export const ParameterSchema = z.object({
   id: z.string(),
   label: z.string(),
-  type: z.enum(['text', 'textarea', 'number', 'boolean', 'select', 'multi-select', 'file']),
-
-  required: z.boolean().default(false),
+  type: z.enum(['text', 'textarea', 'number', 'boolean', 'select', 'multi-select', 'file', 'json']),
+  required: z.boolean().optional(),
   default: z.any().optional(),
-
-  // For select/multi-select
-  options: z.array(z.object({
-    label: z.string(),
-    value: z.any(),
-  })).optional(),
-
-  // For number type
+  options: z
+    .array(
+      z.object({
+        label: z.string(),
+        value: z.any(),
+      }),
+    )
+    .optional(),
   min: z.number().optional(),
   max: z.number().optional(),
-
-  // For textarea type
   rows: z.number().optional(),
-
   placeholder: z.string().optional(),
   description: z.string().optional(),
-  helpText: z.string().optional(), // Tooltip text
+  helpText: z.string().optional(),
 })
 
 export type Parameter = z.infer<typeof ParameterSchema>
@@ -76,38 +73,24 @@ export type ComponentAuthor = z.infer<typeof ComponentAuthorSchema>
  * Complete component metadata definition
  */
 export const ComponentMetadataSchema = z.object({
-  // Identification
-  id: z.string().uuid(),
+  id: z.string().min(1),
+  slug: z.string().min(1),
   name: z.string().min(1),
-  slug: z.string().regex(/^[a-z0-9-]+$/),
-  version: z.string().regex(/^\d+\.\d+\.\d+$/),
-
-  // Categorization
-  category: z.enum(['security-tool', 'building-block', 'input-output']),
-  type: z.enum(['input', 'scan', 'process', 'output']),
-
-  // Authorship
-  author: ComponentAuthorSchema,
-
-  // Documentation
-  description: z.string().max(200),
-  documentation: z.string().optional(),
-  documentationUrl: z.string().url().optional(),
-  icon: z.string(), // Lucide icon name
-  logo: z.string().optional(), // Logo path or URL
-
-  // Status
-  isLatest: z.boolean(),
-  deprecated: z.boolean().default(false),
-
-  // Component contract
-  inputs: z.array(InputPortSchema),
-  outputs: z.array(OutputPortSchema),
-  parameters: z.array(ParameterSchema),
-
-  // Metadata
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  version: z.string().default('1.0.0'),
+  type: z.enum(['trigger', 'input', 'scan', 'process', 'output']),
+  category: z.enum(['security-tool', 'building-block', 'input-output', 'trigger']),
+  description: z.string().optional().default(''),
+  documentation: z.string().optional().nullable(),
+  documentationUrl: z.string().url().optional().nullable(),
+  icon: z.string().optional().nullable(),
+  logo: z.string().optional().nullable(),
+  author: ComponentAuthorSchema.optional().nullable(),
+  isLatest: z.boolean().optional().default(true),
+  deprecated: z.boolean().optional().default(false),
+  runner: ComponentRunnerSchema,
+  inputs: z.array(InputPortSchema).default([]),
+  outputs: z.array(OutputPortSchema).default([]),
+  parameters: z.array(ParameterSchema).default([]),
 })
 
 export type ComponentMetadata = z.infer<typeof ComponentMetadataSchema>

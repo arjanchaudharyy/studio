@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { z } from 'zod';
 
@@ -87,5 +87,23 @@ export class WorkflowRepository {
 
   async list(): Promise<WorkflowRecord[]> {
     return this.db.select().from(workflowsTable);
+  }
+
+  async incrementRunCount(id: string): Promise<WorkflowRecord> {
+    const [record] = await this.db
+      .update(workflowsTable)
+      .set({
+        lastRun: new Date(),
+        runCount: sql`${workflowsTable.runCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(workflowsTable.id, id))
+      .returning();
+
+    if (!record) {
+      throw new Error(`Workflow ${id} not found`);
+    }
+
+    return record;
   }
 }

@@ -55,15 +55,20 @@ export class WorkflowsBootstrapService implements OnModuleInit {
         {
           id: 'trigger',
           type: 'core.trigger.manual',
-          label: 'Manual Trigger',
           position: { x: 0, y: 0 },
+          data: {
+            label: 'Manual Trigger',
+            config: {},
+          },
         },
         {
           id: 'loader',
           type: 'core.file.loader',
-          label: 'Load Sample File',
           position: { x: 200, y: 0 },
-          config: { fileName: 'demo.txt' },
+          data: {
+            label: 'Load Sample File',
+            config: { fileName: 'demo.txt' },
+          },
         },
       ],
       edges: [

@@ -20,13 +20,15 @@ interface ConfigPanelProps {
  * Shows component information and allows editing node parameters
  */
 export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanelProps) {
-  const { getComponent } = useComponentStore()
+  const { getComponent, loading } = useComponentStore()
 
   const handleParameterChange = (paramId: string, value: any) => {
     if (!selectedNode || !onUpdateNode) return
 
+    const nodeData = selectedNode.data as any
+
     const updatedParameters = {
-      ...selectedNode.data.parameters,
+      ...nodeData.parameters,
       [paramId]: value,
     }
 
@@ -39,9 +41,28 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
     return null
   }
 
-  const component = getComponent(selectedNode.data.componentSlug)
+  const nodeData = selectedNode.data as any
+  const componentRef: string | undefined = nodeData.componentId ?? nodeData.componentSlug
+  const component = getComponent(componentRef)
 
   if (!component) {
+    if (loading) {
+      return (
+        <div className="w-[360px] border-l bg-background flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b">
+            <h3 className="font-semibold">Configuration</h3>
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex-1 p-4">
+            <div className="text-sm text-muted-foreground">
+              Loading component metadata…
+            </div>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="w-[360px] border-l bg-background flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
@@ -52,14 +73,18 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
         </div>
         <div className="flex-1 p-4">
           <div className="text-sm text-red-600">
-            Component not found: {selectedNode.data.componentSlug}
+            Component not found: {componentRef ?? 'unknown'}
           </div>
         </div>
       </div>
     )
   }
 
-  const IconComponent = (LucideIcons[component.icon as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>) || LucideIcons.Box
+  const iconName = component.icon && component.icon in LucideIcons ? component.icon : 'Box'
+  const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>
+
+  const componentInputs = component.inputs ?? []
+  const componentParameters = component.parameters ?? []
 
   return (
     <div className="config-panel w-[400px] border-l bg-background flex flex-col h-full overflow-hidden">
@@ -106,11 +131,11 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 space-y-6">
           {/* Inputs Section */}
-          {component.inputs.length > 0 && (
+          {componentInputs.length > 0 && (
             <div>
               <h5 className="text-sm font-semibold mb-3 text-foreground">Inputs</h5>
               <div className="space-y-3">
-                {component.inputs.map((input) => (
+                {componentInputs.map((input) => (
                   <div
                     key={input.id}
                     className="p-3 rounded-lg border bg-background"
@@ -132,19 +157,19 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                     {/* Connection status */}
                     <div className="mt-2 pt-2 border-t">
                       <div className="text-xs">
-                        {selectedNode.data.inputs?.[input.id] ? (
+                        {nodeData.inputs?.[input.id] ? (
                           <div className="space-y-1">
                             <div className="text-green-600 flex items-center gap-1">
                               ✓ <span className="font-medium">Connected</span>
                             </div>
                             <div className="text-muted-foreground">
                               Source: <span className="font-mono text-blue-600">
-                                {selectedNode.data.inputs[input.id].source}
+                                {nodeData.inputs[input.id].source}
                               </span>
                             </div>
                             <div className="text-muted-foreground">
                               Output: <span className="font-mono">
-                                {selectedNode.data.inputs[input.id].output}
+                                {nodeData.inputs[input.id].output}
                               </span>
                             </div>
                           </div>
@@ -170,17 +195,17 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
           )}
 
           {/* Parameters Section */}
-          {component.parameters.length > 0 && (
+          {componentParameters.length > 0 && (
             <div>
               <h5 className="text-sm font-semibold mb-3 text-foreground">
                 Parameters
               </h5>
               <div className="space-y-3">
-                {component.parameters.map((param) => (
+                {componentParameters.map((param) => (
                   <ParameterFieldWrapper
                     key={param.id}
                     parameter={param}
-                    value={selectedNode.data.parameters?.[param.id]}
+                    value={nodeData.parameters?.[param.id]}
                     onChange={(value) => handleParameterChange(param.id, value)}
                   />
                 ))}

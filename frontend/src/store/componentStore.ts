@@ -1,22 +1,17 @@
 import { create } from 'zustand'
 import { ComponentMetadata } from '@/schemas/component'
-import {
-  getAllComponents,
-  getComponent as getComponentFromRegistry,
-  getComponentsByType,
-  getComponentsByCategory,
-  searchComponents as searchComponentsInRegistry,
-} from '@/components/workflow/nodes/registry'
+import { api } from '@/services/api'
 
-interface ComponentStore {
-  // State
+interface ComponentStoreState {
   components: Record<string, ComponentMetadata>
+  slugIndex: Record<string, string>
   loading: boolean
   error: string | null
+}
 
-  // Actions
-  fetchComponents: () => void
-  getComponent: (slug: string) => ComponentMetadata | null
+interface ComponentStore extends ComponentStoreState {
+  fetchComponents: () => Promise<void>
+  getComponent: (ref?: string | null) => ComponentMetadata | null
   getComponentsByType: (type: ComponentMetadata['type']) => ComponentMetadata[]
   getComponentsByCategory: (category: ComponentMetadata['category']) => ComponentMetadata[]
   searchComponents: (query: string) => ComponentMetadata[]
@@ -24,29 +19,38 @@ interface ComponentStore {
 }
 
 /**
+ * Normalize components by ID and maintain a slug lookup table.
+ */
+function buildIndexes(components: ComponentMetadata[]) {
+  const byId: Record<string, ComponentMetadata> = {}
+  const slugIndex: Record<string, string> = {}
+
+  components.forEach((component) => {
+    byId[component.id] = component
+    if (component.slug) {
+      slugIndex[component.slug] = component.id
+    }
+  })
+
+  return { byId, slugIndex }
+}
+
+/**
  * Component Store
- * Manages component metadata for the workflow builder
- *
- * Currently uses local registry, but can be extended to fetch from backend
+ * Consumes backend component metadata and provides convenient selectors.
  */
 export const useComponentStore = create<ComponentStore>((set, get) => ({
   components: {},
+  slugIndex: {},
   loading: false,
   error: null,
 
-  /**
-   * Fetch components from registry (or backend in the future)
-   */
-  fetchComponents: () => {
+  fetchComponents: async () => {
     set({ loading: true, error: null })
     try {
-      // For now, use local registry
-      // TODO: Replace with API call when backend is ready
-      const components = getAllComponents()
-      const componentsMap = Object.fromEntries(
-        components.map((comp) => [comp.slug, comp])
-      )
-      set({ components: componentsMap, loading: false })
+      const components = await api.components.list()
+      const { byId, slugIndex } = buildIndexes(components)
+      set({ components: byId, slugIndex, loading: false })
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to fetch components',
@@ -55,69 +59,46 @@ export const useComponentStore = create<ComponentStore>((set, get) => ({
     }
   },
 
-  /**
-   * Get component by slug
-   */
-  getComponent: (slug: string) => {
-    const components = get().components
-    if (Object.keys(components).length === 0) {
-      // If not loaded yet, try registry directly
-      return getComponentFromRegistry(slug)
+  getComponent: (ref?: string | null) => {
+    const { components, slugIndex } = get()
+    if (!ref) return null
+
+    if (components[ref]) {
+      return components[ref]
     }
-    return components[slug] || null
+
+    const idFromSlug = slugIndex[ref]
+    if (idFromSlug && components[idFromSlug]) {
+      return components[idFromSlug]
+    }
+
+    return null
   },
 
-  /**
-   * Get components by type
-   */
   getComponentsByType: (type: ComponentMetadata['type']) => {
-    const components = get().components
-    if (Object.keys(components).length === 0) {
-      // If not loaded yet, try registry directly
-      return getComponentsByType(type)
-    }
-    return Object.values(components).filter((comp) => comp.type === type)
+    return Object.values(get().components).filter((component) => component.type === type)
   },
 
-  /**
-   * Get components by category
-   */
   getComponentsByCategory: (category: ComponentMetadata['category']) => {
-    const components = get().components
-    if (Object.keys(components).length === 0) {
-      // If not loaded yet, try registry directly
-      return getComponentsByCategory(category)
-    }
-    return Object.values(components).filter((comp) => comp.category === category)
+    return Object.values(get().components).filter((component) => component.category === category)
   },
 
-  /**
-   * Search components by query
-   */
   searchComponents: (query: string) => {
-    const components = get().components
-    if (Object.keys(components).length === 0) {
-      // If not loaded yet, try registry directly
-      return searchComponentsInRegistry(query)
+    if (!query) {
+      return Object.values(get().components)
     }
-    const lowerQuery = query.toLowerCase()
-    return Object.values(components).filter(
-      (comp) =>
-        comp.name.toLowerCase().includes(lowerQuery) ||
-        comp.description.toLowerCase().includes(lowerQuery) ||
-        comp.slug.toLowerCase().includes(lowerQuery)
-    )
+
+    const normalized = query.toLowerCase()
+    return Object.values(get().components).filter((component) => {
+      return (
+        component.name.toLowerCase().includes(normalized) ||
+        component.slug.toLowerCase().includes(normalized) ||
+        (component.description ?? '').toLowerCase().includes(normalized)
+      )
+    })
   },
 
-  /**
-   * Get all components
-   */
   getAllComponents: () => {
-    const components = get().components
-    if (Object.keys(components).length === 0) {
-      // If not loaded yet, try registry directly
-      return getAllComponents()
-    }
-    return Object.values(components)
+    return Object.values(get().components)
   },
 }))

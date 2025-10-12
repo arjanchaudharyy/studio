@@ -179,6 +179,8 @@ describe('WorkflowsService', () => {
       description: sampleGraph.description ?? null,
       graph: sampleGraph,
       compiledDefinition: definition,
+      lastRun: null,
+      runCount: 0,
     });
 
     const run = await service.run('workflow-id', { inputs: { message: 'hi' } });

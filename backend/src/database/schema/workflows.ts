@@ -1,4 +1,4 @@
-import { jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { WorkflowDefinition } from '../../dsl/types';
@@ -14,6 +14,8 @@ export const workflowsTable = pgTable('workflows', {
   compiledDefinition: jsonb('compiled_definition')
     .$type<WorkflowDefinition | null>()
     .default(null),
+  lastRun: timestamp('last_run', { withTimezone: true }),
+  runCount: integer('run_count').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

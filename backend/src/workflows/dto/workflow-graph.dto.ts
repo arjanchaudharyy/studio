@@ -7,15 +7,19 @@ export const WorkflowViewportSchema = z.object({
   zoom: z.number(),
 });
 
+export const WorkflowNodeDataSchema = z.object({
+  label: z.string(),
+  config: z.record(z.string(), z.unknown()).default({}),
+});
+
 export const WorkflowNodeSchema = z.object({
   id: z.string(),
   type: z.string(),
-  label: z.string(),
   position: z.object({
     x: z.number(),
     y: z.number(),
   }),
-  config: z.record(z.string(), z.unknown()).optional(),
+  data: WorkflowNodeDataSchema,
 });
 
 export const WorkflowEdgeSchema = z.object({

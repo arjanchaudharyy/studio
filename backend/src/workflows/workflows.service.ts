@@ -47,7 +47,17 @@ export class WorkflowsService {
     if (!record) {
       throw new NotFoundException(`Workflow ${id} not found`);
     }
-    return record;
+    return this.flattenWorkflowGraph(record);
+  }
+
+  private flattenWorkflowGraph(record: WorkflowRecord): WorkflowRecord {
+    // Flatten graph.{nodes, edges, viewport} to top level for API compatibility
+    return {
+      ...record,
+      nodes: record.graph.nodes,
+      edges: record.graph.edges,
+      viewport: record.graph.viewport,
+    } as WorkflowRecord;
   }
 
   async delete(id: string): Promise<void> {
@@ -55,7 +65,8 @@ export class WorkflowsService {
   }
 
   async list(): Promise<WorkflowRecord[]> {
-    return this.repository.list();
+    const records = await this.repository.list();
+    return records.map(r => this.flattenWorkflowGraph(r));
   }
 
   async commit(id: string): Promise<WorkflowDefinition> {
@@ -69,6 +80,9 @@ export class WorkflowsService {
     const workflow = await this.findById(id);
     const definition = workflow.compiledDefinition ?? (await this.commit(id));
     const runId = `shipsec-run-${randomUUID()}`;
+
+    // Track execution stats
+    await this.repository.incrementRunCount(id);
 
     const temporalRun = await this.temporalService.startWorkflow({
       workflowType: SHIPSEC_WORKFLOW_TYPE,

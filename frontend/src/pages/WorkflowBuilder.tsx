@@ -5,8 +5,10 @@ import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { BottomPanel } from '@/components/layout/BottomPanel'
 import { Canvas } from '@/components/workflow/Canvas'
+import { RunWorkflowDialog } from '@/components/workflow/RunWorkflowDialog'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
+import { useComponentStore } from '@/store/componentStore'
 import { api, API_BASE_URL } from '@/services/api'
 import {
   serializeWorkflowForCreate,
@@ -21,7 +23,10 @@ function WorkflowBuilderContent() {
   const isNewWorkflow = id === 'new'
   const { metadata, setMetadata, setWorkflowId, markClean, resetWorkflow } = useWorkflowStore()
   const { getNodes, getEdges, setNodes, setEdges } = useReactFlow()
+  const { getComponent } = useComponentStore()
   const [isLoading, setIsLoading] = useState(false)
+  const [runDialogOpen, setRunDialogOpen] = useState(false)
+  const [runtimeInputs, setRuntimeInputs] = useState<any[]>([])
 
   // Load workflow on mount (if not new)
   useEffect(() => {
@@ -93,13 +98,51 @@ function WorkflowBuilderContent() {
       return
     }
 
+    // Check if workflow has a Manual Trigger with runtime inputs
+    const triggerNode = nodes.find(node => {
+      const nodeData = node.data as any
+      const componentRef = nodeData.componentId ?? nodeData.componentSlug
+      const component = getComponent(componentRef)
+      return component?.slug === 'manual-trigger'
+    })
+
+    if (triggerNode) {
+      const nodeData = triggerNode.data as any
+      const runtimeInputsParam = nodeData.parameters?.runtimeInputs
+
+      if (runtimeInputsParam) {
+        try {
+          const parsedInputs = typeof runtimeInputsParam === 'string'
+            ? JSON.parse(runtimeInputsParam)
+            : runtimeInputsParam
+
+          if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
+            // Show dialog to collect runtime inputs
+            setRuntimeInputs(parsedInputs)
+            setRunDialogOpen(true)
+            return
+          }
+        } catch (error) {
+          console.error('Failed to parse runtime inputs:', error)
+        }
+      }
+    }
+
+    // No runtime inputs needed, run directly
+    await executeWorkflow()
+  }
+
+  const executeWorkflow = async (runtimeData?: Record<string, unknown>) => {
+    const workflowId = metadata.id
+    if (!workflowId) return
+
     setIsLoading(true)
     try {
       // First, commit the workflow (compile DSL)
       await api.workflows.commit(workflowId)
       
-      // Then run it
-      const result = await api.workflows.run(workflowId)
+      // Then run it with runtime inputs if provided
+      const result = await api.workflows.run(workflowId, runtimeData ? { inputs: runtimeData } : undefined)
       
       // Start polling for execution status
       const runId = (result as any).runId
@@ -213,6 +256,14 @@ function WorkflowBuilderContent() {
       </div>
 
       <BottomPanel />
+
+      <RunWorkflowDialog
+        open={runDialogOpen}
+        onOpenChange={setRunDialogOpen}
+        workflowId={metadata.id || ''}
+        runtimeInputs={runtimeInputs}
+        onRun={executeWorkflow}
+      />
     </div>
   )
 }

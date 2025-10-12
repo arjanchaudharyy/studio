@@ -13,6 +13,7 @@ type Output = {
   mimeType: string;
   size: number;
   content: string; // base64 encoded for downstream components
+  textContent: string; // decoded text content
 };
 
 const outputSchema = z.object({
@@ -21,6 +22,7 @@ const outputSchema = z.object({
   mimeType: z.string(),
   size: z.number(),
   content: z.string(),
+  textContent: z.string(),
 });
 
 const definition: ComponentDefinition<Input, Output> = {
@@ -31,6 +33,44 @@ const definition: ComponentDefinition<Input, Output> = {
   inputSchema,
   outputSchema,
   docs: 'Loads file content from storage. Requires a fileId from previously uploaded file.',
+  metadata: {
+    slug: 'file-loader',
+    version: '1.0.0',
+    type: 'input',
+    category: 'input-output',
+    description: 'Load file contents from ShipSec storage for use in workflows.',
+    icon: 'FileUp',
+    author: {
+      name: 'ShipSecAI',
+      type: 'shipsecai',
+    },
+    isLatest: true,
+    deprecated: false,
+    inputs: [
+      {
+        id: 'fileId',
+        label: 'File ID',
+        type: 'string',
+        required: true,
+        description: 'File ID from uploaded file (typically from Manual Trigger runtime input).',
+      },
+    ],
+    outputs: [
+      {
+        id: 'file',
+        label: 'File Data',
+        type: 'object',
+        description: 'Complete file metadata and base64 encoded content.',
+      },
+      {
+        id: 'textContent',
+        label: 'Text Content',
+        type: 'string',
+        description: 'Decoded text content of the file (UTF-8).',
+      },
+    ],
+    parameters: [],
+  },
   async execute(params, context) {
     context.logger.info(`[FileLoader] Loading file with ID: ${params.fileId}`);
 
@@ -56,6 +96,9 @@ const definition: ComponentDefinition<Input, Output> = {
 
     // Convert to base64 for downstream components
     const content = buffer.toString('base64');
+    
+    // Also provide decoded text content
+    const textContent = buffer.toString('utf-8');
 
     return {
       fileId: metadata.id,
@@ -63,10 +106,10 @@ const definition: ComponentDefinition<Input, Output> = {
       mimeType: metadata.mimeType,
       size: metadata.size,
       content,
+      textContent,
     };
   },
 };
 
 componentRegistry.register(definition);
-
 

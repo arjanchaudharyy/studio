@@ -80,8 +80,11 @@ describe('Backend Integration Tests', () => {
           {
             id: 'node-1',
             type: 'core.trigger.manual',
-            label: 'Manual Trigger',
             position: { x: 0, y: 0 },
+            data: {
+              label: 'Manual Trigger',
+              config: {},
+            },
           },
         ],
         edges: [],

@@ -75,8 +75,12 @@ export function validateConnection(
   }
 
   // Get component metadata
-  const sourceComponent = getComponent(sourceNode.data.componentSlug)
-  const targetComponent = getComponent(targetNode.data.componentSlug)
+  const sourceComponent = getComponent(
+    (sourceNode.data as any).componentId ?? (sourceNode.data as any).componentSlug
+  )
+  const targetComponent = getComponent(
+    (targetNode.data as any).componentId ?? (targetNode.data as any).componentSlug
+  )
 
   if (!sourceComponent || !targetComponent) {
     return { isValid: false, error: 'Component metadata not found' }
@@ -87,9 +91,36 @@ export function validateConnection(
     return { isValid: false, error: 'Connection handles not specified' }
   }
 
-  // Get port metadata
-  const sourcePort = sourceComponent.outputs.find((p) => p.id === sourceHandle)
-  const targetPort = targetComponent.inputs.find((p) => p.id === targetHandle)
+  // Get port metadata (with support for dynamic outputs)
+  let sourceOutputs = sourceComponent.outputs ?? []
+  
+  // Special case: Manual Trigger has dynamic outputs based on runtimeInputs parameter
+  if (sourceComponent.slug === 'manual-trigger') {
+    const sourceNodeData = sourceNode.data as any
+    const runtimeInputsParam = sourceNodeData.parameters?.runtimeInputs
+    
+    if (runtimeInputsParam) {
+      try {
+        const runtimeInputs = typeof runtimeInputsParam === 'string'
+          ? JSON.parse(runtimeInputsParam)
+          : runtimeInputsParam
+        
+        if (Array.isArray(runtimeInputs) && runtimeInputs.length > 0) {
+          sourceOutputs = runtimeInputs.map((input: any) => ({
+            id: input.id,
+            label: input.label,
+            type: input.type === 'file' ? 'string' : input.type,
+            description: input.description || `Runtime input: ${input.label}`,
+          }))
+        }
+      } catch (error) {
+        console.error('Failed to parse runtimeInputs for validation:', error)
+      }
+    }
+  }
+  
+  const sourcePort = sourceOutputs.find((p) => p.id === sourceHandle)
+  const targetPort = (targetComponent.inputs ?? []).find((p) => p.id === targetHandle)
 
   if (!sourcePort || !targetPort) {
     return { isValid: false, error: 'Invalid connection ports' }
@@ -170,7 +201,7 @@ export function getNodeValidationWarnings(
   // Check for required parameters that are not set
   component.parameters.forEach((param) => {
     if (param.required) {
-      const value = node.data.parameters?.[param.id]
+      const value = (node.data as any).parameters?.[param.id]
       if (value === undefined || value === null || value === '') {
         warnings.push(`Required parameter "${param.label}" is not set`)
       }

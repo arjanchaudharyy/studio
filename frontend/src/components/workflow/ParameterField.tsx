@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { RuntimeInputsEditor } from './RuntimeInputsEditor'
 import type { Parameter } from '@/schemas/component'
 
 interface ParameterFieldProps {
@@ -14,6 +16,33 @@ interface ParameterFieldProps {
  */
 export function ParameterField({ parameter, value, onChange }: ParameterFieldProps) {
   const currentValue = value !== undefined ? value : parameter.default
+  const [jsonText, setJsonText] = useState<string>('')
+  const [jsonError, setJsonError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (parameter.type !== 'json') {
+      return
+    }
+
+    if (value === undefined || value === null || value === '') {
+      setJsonText('')
+      setJsonError(null)
+      return
+    }
+
+    if (typeof value === 'string') {
+      setJsonText(value)
+      setJsonError(null)
+      return
+    }
+
+    try {
+      setJsonText(JSON.stringify(value, null, 2))
+      setJsonError(null)
+    } catch (error) {
+      console.error('Failed to serialise JSON parameter value', error)
+    }
+  }, [parameter.type, value])
 
   switch (parameter.type) {
     case 'text':
@@ -46,8 +75,15 @@ export function ParameterField({ parameter, value, onChange }: ParameterFieldPro
           id={parameter.id}
           type="number"
           placeholder={parameter.placeholder}
-          value={currentValue || ''}
-          onChange={(e) => onChange(Number(e.target.value))}
+          value={currentValue ?? ''}
+          onChange={(e) => {
+            const inputValue = e.target.value
+            if (inputValue === '') {
+              onChange(undefined)
+              return
+            }
+            onChange(Number(inputValue))
+          }}
           min={parameter.min}
           max={parameter.max}
           className="text-sm"
@@ -157,6 +193,40 @@ export function ParameterField({ parameter, value, onChange }: ParameterFieldPro
         </div>
       )
 
+    case 'json':
+      return (
+        <div className="space-y-2">
+          <textarea
+            id={parameter.id}
+            value={jsonText}
+            onChange={(e) => {
+              const nextValue = e.target.value
+              setJsonText(nextValue)
+
+              if (nextValue.trim() === '') {
+                setJsonError(null)
+                onChange(undefined)
+                return
+              }
+
+              try {
+                const parsed = JSON.parse(nextValue)
+                setJsonError(null)
+                onChange(parsed)
+              } catch (error) {
+                setJsonError('Invalid JSON')
+              }
+            }}
+            className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-y font-mono"
+            rows={parameter.rows || 4}
+            placeholder={parameter.placeholder || '{\n  "key": "value"\n}'}
+          />
+          {jsonError && (
+            <p className="text-xs text-red-500">{jsonError}</p>
+          )}
+        </div>
+      )
+
     default:
       return (
         <div className="text-xs text-muted-foreground italic">
@@ -180,6 +250,28 @@ export function ParameterFieldWrapper({
   value,
   onChange,
 }: ParameterFieldWrapperProps) {
+  // Special case: Runtime Inputs Editor for Manual Trigger
+  if (parameter.id === 'runtimeInputs') {
+    return (
+      <div className="p-3 rounded-lg border bg-background space-y-2">
+        {parameter.description && (
+          <p className="text-xs text-muted-foreground mb-2">
+            {parameter.description}
+          </p>
+        )}
+
+        <RuntimeInputsEditor value={value || []} onChange={onChange} />
+
+        {parameter.helpText && (
+          <p className="text-xs text-muted-foreground italic mt-2">
+            💡 {parameter.helpText}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  // Standard parameter field rendering
   return (
     <div className="p-3 rounded-lg border bg-background space-y-2">
       <div className="flex items-center justify-between mb-1">

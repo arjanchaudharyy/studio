@@ -7,6 +7,8 @@
 import './core/trigger-manual';
 import './core/file-loader';
 import './core/webhook';
+import './core/text-splitter';
+import './core/console-log';
 
 // Security components
 import './security/subfinder';

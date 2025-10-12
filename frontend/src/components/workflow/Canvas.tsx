@@ -150,15 +150,15 @@ export function Canvas({ className }: CanvasProps) {
     (event: React.DragEvent) => {
       event.preventDefault()
 
-      const componentSlug = event.dataTransfer.getData('application/reactflow')
+      const componentId = event.dataTransfer.getData('application/reactflow')
 
-      if (typeof componentSlug === 'undefined' || !componentSlug) {
+      if (typeof componentId === 'undefined' || !componentId) {
         return
       }
 
-      const component = getComponent(componentSlug)
+      const component = getComponent(componentId)
       if (!component) {
-        console.error('Component not found:', componentSlug)
+        console.error('Component not found:', componentId)
         return
       }
 
@@ -170,13 +170,19 @@ export function Canvas({ className }: CanvasProps) {
       if (!position) return
 
       const newNode: Node<NodeData> = {
-        id: `${componentSlug}-${Date.now()}`,
+        id: `${component.slug ?? component.id}-${Date.now()}`,
         type: 'workflow',
         position,
         data: {
-          componentSlug: componentSlug,
+          // Backend fields (required)
+          label: component.name,
+          config: {},
+          // Frontend fields
+          componentId: component.id,
+          componentSlug: component.slug ?? component.id,
           componentVersion: component.version,
           parameters: {},
+          inputs: {},
           status: 'idle',
         },
       }

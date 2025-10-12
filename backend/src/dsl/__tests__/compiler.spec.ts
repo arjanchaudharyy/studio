@@ -14,20 +14,29 @@ describe('compileWorkflowGraph', () => {
         {
           id: 'trigger',
           type: 'core.trigger.manual',
-          label: 'Trigger',
           position: { x: 0, y: 0 },
+          data: {
+            label: 'Trigger',
+            config: {},
+          },
         },
         {
           id: 'loader',
           type: 'core.file.loader',
-          label: 'File loader',
           position: { x: 0, y: 100 },
+          data: {
+            label: 'File loader',
+            config: {},
+          },
         },
         {
           id: 'webhook',
           type: 'core.webhook.post',
-          label: 'Webhook',
           position: { x: 0, y: 200 },
+          data: {
+            label: 'Webhook',
+            config: {},
+          },
         },
       ],
       edges: [
@@ -57,8 +66,11 @@ describe('compileWorkflowGraph', () => {
         {
           id: 'missing',
           type: 'component.not.registered',
-          label: 'Missing',
           position: { x: 0, y: 0 },
+          data: {
+            label: 'Missing',
+            config: {},
+          },
         },
       ],
       edges: [],
@@ -82,14 +94,20 @@ describe('compileWorkflowGraph', () => {
         {
           id: 'a',
           type: registeredComponent.id,
-          label: 'A',
           position: { x: 0, y: 0 },
+          data: {
+            label: 'A',
+            config: {},
+          },
         },
         {
           id: 'b',
           type: registeredComponent.id,
-          label: 'B',
           position: { x: 0, y: 100 },
+          data: {
+            label: 'B',
+            config: {},
+          },
         },
       ],
       edges: [

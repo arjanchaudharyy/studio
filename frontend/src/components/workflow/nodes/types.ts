@@ -28,6 +28,11 @@ export const CATEGORY_CONFIGS: Record<
     description: 'Data input and output components',
     icon: 'FileJson',
   },
+  trigger: {
+    label: 'Triggers',
+    description: 'Workflow entrypoint components',
+    icon: 'Play',
+  },
 }
 
 /**
@@ -39,6 +44,10 @@ export interface TypeConfig {
 }
 
 export const TYPE_CONFIGS: Record<ComponentMetadata['type'], TypeConfig> = {
+  trigger: {
+    label: 'Trigger',
+    color: 'text-gray-500',
+  },
   input: {
     label: 'Input',
     color: 'text-blue-600',

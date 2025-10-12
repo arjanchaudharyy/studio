@@ -7,22 +7,25 @@ import type { ComponentMetadata } from '@/schemas/component'
 import { cn } from '@/lib/utils'
 
 const TYPE_CONFIG = {
-  input: { label: 'Input', color: 'text-blue-600' },
+  trigger: { label: 'Triggers', color: 'text-gray-500' },
+  input: { label: 'Inputs', color: 'text-blue-600' },
   scan: { label: 'Security Tools', color: 'text-purple-600' },
   process: { label: 'Processing', color: 'text-green-600' },
-  output: { label: 'Output', color: 'text-orange-600' },
-} as const
+  output: { label: 'Outputs', color: 'text-orange-600' },
+} as const satisfies Record<string, { label: string; color: string }>
 
 interface ComponentItemProps {
   component: ComponentMetadata
 }
 
 function ComponentItem({ component }: ComponentItemProps) {
-  const IconComponent = (LucideIcons[component.icon as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>) || LucideIcons.Box
+  const iconName = component.icon && component.icon in LucideIcons ? component.icon : 'Box'
+  const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>
+  const description = component.description || 'No description available yet.'
 
   const onDragStart = (event: React.DragEvent) => {
-    // Store component slug for canvas to create node
-    event.dataTransfer.setData('application/reactflow', component.slug)
+    // Store component ID for canvas to create node
+    event.dataTransfer.setData('application/reactflow', component.id)
     event.dataTransfer.effectAllowed = 'move'
   }
 
@@ -36,7 +39,7 @@ function ComponentItem({ component }: ComponentItemProps) {
       )}
       draggable={!component.deprecated}
       onDragStart={onDragStart}
-      title={component.description}
+      title={description}
     >
       {component.logo ? (
         <img 
@@ -57,12 +60,12 @@ function ComponentItem({ component }: ComponentItemProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2 mb-1">
           <span className="text-sm font-medium truncate">{component.name}</span>
-          {component.author.type === 'shipsecai' && (
+          {component.author?.type === 'shipsecai' && (
             <ComponentBadge type="official" />
           )}
         </div>
         <p className="text-xs text-muted-foreground line-clamp-2">
-          {component.description}
+          {description}
         </p>
         {component.deprecated && (
           <div className="mt-2">
@@ -75,16 +78,19 @@ function ComponentItem({ component }: ComponentItemProps) {
 }
 
 export function Sidebar() {
-  const { getAllComponents, getComponentsByType, fetchComponents } = useComponentStore()
+  const { getAllComponents, getComponentsByType, fetchComponents, loading, error } = useComponentStore()
   const [showFileUpload, setShowFileUpload] = useState(false)
 
   // Fetch components on mount
   useEffect(() => {
-    fetchComponents()
+    fetchComponents().catch((error) => {
+      console.error('Failed to load components', error)
+    })
   }, [fetchComponents])
 
   const allComponents = getAllComponents()
   const componentsByType = {
+    trigger: getComponentsByType('trigger'),
     input: getComponentsByType('input'),
     scan: getComponentsByType('scan'),
     process: getComponentsByType('process'),
@@ -101,7 +107,15 @@ export function Sidebar() {
           </p>
         </div>
 
-        {allComponents.length === 0 ? (
+        {loading ? (
+          <div className="text-sm text-muted-foreground text-center py-8">
+            Loading components...
+          </div>
+        ) : error ? (
+          <div className="text-sm text-red-500 text-center py-8">
+            Failed to load components: {error}
+          </div>
+        ) : allComponents.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-8">
             No components available
           </div>
@@ -111,7 +125,8 @@ export function Sidebar() {
               const components = componentsByType[type]
               if (components.length === 0) return null
 
-              const config = TYPE_CONFIG[type]
+              const config = TYPE_CONFIG[type as keyof typeof TYPE_CONFIG]
+              if (!config) return null
 
               return (
                 <div key={type}>

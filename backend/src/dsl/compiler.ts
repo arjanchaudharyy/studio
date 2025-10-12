@@ -66,7 +66,7 @@ export function compileWorkflowGraph(graph: WorkflowGraph): WorkflowDefinition {
 
   const actions: WorkflowAction[] = orderedIds.map((id) => {
     const node = graph.nodes.find((n) => n.id === id)!;
-    const params = node.config ?? {};
+    const params = node.data?.config ?? {};
     return {
       ref: id,
       componentId: node.type,

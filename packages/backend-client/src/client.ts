@@ -255,13 +255,16 @@ export interface components {
             nodes: {
                 id: string;
                 type: string;
-                label: string;
                 position: {
                     x: number;
                     y: number;
                 };
-                config?: {
-                    [key: string]: unknown;
+                data: {
+                    label: string;
+                    /** @default {} */
+                    config: {
+                        [key: string]: unknown;
+                    };
                 };
             }[];
             edges: {
@@ -284,13 +287,16 @@ export interface components {
             nodes: {
                 id: string;
                 type: string;
-                label: string;
                 position: {
                     x: number;
                     y: number;
                 };
-                config?: {
-                    [key: string]: unknown;
+                data: {
+                    label: string;
+                    /** @default {} */
+                    config: {
+                        [key: string]: unknown;
+                    };
                 };
             }[];
             edges: {

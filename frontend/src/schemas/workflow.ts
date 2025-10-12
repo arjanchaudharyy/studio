@@ -4,16 +4,16 @@ import { EdgeSchema } from './edge'
 
 /**
  * Workflow metadata schema (for list endpoint)
- * Contains summary information without nodes/edges
+ * Matches backend structure exactly
  */
 export const WorkflowMetadataSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1, 'Workflow name is required'),
-  description: z.string().optional(),
-  nodeCount: z.number().int().min(0),
-  edgeCount: z.number().int().min(0),
-  lastRun: z.string().datetime().nullable(),
-  runCount: z.number().int().min(0),
+  description: z.string().nullable().optional(),
+  nodes: z.array(NodeSchema),
+  edges: z.array(EdgeSchema),
+  lastRun: z.string().datetime().nullable().optional(),
+  runCount: z.number().int().min(0).optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 })

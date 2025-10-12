@@ -1,8 +1,9 @@
 import { z } from 'zod';
+
 import type {
+  IArtifactService,
   IFileStorageService,
   ISecretsService,
-  IArtifactService,
   ITraceService,
 } from './interfaces';
 
@@ -39,6 +40,84 @@ export interface Logger {
   error: (...args: unknown[]) => void;
 }
 
+export type ComponentPortType = 'string' | 'array' | 'object' | 'file' | 'any';
+
+export interface ComponentPortMetadata {
+  id: string;
+  label: string;
+  type: ComponentPortType;
+  required?: boolean;
+  description?: string;
+}
+
+export type ComponentParameterType =
+  | 'text'
+  | 'textarea'
+  | 'number'
+  | 'boolean'
+  | 'select'
+  | 'multi-select'
+  | 'json';
+
+export interface ComponentParameterOption {
+  label: string;
+  value: unknown;
+}
+
+export interface ComponentParameterMetadata {
+  id: string;
+  label: string;
+  type: ComponentParameterType;
+  required?: boolean;
+  default?: unknown;
+  placeholder?: string;
+  description?: string;
+  helpText?: string;
+  options?: ComponentParameterOption[];
+  min?: number;
+  max?: number;
+  rows?: number;
+}
+
+export type ComponentAuthorType = 'shipsecai' | 'community';
+
+export interface ComponentAuthorMetadata {
+  name: string;
+  type: ComponentAuthorType;
+  url?: string;
+}
+
+export type ComponentUiCategory =
+  | 'security-tool'
+  | 'building-block'
+  | 'input-output'
+  | 'trigger';
+
+export type ComponentUiType =
+  | 'trigger'
+  | 'input'
+  | 'scan'
+  | 'process'
+  | 'output';
+
+export interface ComponentUiMetadata {
+  slug: string;
+  version: string;
+  type: ComponentUiType;
+  category: ComponentUiCategory;
+  description?: string;
+  documentation?: string;
+  documentationUrl?: string;
+  icon?: string;
+  logo?: string;
+  author?: ComponentAuthorMetadata;
+  isLatest?: boolean;
+  deprecated?: boolean;
+  inputs?: ComponentPortMetadata[];
+  outputs?: ComponentPortMetadata[];
+  parameters?: ComponentParameterMetadata[];
+}
+
 /**
  * Execution context provided to components during execution
  * Contains service interfaces (not concrete implementations)
@@ -48,7 +127,7 @@ export interface ExecutionContext {
   componentRef: string;
   logger: Logger;
   emitProgress: (message: string) => void;
-  
+
   // Service interfaces - implemented by adapters
   storage?: IFileStorageService;
   secrets?: ISecretsService;
@@ -64,7 +143,6 @@ export interface ComponentDefinition<I = unknown, O = unknown> {
   inputSchema: z.ZodType<I>;
   outputSchema: z.ZodType<O>;
   docs?: string;
+  metadata?: ComponentUiMetadata;
   execute: (params: I, context: ExecutionContext) => Promise<O>;
 }
-
-

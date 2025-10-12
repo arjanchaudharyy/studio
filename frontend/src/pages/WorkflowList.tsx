@@ -98,7 +98,7 @@ export function WorkflowList() {
                 <div className="flex items-start justify-between mb-3">
                   <h3 className="text-lg font-semibold">{workflow.name}</h3>
                   <Badge variant="secondary">
-                    {workflow.nodeCount || 0} nodes
+                    {workflow.nodes?.length || 0} nodes
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">

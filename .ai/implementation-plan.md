@@ -448,3 +448,24 @@ Successfully implemented real HTTP POST/PUT/PATCH functionality:
 **Commit:** `e12feee` - feat: add type-safe OpenAPI client for frontend integration
 
 ---
+
+## Phase 6.5 – Component Metadata Sync ✅ **COMPLETE**
+
+**Goal:** Align backend component registry with frontend workflow builder expectations.
+
+- [x] Extend `ComponentDefinition` to carry UI metadata (slug, mapped categories, icon, ports, parameters).
+- [x] Populate metadata for worker components (manual trigger, file loader, webhook, subfinder) and ensure registry export.
+- [x] Expose sanitized component DTOs from the backend controller (no raw Zod objects in responses).
+- [x] Update frontend component store and serializers to consume backend metadata.
+- [x] Ensure workflow nodes persist backend component IDs while preserving display data.
+- [x] **Remove all hardcoded component registries from frontend** - Frontend now exclusively uses backend API
+- [x] Delete obsolete component spec JSON files (FileLoader, OutputSaver, Merge, Subfinder)
+- [x] Delete obsolete registry.ts file
+- [x] Verify frontend only uses componentStore (backend API)
+- [x] TypeScript compilation passes with no errors
+
+**Status**: ✅ COMPLETE - Frontend is 100% backend-driven for components
+
+See: `.ai/FRONTEND-CLEANUP-COMPLETE.md` for detailed documentation
+
+---

@@ -74,10 +74,11 @@ export function ComponentBadge({ type, version }: ComponentBadgeProps) {
 export function getBadgeTypeFromComponent(
   component: ComponentMetadata
 ): BadgeType {
+  const isLatest = component.isLatest ?? true
   if (component.deprecated) return 'deprecated'
-  if (!component.isLatest) return 'outdated'
-  if (component.isLatest) return 'latest'
-  return component.author.type === 'shipsecai' ? 'official' : 'community'
+  if (!isLatest) return 'outdated'
+  if (isLatest) return 'latest'
+  return component.author?.type === 'shipsecai' ? 'official' : 'community'
 }
 
 /**
@@ -85,20 +86,21 @@ export function getBadgeTypeFromComponent(
  */
 export function ComponentBadges({ component }: { component: ComponentMetadata }) {
   const badges: Array<{ type: BadgeType; version?: string }> = []
+  const isLatest = component.isLatest ?? true
 
   // Author badge (official or community)
-  if (component.author.type === 'shipsecai') {
+  if (component.author?.type === 'shipsecai') {
     badges.push({ type: 'official' })
-  } else {
+  } else if (component.author?.type === 'community') {
     badges.push({ type: 'community' })
   }
 
   // Status badges
   if (component.deprecated) {
     badges.push({ type: 'deprecated' })
-  } else if (!component.isLatest) {
+  } else if (!isLatest) {
     badges.push({ type: 'outdated' })
-  } else if (component.isLatest) {
+  } else if (isLatest) {
     badges.push({ type: 'latest' })
   }
 
