@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ExecutionLog } from '@/schemas/execution'
 import type { NodeStatus } from '@/schemas/node'
+import { api } from '@/services/api'
 
 interface ExecutionStore {
   // Current execution
@@ -72,35 +73,50 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   /**
    * Poll execution status from backend
    */
-  pollStatus: (_executionId: string) => {
+  pollStatus: (executionId: string) => {
     // Stop any existing polling
     get().stopPolling()
 
     const poll = async () => {
       try {
-        // TODO: Replace with actual API call when backend is ready
-        // const status = await api.executions.getStatus(_executionId)
+        // Fetch execution status
+        const statusResponse = await api.executions.getStatus(executionId)
+        
+        // Fetch execution trace/logs
+        const logsResponse = await api.executions.getLogs(executionId)
 
-        // For now, just check if we're still running
-        const currentStatus = get().status
+        // Convert trace events to execution logs
+        const newLogs: ExecutionLog[] = logsResponse.map((event: any, index: number) => ({
+          id: `log-${executionId}-${index}`,
+          executionId,
+          nodeId: event.nodeRef || '',
+          level: event.error ? 'error' : 'info',
+          message: event.message || event.error || '',
+          timestamp: event.timestamp,
+        }))
 
-        if (currentStatus !== 'running') {
+        const status = (statusResponse as any).status || 'RUNNING'
+        
+        set({
+          status: status === 'COMPLETED' ? 'completed' : 
+                  status === 'FAILED' ? 'failed' :
+                  status === 'CANCELLED' ? 'cancelled' : 'running',
+          logs: newLogs,
+        })
+
+        // Stop polling if execution is complete
+        if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(status)) {
           get().stopPolling()
-          return
         }
-
-        // Mock status update would happen here
-        // set({
-        //   status: status.status,
-        //   nodeStates: status.nodeResults,
-        //   logs: status.logs,
-        // })
 
       } catch (error) {
         console.error('Failed to poll execution status:', error)
-        get().stopPolling()
+        // Continue polling on error (might just be a temporary network issue)
       }
     }
+
+    // Initial poll
+    poll()
 
     // Poll every 2 seconds
     const interval = setInterval(poll, 2000)

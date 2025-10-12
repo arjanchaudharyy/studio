@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import * as LucideIcons from 'lucide-react'
 import { useComponentStore } from '@/store/componentStore'
 import { ComponentBadge } from '@/components/workflow/ComponentBadge'
+import { FileUpload } from '@/components/workflow/FileUpload'
 import type { ComponentMetadata } from '@/schemas/component'
 import { cn } from '@/lib/utils'
 
@@ -75,6 +76,7 @@ function ComponentItem({ component }: ComponentItemProps) {
 
 export function Sidebar() {
   const { getAllComponents, getComponentsByType, fetchComponents } = useComponentStore()
+  const [showFileUpload, setShowFileUpload] = useState(false)
 
   // Fetch components on mount
   useEffect(() => {
@@ -90,8 +92,8 @@ export function Sidebar() {
   }
 
   return (
-    <div className="w-[320px] border-r bg-background overflow-y-auto">
-      <div className="p-4">
+    <div className="w-[320px] border-r bg-background overflow-y-auto flex flex-col">
+      <div className="p-4 flex-1">
         <div className="mb-6">
           <h2 className="text-lg font-semibold">Components</h2>
           <p className="text-xs text-muted-foreground mt-1">
@@ -133,6 +135,35 @@ export function Sidebar() {
             {allComponents.length} component{allComponents.length !== 1 ? 's' : ''} available
           </p>
         </div>
+      </div>
+
+      {/* File Upload Section */}
+      <div className="p-4 border-t bg-muted/50">
+        <button
+          onClick={() => setShowFileUpload(!showFileUpload)}
+          className="w-full flex items-center justify-between mb-2"
+        >
+          <div className="flex items-center gap-2">
+            <LucideIcons.Upload className="h-4 w-4" />
+            <h3 className="text-sm font-semibold">File Upload</h3>
+          </div>
+          {showFileUpload ? (
+            <LucideIcons.ChevronUp className="h-4 w-4" />
+          ) : (
+            <LucideIcons.ChevronDown className="h-4 w-4" />
+          )}
+        </button>
+        
+        {showFileUpload && (
+          <div className="mt-2">
+            <FileUpload
+              onFileUploaded={(fileId, fileName) => {
+                console.log('File uploaded:', fileId, fileName)
+                // Could show a success toast here
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

@@ -19,7 +19,6 @@ function WorkflowBuilderContent() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const isNewWorkflow = id === 'new'
-  const { mockExecution } = useExecutionStore()
   const { metadata, setMetadata, setWorkflowId, markClean, resetWorkflow } = useWorkflowStore()
   const { getNodes, getEdges, setNodes, setEdges } = useReactFlow()
   const [isLoading, setIsLoading] = useState(false)
@@ -79,18 +78,48 @@ function WorkflowBuilderContent() {
     loadWorkflow()
   }, [id, isNewWorkflow, navigate, setMetadata, setNodes, setEdges, resetWorkflow, markClean])
 
-  const handleRun = () => {
-    // Get all node IDs for mock execution
+  const handleRun = async () => {
     const nodes = getNodes()
-    const nodeIds = nodes.map((n) => n.id)
 
-    if (nodeIds.length === 0) {
+    if (nodes.length === 0) {
       alert('Add some nodes to the workflow first!')
       return
     }
 
-    // Use mock execution (will be replaced with actual API call)
-    mockExecution(id || 'new', nodeIds)
+    // Ensure workflow is saved before running
+    const workflowId = metadata.id
+    if (!workflowId || isNewWorkflow) {
+      alert('Please save the workflow before running it.')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // First, commit the workflow (compile DSL)
+      await api.workflows.commit(workflowId)
+      
+      // Then run it
+      const result = await api.workflows.run(workflowId)
+      
+      // Start polling for execution status
+      const runId = (result as any).runId
+      if (runId) {
+        useExecutionStore.setState({ 
+          currentExecutionId: runId, 
+          status: 'running' 
+        })
+        useExecutionStore.getState().pollStatus(runId)
+        
+        alert(`Workflow started! Execution ID: ${runId}\n\nCheck the bottom panel for execution status.`)
+      } else {
+        alert('Workflow started but no run ID returned')
+      }
+    } catch (error) {
+      console.error('Failed to run workflow:', error)
+      alert(`Failed to run workflow: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleSave = async () => {
