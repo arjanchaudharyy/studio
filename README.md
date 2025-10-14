@@ -64,4 +64,8 @@ docker volume ls -q | grep shipsec | xargs -r docker volume rm
 - **Logs required for debugging**: use `timeout` with `pm2 logs` so you can bail out automatically in CI scripts.
 - **Clean rebuild**: `docker compose down --volumes` followed by `docker compose up -d` gives a pristine Temporal/Postgres cluster.
 
+## Execution Contract
+
+Formal schemas for workflow run status and trace events live in [`docs/execution-contract.md`](docs/execution-contract.md) and are exported via the `@shipsec/shared` package (`packages/shared`). Backend and frontend code should consume the shared Zod schemas instead of redefining enums locally.
+
 For deeper architectural context, see `ARCHITECTURE.md`, `.ai/implementation-plan.md`, and the docs in the `.ai/` folder.

@@ -18,14 +18,20 @@ const sampleGraph = WorkflowGraphSchema.parse({
     {
       id: 'trigger',
       type: 'core.trigger.manual',
-      label: 'Trigger',
       position: { x: 0, y: 0 },
+      data: {
+        label: 'Trigger',
+        config: {},
+      },
     },
     {
       id: 'loader',
       type: 'core.file.loader',
-      label: 'Loader',
       position: { x: 0, y: 100 },
+      data: {
+        label: 'Loader',
+        config: {},
+      },
     },
   ],
   edges: [
@@ -100,6 +106,9 @@ describe('WorkflowsService', () => {
         graph: sampleGraph,
         compiledDefinition: definition,
       };
+    },
+    async incrementRunCount() {
+      return;
     },
   } as unknown as WorkflowRepository;
 
@@ -204,7 +213,12 @@ describe('WorkflowsService', () => {
     const result = await service.getRunResult(run.runId, run.temporalRunId);
     await service.cancelRun(run.runId, run.temporalRunId);
 
+    expect(status.runId).toBe(run.runId);
     expect(status.workflowId).toBe(run.runId);
+    expect(status.status).toBe('RUNNING');
+    expect(status.taskQueue).toBe('shipsec-default');
+    expect(status.updatedAt).toBeDefined();
+    expect(status.failure).toBeUndefined();
     expect(result).toMatchObject({ workflowId: run.runId, completed: true });
     expect(lastDescribeRef).toEqual({
       workflowId: run.runId,

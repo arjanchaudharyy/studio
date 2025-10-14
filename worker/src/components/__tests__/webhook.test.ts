@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'bun:test';
 import { createExecutionContext } from '@shipsec/component-sdk';
 import { componentRegistry } from '../index';
 
 describe('webhook component', () => {
   beforeAll(() => {
     require('../index');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('should be registered', () => {
@@ -17,6 +21,14 @@ describe('webhook component', () => {
   it('should return sent status (stub)', async () => {
     const component = componentRegistry.get('core.webhook.post');
     if (!component) throw new Error('Component not registered');
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
 
     const context = createExecutionContext({
       runId: 'test-run',
@@ -55,4 +67,3 @@ describe('webhook component', () => {
     ).not.toThrow();
   });
 });
-

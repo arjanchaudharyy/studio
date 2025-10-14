@@ -21,15 +21,20 @@ const baseGraph: WorkflowGraphDto = WorkflowGraphSchema.parse({
     {
       id: 'trigger',
       type: 'core.trigger.manual',
-      label: 'Trigger',
       position: { x: 0, y: 0 },
+      data: {
+        label: 'Trigger',
+        config: {},
+      },
     },
     {
       id: 'loader',
       type: 'core.file.loader',
-      label: 'Loader',
       position: { x: 0, y: 100 },
-      config: { fileName: 'controller.txt' },
+      data: {
+        label: 'Loader',
+        config: { fileName: 'controller.txt' },
+      },
     },
   ],
   edges: [{ id: 'edge', source: 'trigger', target: 'loader' }],
@@ -96,6 +101,17 @@ describe('WorkflowsController', () => {
       };
       repositoryStore.set(id, updated);
       return updated;
+    },
+    async incrementRunCount(id) {
+      const existing = repositoryStore.get(id);
+      if (!existing) {
+        throw new Error(`Workflow ${id} not found`);
+      }
+      const updated: WorkflowRecord = {
+        ...existing,
+        runCount: (existing.runCount ?? 0) + 1,
+      };
+      repositoryStore.set(id, updated);
     },
   };
 
@@ -183,7 +199,10 @@ describe('WorkflowsController', () => {
     expect(run.taskQueue).toBe('shipsec-default');
 
     const status = await controller.status(run.runId, run.temporalRunId);
-    expect(status.runId).toBe('temporal-run-controller');
+    expect(status.runId).toBe(run.runId);
+    expect(status.workflowId).toBe(run.runId);
+    expect(status.status).toBe('RUNNING');
+    expect(status.updatedAt).toBeDefined();
 
     const result = await controller.result(run.runId, run.temporalRunId);
     expect(result).toEqual({
@@ -201,5 +220,6 @@ describe('WorkflowsController', () => {
     const trace = await controller.trace(run.runId);
     expect(trace.runId).toBe(run.runId);
     expect(trace.events).toHaveLength(0);
+    expect(trace.cursor).toBeUndefined();
   });
 });

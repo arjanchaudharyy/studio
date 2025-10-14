@@ -14,7 +14,7 @@ describe('trigger-manual component', () => {
     expect(component?.category).toBe('trigger');
   });
 
-  it('should pass through payload', async () => {
+  it('should map runtime inputs to outputs', async () => {
     const component = componentRegistry.get('core.trigger.manual');
     if (!component) throw new Error('Component not registered');
 
@@ -24,23 +24,28 @@ describe('trigger-manual component', () => {
     });
 
     const params = component.inputSchema.parse({
-      payload: {
+      runtimeInputs: [
+        { id: 'user', label: 'User', type: 'text', required: true },
+        { id: 'action', label: 'Action', type: 'text', required: true },
+        { id: 'metadata', label: 'Metadata', type: 'json', required: false },
+      ],
+      __runtimeData: {
         user: 'alice',
         action: 'start',
-        timestamp: Date.now(),
+        metadata: { source: 'unit-test' },
       },
     });
 
     const result = await component.execute(params, context) as any;
 
-    expect(result.payload).toEqual({
+    expect(result).toEqual({
       user: 'alice',
       action: 'start',
-      timestamp: (params as any).payload.timestamp,
+      metadata: { source: 'unit-test' },
     });
   });
 
-  it('should handle empty payload', async () => {
+  it('should handle empty runtime input configuration', async () => {
     const component = componentRegistry.get('core.trigger.manual');
     if (!component) throw new Error('Component not registered');
 
@@ -53,7 +58,27 @@ describe('trigger-manual component', () => {
 
     const result = await component.execute(params, context) as any;
 
-    expect(result.payload).toEqual({});
+    expect(result).toEqual({});
+  });
+
+  it('should throw when required runtime input is missing', async () => {
+    const component = componentRegistry.get('core.trigger.manual');
+    if (!component) throw new Error('Component not registered');
+
+    const context = createExecutionContext({
+      runId: 'test-run',
+      componentRef: 'trigger-test',
+    });
+
+    const params = component.inputSchema.parse({
+      runtimeInputs: [
+        { id: 'user', label: 'User', type: 'text', required: true },
+      ],
+      __runtimeData: {},
+    });
+
+    await expect(component.execute(params, context)).rejects.toThrow(
+      "Required runtime input 'User' (user) was not provided",
+    );
   });
 });
-

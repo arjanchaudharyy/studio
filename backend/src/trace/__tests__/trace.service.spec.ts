@@ -74,35 +74,57 @@ describe('TraceService', () => {
       },
     ];
 
-    const events = await service.list(runId);
+    const { events, cursor } = await service.list(runId);
     expect(events).toEqual([
       {
-        type: 'NODE_STARTED',
+        id: '1',
+        type: 'STARTED',
+        level: 'info',
         runId,
-        nodeRef: 'node-1',
+        nodeId: 'node-1',
         timestamp: '2025-01-01T00:00:00.000Z',
+        message: undefined,
+        error: undefined,
+        outputSummary: undefined,
+        data: undefined,
       },
       {
-        type: 'NODE_PROGRESS',
+        id: '2',
+        type: 'PROGRESS',
+        level: 'info',
         runId,
-        nodeRef: 'node-1',
+        nodeId: 'node-1',
         timestamp: '2025-01-01T00:00:01.000Z',
         message: 'Working',
+        error: undefined,
+        outputSummary: undefined,
+        data: undefined,
       },
       {
-        type: 'NODE_COMPLETED',
+        id: '3',
+        type: 'COMPLETED',
+        level: 'info',
         runId,
-        nodeRef: 'node-1',
+        nodeId: 'node-1',
         timestamp: '2025-01-01T00:00:02.000Z',
+        message: undefined,
+        error: undefined,
         outputSummary: { ok: true },
+        data: undefined,
       },
       {
-        type: 'NODE_FAILED',
+        id: '4',
+        type: 'FAILED',
+        level: 'error',
         runId,
-        nodeRef: 'node-2',
+        nodeId: 'node-2',
         timestamp: '2025-01-01T00:00:03.000Z',
-        error: 'Oops',
+        message: undefined,
+        error: { message: 'Oops' },
+        outputSummary: undefined,
+        data: undefined,
       },
     ]);
+    expect(cursor).toBe('4');
   });
 });

@@ -8,7 +8,9 @@ import { sql } from 'drizzle-orm';
 import { Client as MinioClient } from 'minio';
 import { randomUUID } from 'node:crypto';
 
-describe('Backend Integration Tests', () => {
+const runIntegration = process.env.RUN_BACKEND_INTEGRATION === 'true';
+
+(runIntegration ? describe : describe.skip)('Backend Integration Tests', () => {
   let app: INestApplication;
   let pool: Pool;
   let db: ReturnType<typeof drizzle>;
@@ -409,4 +411,3 @@ describe('Backend Integration Tests', () => {
     });
   });
 });
-

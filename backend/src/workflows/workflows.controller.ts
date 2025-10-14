@@ -202,8 +202,8 @@ export class WorkflowsController {
     },
   })
   async trace(@Param('runId') runId: string) {
-    const events = await this.traceService.list(runId);
-    return { runId, events };
+    const { events, cursor } = await this.traceService.list(runId);
+    return { runId, events, cursor };
   }
 
   @Get()

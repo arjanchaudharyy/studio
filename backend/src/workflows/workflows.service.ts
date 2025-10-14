@@ -6,10 +6,15 @@ import { compileWorkflowGraph } from '../dsl/compiler';
 import { WorkflowDefinition } from '../dsl/types';
 import {
   TemporalService,
-  type WorkflowRunStatus,
+  type WorkflowRunStatus as TemporalWorkflowRunStatus,
 } from '../temporal/temporal.service';
 import { WorkflowGraphDto, WorkflowGraphSchema } from './dto/workflow-graph.dto';
 import { WorkflowRecord, WorkflowRepository } from './repository/workflow.repository';
+import {
+  ExecutionStatus,
+  FailureSummary,
+  WorkflowRunStatusPayload,
+} from '@shipsec/shared';
 
 export interface WorkflowRunRequest {
   inputs?: Record<string, unknown>;
@@ -155,11 +160,18 @@ export class WorkflowsService {
     }
   }
 
-  async getRunStatus(runId: string, temporalRunId?: string): Promise<WorkflowRunStatus> {
+  async getRunStatus(
+    runId: string,
+    temporalRunId?: string,
+  ): Promise<WorkflowRunStatusPayload> {
     this.logger.log(
       `Fetching status for workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
     );
-    return this.temporalService.describeWorkflow({ workflowId: runId, runId: temporalRunId });
+    const temporalStatus = await this.temporalService.describeWorkflow({
+      workflowId: runId,
+      runId: temporalRunId,
+    });
+    return this.mapTemporalStatus(runId, temporalStatus);
   }
 
   async getRunResult(runId: string, temporalRunId?: string) {
@@ -212,5 +224,63 @@ export class WorkflowsService {
     }
 
     return String(value);
+  }
+
+  private mapTemporalStatus(
+    requestedRunId: string,
+    status: TemporalWorkflowRunStatus,
+  ): WorkflowRunStatusPayload {
+    const normalizedStatus = this.normalizeStatus(status.status);
+    const completedAt = status.closeTime?.toISOString();
+
+    return {
+      runId: status.workflowId,
+      workflowId: status.workflowId,
+      status: normalizedStatus,
+      startedAt: status.startTime,
+      updatedAt: new Date().toISOString(),
+      completedAt,
+      taskQueue: status.taskQueue,
+      historyLength: status.historyLength,
+      progress: undefined,
+      failure: this.buildFailure(normalizedStatus, requestedRunId, status.runId),
+    };
+  }
+
+  private normalizeStatus(status: string): ExecutionStatus {
+    switch (status) {
+      case 'RUNNING':
+        return 'RUNNING';
+      case 'COMPLETED':
+        return 'COMPLETED';
+      case 'FAILED':
+        return 'FAILED';
+      case 'CANCELED':
+        return 'CANCELLED';
+      case 'TERMINATED':
+        return 'TERMINATED';
+      case 'TIMED_OUT':
+        return 'TIMED_OUT';
+      case 'CONTINUED_AS_NEW':
+        return 'RUNNING';
+      default:
+        this.logger.warn(`Unknown Temporal status '${status}', defaulting to RUNNING`);
+        return 'RUNNING';
+    }
+  }
+
+  private buildFailure(
+    status: ExecutionStatus,
+    requestedRunId: string,
+    temporalRunId?: string,
+  ): FailureSummary | undefined {
+    if (!['FAILED', 'TERMINATED', 'TIMED_OUT'].includes(status)) {
+      return undefined;
+    }
+
+    return {
+      reason: `Workflow ${requestedRunId} reported status ${status}`,
+      temporalCode: temporalRunId,
+    };
   }
 }

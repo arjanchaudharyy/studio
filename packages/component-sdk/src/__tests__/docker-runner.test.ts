@@ -19,11 +19,13 @@ describe('Docker Runner', () => {
     };
   });
 
-  test('should execute simple echo command in alpine container', async () => {
+  const BUSYBOX_IMAGE = 'busybox:1.36';
+
+  test('should execute simple echo command in busybox container', async () => {
     const runner: DockerRunnerConfig = {
       kind: 'docker',
-      image: 'alpine:latest',
-      command: ['echo', 'Hello from Docker!'],
+      image: BUSYBOX_IMAGE,
+      command: ['/bin/sh', '-c', 'echo "Hello from Docker!"'],
       timeoutSeconds: 30,
     };
 
@@ -40,15 +42,15 @@ describe('Docker Runner', () => {
     );
 
     expect(result).toBe('Hello from Docker!');
-    expect(logs.some(log => log.includes('alpine:latest'))).toBe(true);
+    expect(logs.some(log => log.includes(BUSYBOX_IMAGE))).toBe(true);
     expect(logs.some(log => log.includes('Completed successfully'))).toBe(true);
   });
 
   test('should handle JSON output from container', async () => {
     const runner: DockerRunnerConfig = {
       kind: 'docker',
-      image: 'alpine:latest',
-      command: ['sh', '-c', 'echo \'{"result":"test-value"}\''],
+      image: BUSYBOX_IMAGE,
+      command: ['/bin/sh', '-c', 'echo \'{"result":"test-value"}\''],
       timeoutSeconds: 30,
     };
 
@@ -70,8 +72,8 @@ describe('Docker Runner', () => {
   test('should pass environment variables to container', async () => {
     const runner: DockerRunnerConfig = {
       kind: 'docker',
-      image: 'alpine:latest',
-      command: ['sh', '-c', 'echo $TEST_VAR'],
+      image: BUSYBOX_IMAGE,
+      command: ['/bin/sh', '-c', 'echo $TEST_VAR'],
       env: { TEST_VAR: 'environment-works' },
       timeoutSeconds: 30,
     };
@@ -94,8 +96,8 @@ describe('Docker Runner', () => {
   test('should handle container errors gracefully', async () => {
     const runner: DockerRunnerConfig = {
       kind: 'docker',
-      image: 'alpine:latest',
-      command: ['sh', '-c', 'exit 1'], // Force error
+      image: BUSYBOX_IMAGE,
+      command: ['/bin/sh', '-c', 'exit 1'], // Force error
       timeoutSeconds: 30,
     };
 
@@ -112,8 +114,8 @@ describe('Docker Runner', () => {
   test('should timeout long-running containers', async () => {
     const runner: DockerRunnerConfig = {
       kind: 'docker',
-      image: 'alpine:latest',
-      command: ['sh', '-c', 'sleep 10'],
+      image: BUSYBOX_IMAGE,
+      command: ['/bin/sh', '-c', 'sleep 10'],
       timeoutSeconds: 1, // 1 second timeout
     };
 
@@ -145,4 +147,3 @@ describe('Docker Runner', () => {
     ).rejects.toThrow();
   }, 10000); // Give it time to fail
 });
-

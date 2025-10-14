@@ -11,7 +11,7 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Phase 0 | ⚪ Not Started | Baseline Audit & Readiness |
-| Phase 1 | ⚪ Not Started | Contract Specification & Shared Types |
+| Phase 1 | 🟡 In Progress | Contract Specification & Shared Types |
 | Phase 2 | ⚪ Not Started | Backend Contract Realignment |
 | Phase 3 | ⚪ Not Started | Frontend Schema & Store Sync |
 | Phase 4 | ⚪ Not Started | Worker Trace Enhancements |
@@ -42,12 +42,12 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 
 **Goal:** Publish the authoritative execution status and trace specification consumed by both backend and frontend.
 
-- [ ] Draft execution status schema (enum, timestamps, failure payload, progress fields).
-- [ ] Draft trace event schema (id, nodeRef, type, level, message, error, outputSummary, data).
-- [ ] Add shared TypeScript exports (e.g., `packages/shared/execution.ts`) for backend + frontend reuse.
+- [x] Draft execution status schema (enum, timestamps, failure payload, progress fields).
+- [x] Draft trace event schema (id, nodeId, type, level, message, error, outputSummary, data).
+- [x] Add shared TypeScript exports (`packages/shared/src/execution.ts`) for backend + frontend reuse.
 - [ ] Update OpenAPI definitions so generated clients reflect the new contract.
-- [ ] Tests: type-level verification; lint; ensure spec exports compile.
-- **Deliverable:** `docs/execution-contract.md` linked from README and this plan.
+- [x] Tests/validation: `bun test` root (pulls in shared package), ensure schemas compile.
+- **Deliverable:** `docs/execution-contract.md` (new) describing the contract.
 
 ---
 
@@ -221,6 +221,7 @@ Document project-specific shortcuts or scripts in this section as they evolve so
 
 **Change Log**
 
+- `2025-10-13` – Added execution contract spec (`docs/execution-contract.md`) and shared TypeScript schemas via `@shipsec/shared`.
 - `2025-10-13` – Added operational runbook and local environment guidance.
 - `2025-10-13` – Replaced legacy implementation plan with observability-focused roadmap (this document).
 
