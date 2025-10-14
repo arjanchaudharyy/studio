@@ -44,6 +44,7 @@ const baseGraph: WorkflowGraphDto = WorkflowGraphSchema.parse({
 describe('WorkflowsController', () => {
   let controller: WorkflowsController;
   let repositoryStore: Map<string, WorkflowRecord>;
+  let runStore: Map<string, any>;
   let lastCancelledRun: { workflowId: string; runId?: string } | null = null;
   const now = new Date().toISOString();
 
@@ -110,6 +111,7 @@ describe('WorkflowsController', () => {
       const updated: WorkflowRecord = {
         ...existing,
         runCount: (existing.runCount ?? 0) + 1,
+        lastRun: new Date(),
       };
       repositoryStore.set(id, updated);
     },
@@ -117,7 +119,32 @@ describe('WorkflowsController', () => {
 
   beforeEach(() => {
     repositoryStore = new Map();
+    runStore = new Map();
     lastCancelledRun = null;
+
+    const runRepositoryStub = {
+      async upsert(data: { runId: string; workflowId: string; temporalRunId: string; totalActions: number }) {
+        const record = {
+          runId: data.runId,
+          workflowId: data.workflowId,
+          temporalRunId: data.temporalRunId,
+          totalActions: data.totalActions,
+          createdAt: new Date(now),
+          updatedAt: new Date(now),
+        };
+        runStore.set(data.runId, record);
+        return record;
+      },
+      async findByRunId(runId: string) {
+        return runStore.get(runId);
+      },
+    };
+
+    const traceRepositoryStub = {
+      async countByType() {
+        return 1;
+      },
+    };
 
     const temporalStub: Pick<
       TemporalService,
@@ -139,6 +166,7 @@ describe('WorkflowsController', () => {
           closeTime: undefined,
           historyLength: 0,
           taskQueue: 'shipsec-default',
+          failure: undefined,
         };
         return status;
       },
@@ -155,6 +183,8 @@ describe('WorkflowsController', () => {
 
     const workflowsService = new WorkflowsService(
       repositoryStub as WorkflowRepository,
+      runRepositoryStub as any,
+      traceRepositoryStub as any,
       temporalStub as TemporalService,
     );
     const traceService = new TraceService({
@@ -200,9 +230,9 @@ describe('WorkflowsController', () => {
 
     const status = await controller.status(run.runId, run.temporalRunId);
     expect(status.runId).toBe(run.runId);
-    expect(status.workflowId).toBe(run.runId);
+    expect(status.workflowId).toBe(created.id);
     expect(status.status).toBe('RUNNING');
-    expect(status.updatedAt).toBeDefined();
+    expect(status.progress).toEqual({ completedActions: 1, totalActions: 2 });
 
     const result = await controller.result(run.runId, run.temporalRunId);
     expect(result).toEqual({

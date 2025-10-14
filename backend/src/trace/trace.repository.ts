@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import {
@@ -8,6 +8,7 @@ import {
 } from '../database/schema';
 import { DRIZZLE_TOKEN } from '../database/database.module';
 import type { TraceEventType } from './types';
+import { sql } from 'drizzle-orm';
 
 export interface PersistedTraceEvent {
   runId: string;
@@ -16,9 +17,11 @@ export interface PersistedTraceEvent {
   nodeRef: string;
   timestamp: string;
   sequence: number;
+  level: string;
   message?: string;
   error?: string;
   outputSummary?: unknown;
+  data?: Record<string, unknown> | null;
 }
 
 @Injectable()
@@ -50,6 +53,20 @@ export class TraceRepository {
       .orderBy(workflowTracesTable.sequence);
   }
 
+  async countByType(runId: string, type: TraceEventType): Promise<number> {
+    const [result] = await this.db
+      .select({ value: sql<number>`count(*)` })
+      .from(workflowTracesTable)
+      .where(
+        and(
+          eq(workflowTracesTable.runId, runId),
+          eq(workflowTracesTable.type, type),
+        ),
+      );
+
+    return Number(result?.value ?? 0);
+  }
+
   private mapToInsert(event: PersistedTraceEvent) {
     return {
       runId: event.runId,
@@ -60,6 +77,8 @@ export class TraceRepository {
       message: event.message ?? null,
       error: event.error ?? null,
       outputSummary: event.outputSummary ?? null,
+      level: event.level,
+      data: event.data ?? null,
       sequence: event.sequence,
     };
   }

@@ -73,7 +73,20 @@ export class TraceAdapter implements ITraceService {
       message: 'message' in event ? event.message ?? null : null,
       error: 'error' in event ? event.error ?? null : null,
       outputSummary: 'outputSummary' in event ? event.outputSummary ?? null : null,
+      level: this.determineLevel(event),
+      data: null,
       sequence,
     });
+  }
+
+  private determineLevel(event: TraceEvent): string {
+    switch (event.type) {
+      case 'NODE_FAILED':
+        return 'error';
+      case 'NODE_PROGRESS':
+        return event.message?.toLowerCase().includes('retry') ? 'warn' : 'info';
+      default:
+        return 'info';
+    }
   }
 }

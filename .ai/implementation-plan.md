@@ -53,13 +53,14 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 
 ## Phase 2 – Backend Contract Realignment
 
-**Goal:** Align backend responses with the shared spec while maintaining backwards compatibility where possible.
+**Goal:** Rebuild backend responses so they natively emit the shared spec. No backwards-compatibility shims are required—treat this as a clean 0.1 baseline.
 
-- [ ] Add database migration extending `workflow_traces` with `level`, `data`, and `sequence` columns.
-- [ ] Normalize Temporal statuses → new enum; include timestamps and failure info in `WorkflowsService` responses.
+- [x] Add database migration extending `workflow_traces` with `level` and `data` columns.
+- [x] Normalize Temporal statuses → new enum; include timestamps and failure info in `WorkflowsService` responses.
+- [x] Persist workflow run metadata (run → workflow mapping, total actions) for progress calculations.
 - [ ] Ensure run IDs and Temporal IDs stay consistent (`shipsec-run-*`).
-- [ ] Update `TraceService` to emit deterministic event IDs (`${sequence}`) and attach new fields.
-- [ ] Compute progress counters (completed/total actions) for status response.
+- [x] Update `TraceService` to emit deterministic event IDs (`${sequence}`) and attach new fields.
+- [x] Compute progress counters (completed/total actions) for status response.
 - [ ] Tests:
   - Unit tests for status normalization and trace mapping.
   - Integration test hitting `/status` and `/trace`, asserting schema compliance.

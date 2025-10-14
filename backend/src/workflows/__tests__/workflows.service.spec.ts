@@ -53,6 +53,8 @@ describe('WorkflowsService', () => {
   const now = new Date().toISOString();
 
   let savedDefinition: WorkflowDefinition | null = null;
+  let storedRunMeta: any = null;
+  let completedCount = 0;
 
   const repositoryMock = {
     async create() {
@@ -112,7 +114,36 @@ describe('WorkflowsService', () => {
     },
   } as unknown as WorkflowRepository;
 
-  const buildTemporalStub = () => {
+  const runRepositoryMock = {
+    async upsert(data: { runId: string; workflowId: string; temporalRunId: string; totalActions: number }) {
+      storedRunMeta = {
+        runId: data.runId,
+        workflowId: data.workflowId,
+        temporalRunId: data.temporalRunId,
+        totalActions: data.totalActions,
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+      };
+      return storedRunMeta;
+    },
+    async findByRunId(runId: string) {
+      if (storedRunMeta && storedRunMeta.runId === runId) {
+        return storedRunMeta;
+      }
+      return undefined;
+    },
+  };
+
+  const traceRepositoryMock = {
+    async countByType(runId: string, type: string) {
+      if (type === 'NODE_COMPLETED' && storedRunMeta?.runId === runId) {
+        return completedCount;
+      }
+      return 0;
+    },
+  };
+
+  const buildTemporalStub = (overrides?: Partial<WorkflowRunStatus>) => {
     const temporalStub: Pick<
       TemporalService,
       'startWorkflow' | 'describeWorkflow' | 'getWorkflowResult' | 'cancelWorkflow' | 'getDefaultTaskQueue'
@@ -127,7 +158,7 @@ describe('WorkflowsService', () => {
       },
       async describeWorkflow(ref) {
         lastDescribeRef = ref;
-        const status: WorkflowRunStatus = {
+        const base: WorkflowRunStatus = {
           workflowId: ref.workflowId,
           runId: ref.runId ?? 'temporal-run-mock',
           status: 'RUNNING',
@@ -135,8 +166,9 @@ describe('WorkflowsService', () => {
           closeTime: undefined,
           historyLength: 0,
           taskQueue: 'shipsec-default',
+          failure: undefined,
         };
-        return status;
+        return { ...base, ...overrides };
       },
       async getWorkflowResult(ref) {
         return { workflowId: ref.workflowId, completed: true };
@@ -149,7 +181,7 @@ describe('WorkflowsService', () => {
       },
     };
 
-    return temporalStub;
+    return temporalStub as TemporalService;
   };
 
   beforeEach(() => {
@@ -158,11 +190,15 @@ describe('WorkflowsService', () => {
     lastDescribeRef = null;
     lastCancelRef = null;
     savedDefinition = null;
+    storedRunMeta = null;
+    completedCount = 0;
 
     const temporalService = buildTemporalStub();
     service = new WorkflowsService(
       repositoryMock,
-      temporalService as TemporalService,
+      runRepositoryMock as any,
+      traceRepositoryMock as any,
+      temporalService,
     );
   });
 
@@ -205,19 +241,25 @@ describe('WorkflowsService', () => {
       workflowId: 'workflow-id',
       inputs: { message: 'hi' },
     });
+    expect(storedRunMeta).toMatchObject({
+      runId: run.runId,
+      workflowId: 'workflow-id',
+      totalActions: definition.actions.length,
+    });
   });
 
   it('delegates status, result, and cancel operations to the Temporal service', async () => {
     const run = await service.run('workflow-id');
+    completedCount = 1;
     const status = await service.getRunStatus(run.runId, run.temporalRunId);
     const result = await service.getRunResult(run.runId, run.temporalRunId);
     await service.cancelRun(run.runId, run.temporalRunId);
 
     expect(status.runId).toBe(run.runId);
-    expect(status.workflowId).toBe(run.runId);
+    expect(status.workflowId).toBe('workflow-id');
     expect(status.status).toBe('RUNNING');
     expect(status.taskQueue).toBe('shipsec-default');
-    expect(status.updatedAt).toBeDefined();
+    expect(status.progress).toEqual({ completedActions: 1, totalActions: 2 });
     expect(status.failure).toBeUndefined();
     expect(result).toMatchObject({ workflowId: run.runId, completed: true });
     expect(lastDescribeRef).toEqual({
@@ -227,6 +269,48 @@ describe('WorkflowsService', () => {
     expect(lastCancelRef).toEqual({
       workflowId: run.runId,
       runId: run.temporalRunId,
+    });
+  });
+
+  it('maps failure details into a failure summary', async () => {
+    const failureTemporalService = buildTemporalStub({
+      status: 'FAILED',
+      closeTime: now,
+      failure: {
+        message: 'Component crashed',
+        stackTrace: 'Error: boom',
+        applicationFailureInfo: {
+          type: 'ComponentError',
+          details: { node: 'node-1' },
+        },
+      },
+    });
+
+    service = new WorkflowsService(
+      repositoryMock,
+      runRepositoryMock as any,
+      traceRepositoryMock as any,
+      failureTemporalService,
+    );
+
+    storedRunMeta = {
+      runId: 'shipsec-run-fail',
+      workflowId: 'workflow-id',
+      temporalRunId: 'temporal-run-mock',
+      totalActions: 2,
+      createdAt: new Date(now),
+      updatedAt: new Date(now),
+    };
+
+    const status = await service.getRunStatus('shipsec-run-fail');
+    expect(status.status).toBe('FAILED');
+    expect(status.failure).toEqual({
+      reason: 'Component crashed',
+      temporalCode: 'ComponentError',
+      details: {
+        stackTrace: 'Error: boom',
+        applicationFailureDetails: { node: 'node-1' },
+      },
     });
   });
 });

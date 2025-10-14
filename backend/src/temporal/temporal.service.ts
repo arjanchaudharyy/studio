@@ -43,6 +43,7 @@ export interface WorkflowRunStatus {
   closeTime?: string;
   historyLength: number;
   taskQueue: string;
+  failure?: unknown;
 }
 
 @Injectable()
@@ -130,6 +131,7 @@ export class TemporalService implements OnModuleDestroy {
       closeTime: description.closeTime?.toISOString(),
       historyLength: description.historyLength,
       taskQueue: description.taskQueue,
+      failure: (description.status as any)?.failure,
     };
   }
 

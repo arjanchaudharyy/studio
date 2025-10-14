@@ -27,10 +27,12 @@ export class TraceService {
     message: string | null;
     error: string | null;
     outputSummary: unknown | null;
+    level: string;
+    data: Record<string, unknown> | null;
     sequence: number;
   }): TraceEventPayload {
     const type = this.mapEventType(record.type);
-    const level = this.mapEventLevel(type, record);
+    const level = this.mapEventLevel(type, record.level);
 
     return {
       id: record.sequence.toString(),
@@ -42,7 +44,7 @@ export class TraceService {
       message: record.message ?? undefined,
       error: record.error ? { message: record.error } : undefined,
       outputSummary: record.outputSummary ?? undefined,
-      data: undefined,
+      data: record.data ?? undefined,
     };
   }
 
@@ -60,15 +62,12 @@ export class TraceService {
     }
   }
 
-  private mapEventLevel(
-    type: TraceEventType,
-    record: { message: string | null; error: string | null },
-  ): TraceEventLevel {
+  private mapEventLevel(type: TraceEventType, storedLevel: string): TraceEventLevel {
+    if (storedLevel === 'error' || storedLevel === 'warn' || storedLevel === 'debug') {
+      return storedLevel;
+    }
     if (type === 'FAILED') {
       return 'error';
-    }
-    if (type === 'PROGRESS' && record.message?.toLowerCase().includes('retry')) {
-      return 'warn';
     }
     return 'info';
   }

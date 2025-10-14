@@ -9,7 +9,12 @@ import {
   type WorkflowRunStatus as TemporalWorkflowRunStatus,
 } from '../temporal/temporal.service';
 import { WorkflowGraphDto, WorkflowGraphSchema } from './dto/workflow-graph.dto';
-import { WorkflowRecord, WorkflowRepository } from './repository/workflow.repository';
+import {
+  WorkflowRecord,
+  WorkflowRepository,
+} from './repository/workflow.repository';
+import { WorkflowRunRepository } from './repository/workflow-run.repository';
+import { TraceRepository } from '../trace/trace.repository';
 import {
   ExecutionStatus,
   FailureSummary,
@@ -36,6 +41,8 @@ export class WorkflowsService {
 
   constructor(
     private readonly repository: WorkflowRepository,
+    private readonly runRepository: WorkflowRunRepository,
+    private readonly traceRepository: TraceRepository,
     private readonly temporalService: TemporalService,
   ) {}
 
@@ -143,6 +150,13 @@ export class WorkflowsService {
         `Started workflow run ${runId} (temporalRunId=${temporalRun.runId}, taskQueue=${temporalRun.taskQueue}, actions=${compiledDefinition.actions.length})`,
       );
 
+      await this.runRepository.upsert({
+        runId,
+        workflowId: workflow.id,
+        temporalRunId: temporalRun.runId,
+        totalActions: compiledDefinition.actions.length,
+      });
+
       return {
         runId,
         workflowId: workflow.id,
@@ -171,7 +185,14 @@ export class WorkflowsService {
       workflowId: runId,
       runId: temporalRunId,
     });
-    return this.mapTemporalStatus(runId, temporalStatus);
+    const metadata = await this.runRepository.findByRunId(runId);
+
+    let completedActions = 0;
+    if (metadata?.totalActions && metadata.totalActions > 0) {
+      completedActions = await this.traceRepository.countByType(runId, 'NODE_COMPLETED');
+    }
+
+    return this.mapTemporalStatus(runId, temporalStatus, metadata ?? null, completedActions);
   }
 
   async getRunResult(runId: string, temporalRunId?: string) {
@@ -229,21 +250,31 @@ export class WorkflowsService {
   private mapTemporalStatus(
     requestedRunId: string,
     status: TemporalWorkflowRunStatus,
+    metadata: { workflowId: string; totalActions: number } | null,
+    completedActions: number,
   ): WorkflowRunStatusPayload {
     const normalizedStatus = this.normalizeStatus(status.status);
-    const completedAt = status.closeTime?.toISOString();
+    const completedAt = status.closeTime ?? undefined;
+    const workflowId = metadata?.workflowId ?? requestedRunId;
+    const totalActions = metadata?.totalActions ?? 0;
+    const progress = totalActions > 0
+      ? {
+          completedActions: Math.min(completedActions, totalActions),
+          totalActions,
+        }
+      : undefined;
 
     return {
-      runId: status.workflowId,
-      workflowId: status.workflowId,
+      runId: requestedRunId,
+      workflowId,
       status: normalizedStatus,
       startedAt: status.startTime,
       updatedAt: new Date().toISOString(),
       completedAt,
       taskQueue: status.taskQueue,
       historyLength: status.historyLength,
-      progress: undefined,
-      failure: this.buildFailure(normalizedStatus, requestedRunId, status.runId),
+      progress,
+      failure: this.buildFailure(normalizedStatus, status.failure),
     };
   }
 
@@ -269,18 +300,38 @@ export class WorkflowsService {
     }
   }
 
-  private buildFailure(
-    status: ExecutionStatus,
-    requestedRunId: string,
-    temporalRunId?: string,
-  ): FailureSummary | undefined {
+  private buildFailure(status: ExecutionStatus, failure?: unknown): FailureSummary | undefined {
     if (!['FAILED', 'TERMINATED', 'TIMED_OUT'].includes(status)) {
       return undefined;
     }
 
+    const failureObj = failure as any;
+    if (!failureObj) {
+      return {
+        reason: `Workflow run ended with status ${status}`,
+      };
+    }
+
+    const reason: string = failureObj.message ?? `Workflow run ended with status ${status}`;
+    const temporalCode: string | undefined =
+      failureObj.applicationFailureInfo?.type ??
+      failureObj.timeoutFailureInfo?.timeoutType ??
+      failureObj.terminatedFailureInfo?.reason ??
+      failureObj.serverFailureInfo?.nonRetryable?.toString() ??
+      failureObj.code;
+
+    const details: Record<string, unknown> = {};
+    if (failureObj.stackTrace) {
+      details.stackTrace = failureObj.stackTrace;
+    }
+    if (failureObj.applicationFailureInfo?.details) {
+      details.applicationFailureDetails = failureObj.applicationFailureInfo.details;
+    }
+
     return {
-      reason: `Workflow ${requestedRunId} reported status ${status}`,
-      temporalCode: temporalRunId,
+      reason,
+      temporalCode,
+      details: Object.keys(details).length > 0 ? details : undefined,
     };
   }
 }

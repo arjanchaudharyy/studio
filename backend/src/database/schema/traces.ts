@@ -14,6 +14,8 @@ export const workflowTracesTable = pgTable(
     message: text('message'),
     error: text('error'),
     outputSummary: jsonb('output_summary'),
+    level: text('level').notNull().default('info'),
+    data: jsonb('data'),
     sequence: integer('sequence').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
