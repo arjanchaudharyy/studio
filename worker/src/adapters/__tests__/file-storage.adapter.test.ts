@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { randomUUID } from 'node:crypto';
 import { FileStorageAdapter } from '../file-storage.adapter';
-import * as schema from '../schema/files.schema';
+import * as schema from '../schema';
 
 describe('FileStorageAdapter (Integration)', () => {
   let minioClient: Client;
@@ -272,4 +272,3 @@ describe('FileStorageAdapter (Integration)', () => {
     });
   });
 });
-

@@ -10,7 +10,7 @@ import '../src/components';
 import { executeWorkflow } from '../src/temporal/workflow-runner';
 import type { WorkflowDefinition } from '../src/temporal/types';
 import { FileStorageAdapter, TraceAdapter } from '../src/adapters';
-import * as schema from '../src/adapters/schema/files.schema';
+import * as schema from '../src/adapters/schema';
 
 async function loadDefinition(pool: Pool, workflowId: string): Promise<WorkflowDefinition> {
   const { rows } = await pool.query<{ compiled_definition: WorkflowDefinition | null }>(
@@ -53,11 +53,12 @@ async function main() {
   });
 
   const storage = new FileStorageAdapter(minioClient, db, minioBucket);
-  const trace = new TraceAdapter();
+  const trace = new TraceAdapter(db);
 
   const definition = await loadDefinition(pool, workflowId);
 
   const runId = `inline-${randomUUID()}`;
+  trace.setRunMetadata(runId, { workflowId });
   const result = await executeWorkflow(
     definition,
     { inputs: { input1: fileId } },
@@ -65,6 +66,8 @@ async function main() {
   );
 
   console.log(JSON.stringify({ runId, result }, null, 2));
+
+  trace.finalizeRun(runId);
 
   await pool.end();
 }

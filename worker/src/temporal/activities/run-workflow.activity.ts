@@ -2,6 +2,7 @@ import '../../components'; // Register all components
 import { executeWorkflow } from '../workflow-runner';
 import type { RunWorkflowActivityInput, RunWorkflowActivityOutput } from '../types';
 import type { IFileStorageService, ITraceService } from '@shipsec/component-sdk';
+import { TraceAdapter } from '../../adapters';
 
 // Global service container (set by worker initialization)
 let globalStorage: IFileStorageService | undefined;
@@ -22,6 +23,10 @@ export async function runWorkflowActivity(
   console.log(`🔧 [ACTIVITY] Workflow: ${input.workflowId}, Actions: ${input.definition.actions.length}`);
 
   try {
+    if (globalTrace instanceof TraceAdapter) {
+      globalTrace.setRunMetadata(input.runId, { workflowId: input.workflowId });
+    }
+
     const result = await executeWorkflow(
       input.definition,
       {
@@ -39,6 +44,9 @@ export async function runWorkflowActivity(
   } catch (error) {
     console.error(`❌ [ACTIVITY] runWorkflow failed for run: ${input.runId}`, error);
     throw error;
+  } finally {
+    if (globalTrace instanceof TraceAdapter) {
+      globalTrace.finalizeRun(input.runId);
+    }
   }
 }
-

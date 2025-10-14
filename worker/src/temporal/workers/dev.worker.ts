@@ -7,7 +7,7 @@ import { Worker, NativeConnection } from '@temporalio/worker';
 import { config } from 'dotenv';
 import { runWorkflowActivity, initializeActivityServices } from '../activities/run-workflow.activity';
 import { FileStorageAdapter, TraceAdapter } from '../../adapters';
-import * as schema from '../../adapters/schema/files.schema';
+import * as schema from '../../adapters/schema';
 
 // Load environment variables from .env file
 config({ path: join(dirname(fileURLToPath(import.meta.url)), '../../..', '.env') });
@@ -56,7 +56,7 @@ async function main() {
 
   // Create service adapters (implementing SDK interfaces)
   const storageAdapter = new FileStorageAdapter(minioClient, db, minioBucketName);
-  const traceAdapter = new TraceAdapter();
+  const traceAdapter = new TraceAdapter(db);
 
   // Initialize global services for activities
   initializeActivityServices(storageAdapter, traceAdapter);
@@ -85,4 +85,3 @@ main().catch((error) => {
   console.error('Temporal worker failed', error);
   process.exit(1);
 });
-

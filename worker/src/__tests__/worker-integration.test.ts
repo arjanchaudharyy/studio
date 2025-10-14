@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 
 import { FileStorageAdapter } from '../adapters/file-storage.adapter';
 import { TraceAdapter } from '../adapters/trace.adapter';
-import * as schema from '../adapters/schema/files.schema';
+import * as schema from '../adapters/schema';
 import '../components'; // Register all components
 
 describe('Worker Integration Tests', () => {
@@ -54,7 +54,7 @@ describe('Worker Integration Tests', () => {
     // Initialize adapters
     const bucketName = process.env.MINIO_BUCKET_NAME || 'shipsec-files';
     fileStorageAdapter = new FileStorageAdapter(minioClient, db, bucketName);
-    traceAdapter = new TraceAdapter();
+    traceAdapter = new TraceAdapter(db);
 
     // Ensure bucket exists
     const bucketExists = await minioClient.bucketExists(bucketName);

@@ -1,9 +1,24 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { TraceAdapter } from '../trace.adapter';
 import type { TraceEvent } from '@shipsec/component-sdk';
+import { workflowTraces } from '../schema';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as schema from '../schema';
 
 describe('TraceAdapter', () => {
   let adapter: TraceAdapter;
+
+  class FakeDb {
+    public inserts: Array<{ table: unknown; input: unknown }> = [];
+
+    insert(table: unknown) {
+      return {
+        values: async (input: unknown) => {
+          this.inserts.push({ table, input });
+        },
+      };
+    }
+  }
 
   beforeEach(() => {
     adapter = new TraceAdapter();
@@ -180,6 +195,29 @@ describe('TraceAdapter', () => {
     });
   });
 
+  describe('finalizeRun', () => {
+    it('should release resources for specific run', () => {
+      adapter.record({
+        type: 'NODE_STARTED',
+        runId: 'run-finalize',
+        nodeRef: 'node-1',
+        timestamp: new Date().toISOString(),
+      });
+      adapter.setRunMetadata('run-finalize', { workflowId: 'wf' });
+
+      adapter.finalizeRun('run-finalize');
+
+      expect(adapter.getEvents('run-finalize')).toHaveLength(0);
+      adapter.record({
+        type: 'NODE_STARTED',
+        runId: 'run-finalize',
+        nodeRef: 'node-2',
+        timestamp: new Date().toISOString(),
+      });
+      expect(adapter.getEvents('run-finalize')).toHaveLength(1);
+    });
+  });
+
   describe('ITraceService interface compliance', () => {
     it('should implement all required methods', () => {
       expect(typeof adapter.record).toBe('function');
@@ -224,5 +262,34 @@ describe('TraceAdapter', () => {
       expect(() => adapter.record(nodeProgress)).not.toThrow();
     });
   });
-});
 
+  describe('persistence', () => {
+    it('persists events when database is provided', async () => {
+      const fakeDb = new FakeDb();
+      const persistentAdapter = new TraceAdapter(fakeDb as unknown as NodePgDatabase<typeof schema>);
+      const timestamp = new Date('2025-01-01T00:00:00Z').toISOString();
+
+      persistentAdapter.setRunMetadata('run-persist', { workflowId: 'workflow-123' });
+      persistentAdapter.record({
+        type: 'NODE_PROGRESS',
+        runId: 'run-persist',
+        nodeRef: 'node-p',
+        timestamp,
+        message: 'Persist me',
+      });
+
+      // Flush async persistence
+      await Promise.resolve();
+
+      expect(fakeDb.inserts).toHaveLength(1);
+      expect(fakeDb.inserts[0].table).toBe(workflowTraces);
+      expect(fakeDb.inserts[0].input).toMatchObject({
+        runId: 'run-persist',
+        workflowId: 'workflow-123',
+        type: 'NODE_PROGRESS',
+        nodeRef: 'node-p',
+        sequence: 1,
+      });
+    });
+  });
+});

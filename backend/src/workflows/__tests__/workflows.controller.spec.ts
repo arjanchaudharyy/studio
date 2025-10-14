@@ -141,7 +141,9 @@ describe('WorkflowsController', () => {
       repositoryStub as WorkflowRepository,
       temporalStub as TemporalService,
     );
-    const traceService = new TraceService();
+    const traceService = new TraceService({
+      listByRunId: async () => [],
+    } as any);
     controller = new WorkflowsController(workflowsService, traceService);
   });
 

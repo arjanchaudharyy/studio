@@ -2,7 +2,7 @@ import { Client } from 'minio';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { eq } from 'drizzle-orm';
 import { IFileStorageService } from '@shipsec/component-sdk';
-import * as schema from './schema/files.schema';
+import * as schema from './schema';
 
 /**
  * Adapter that implements IFileStorageService using MinIO + PostgreSQL
@@ -105,4 +105,3 @@ export class FileStorageAdapter implements IFileStorageService {
     });
   }
 }
-
