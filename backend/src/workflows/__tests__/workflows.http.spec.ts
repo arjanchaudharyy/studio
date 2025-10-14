@@ -10,6 +10,7 @@ import {
 import { WorkflowsController } from '../workflows.controller';
 import { WorkflowsService } from '../workflows.service';
 import { TraceService } from '../../trace/trace.service';
+import { LogStreamService } from '../../trace/log-stream.service';
 
 const sampleStatus = WorkflowRunStatusSchema.parse({
   runId: 'shipsec-run-123',
@@ -36,6 +37,26 @@ const sampleTrace = TraceStreamEnvelopeSchema.parse({
   cursor: '1',
 });
 
+const sampleLogs = {
+  runId: 'shipsec-run-123',
+  streams: [
+    {
+      nodeRef: 'node-1',
+      stream: 'stdout',
+      labels: { run_id: 'shipsec-run-123', node: 'node-1', stream: 'stdout' },
+      firstTimestamp: new Date().toISOString(),
+      lastTimestamp: new Date().toISOString(),
+      lineCount: 2,
+      entries: [
+        {
+          timestamp: new Date().toISOString(),
+          message: 'line one',
+        },
+      ],
+    },
+  ],
+};
+
 describe('WorkflowsController HTTP', () => {
   let app: INestApplication;
   const workflowService = {
@@ -51,12 +72,17 @@ describe('WorkflowsController HTTP', () => {
     list: vi.fn().mockResolvedValue(sampleTrace),
   } as unknown as TraceService;
 
+  const logStreamService = {
+    fetch: vi.fn().mockResolvedValue(sampleLogs),
+  } as unknown as LogStreamService;
+
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [WorkflowsController],
       providers: [
         { provide: WorkflowsService, useValue: workflowService },
         { provide: TraceService, useValue: traceService },
+        { provide: LogStreamService, useValue: logStreamService },
       ],
     }).compile();
 
@@ -72,7 +98,7 @@ describe('WorkflowsController HTTP', () => {
     await request(app.getHttpServer())
       .get('/workflows/runs/shipsec-run-123/status')
       .expect(200)
-      .expect(({ body }) => {
+      .expect(({ body }: { body: unknown }) => {
         const parsed = WorkflowRunStatusSchema.parse(body);
         expect(parsed.runId).toBe(sampleStatus.runId);
         expect(parsed.workflowId).toBe(sampleStatus.workflowId);
@@ -85,11 +111,26 @@ describe('WorkflowsController HTTP', () => {
     await request(app.getHttpServer())
       .get('/workflows/runs/shipsec-run-123/trace')
       .expect(200)
-      .expect(({ body }) => {
+      .expect(({ body }: { body: unknown }) => {
         const parsed = TraceStreamEnvelopeSchema.parse(body);
         expect(parsed.events).toHaveLength(1);
       });
 
     expect(traceService.list).toHaveBeenCalledWith('shipsec-run-123');
+  });
+
+  it('returns logs payload from Loki metadata', async () => {
+    await request(app.getHttpServer())
+      .get('/workflows/runs/shipsec-run-123/logs')
+      .expect(200)
+      .expect(({ body }: { body: unknown }) => {
+        expect(body).toEqual(sampleLogs);
+      });
+
+    expect(logStreamService.fetch).toHaveBeenCalledWith('shipsec-run-123', {
+      nodeRef: undefined,
+      stream: undefined,
+      limit: undefined,
+    });
   });
 });

@@ -28,13 +28,17 @@ export class TraceService {
     error: string | null;
     outputSummary: unknown | null;
     level: string;
-    data: Record<string, unknown> | null;
+    data: unknown | null;
     sequence: number;
   }): TraceEventPayload {
     const type = this.mapEventType(record.type);
     const level = this.mapEventLevel(type, record.level);
 
-    return {
+    const mappedData = this.toRecord(record.data);
+
+    const outputSummary = this.toRecord(record.outputSummary);
+
+    const event: TraceEventPayload = {
       id: record.sequence.toString(),
       runId: record.runId,
       nodeId: record.nodeRef,
@@ -43,9 +47,14 @@ export class TraceService {
       timestamp: record.timestamp.toISOString(),
       message: record.message ?? undefined,
       error: record.error ? { message: record.error } : undefined,
-      outputSummary: record.outputSummary ?? undefined,
-      data: record.data ?? undefined,
+      outputSummary,
     };
+
+    if (mappedData) {
+      event.data = mappedData;
+    }
+
+    return event;
   }
 
   private mapEventType(type: PersistedTraceEventType): TraceEventType {
@@ -70,5 +79,16 @@ export class TraceService {
       return 'error';
     }
     return 'info';
+  }
+
+  private toRecord(input: unknown): Record<string, unknown> | undefined {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return undefined;
+    }
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      result[key] = value;
+    }
+    return result;
   }
 }

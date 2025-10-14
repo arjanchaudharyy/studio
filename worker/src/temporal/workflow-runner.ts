@@ -7,8 +7,14 @@ import {
   type ISecretsService,
   type IArtifactService,
   type ITraceService,
+  type LogEventInput,
 } from '@shipsec/component-sdk';
-import type { WorkflowDefinition, WorkflowRunRequest, WorkflowRunResult } from './types';
+import type {
+  WorkflowDefinition,
+  WorkflowRunRequest,
+  WorkflowRunResult,
+  WorkflowLogSink,
+} from './types';
 
 export interface ExecuteWorkflowOptions {
   runId?: string;
@@ -16,6 +22,7 @@ export interface ExecuteWorkflowOptions {
   secrets?: ISecretsService;
   artifacts?: IArtifactService;
   trace?: ITraceService;
+  logs?: WorkflowLogSink;
 }
 
 /**
@@ -29,6 +36,25 @@ export async function executeWorkflow(
 ): Promise<WorkflowRunResult> {
   const runId = options.runId ?? randomUUID();
   const results = new Map<string, unknown>();
+
+  const forwardLog: ((entry: LogEventInput) => void) | undefined = options.logs
+    ? (entry) => {
+        const parsed = new Date(entry.timestamp);
+        const timestamp = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+        void options.logs
+          ?.append({
+            runId: entry.runId,
+            nodeRef: entry.nodeRef,
+            stream: entry.stream,
+            level: entry.level,
+            message: entry.message,
+            timestamp,
+          })
+          .catch((error) => {
+            console.error('[Logs] Failed to append log entry', error);
+          });
+      }
+    : undefined;
 
   try {
     for (const action of definition.actions) {
@@ -91,6 +117,7 @@ export async function executeWorkflow(
         secrets: options.secrets,
         artifacts: options.artifacts,
         trace: options.trace,
+        logCollector: forwardLog,
       });
 
       try {

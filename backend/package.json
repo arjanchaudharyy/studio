@@ -41,6 +41,7 @@
     "@types/multer": "^2.0.0",
     "@types/node": "^20.16.11",
     "@types/pg": "^8.15.5",
+    "@types/supertest": "^2.0.16",
     "bun-types": "^1.2.23",
     "drizzle-kit": "^0.31.5",
     "supertest": "^7.1.4",

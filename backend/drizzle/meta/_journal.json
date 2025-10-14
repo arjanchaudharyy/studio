@@ -36,6 +36,13 @@
       "when": 1760703600000,
       "tag": "0004_update-workflow-traces",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1760458863777,
+      "tag": "0005_add-workflow-log-streams",
+      "breakpoints": true
     }
   ]
 }

@@ -29,7 +29,7 @@ export interface WorkflowRunHandle {
   runId: string;
   workflowId: string;
   temporalRunId: string;
-  status: WorkflowRunStatus['status'];
+  status: ExecutionStatus;
   taskQueue: string;
 }
 

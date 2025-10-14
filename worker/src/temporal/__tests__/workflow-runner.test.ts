@@ -1,9 +1,13 @@
 import { beforeAll, describe, expect, it } from 'bun:test';
 import { z } from 'zod';
-import { componentRegistry, type ComponentDefinition, type TraceEvent } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  type ComponentDefinition,
+  type TraceEvent,
+} from '@shipsec/component-sdk';
 
 import { executeWorkflow } from '../workflow-runner';
-import type { WorkflowDefinition } from '../types';
+import type { WorkflowDefinition, WorkflowLogEntry, WorkflowLogSink } from '../types';
 
 // Ensure built-in components are registered for workflow execution
 import '../../components';
@@ -33,6 +37,13 @@ describe('executeWorkflow', () => {
     const trace = {
       record: (event: TraceEvent) => {
         events.push(event);
+      },
+    };
+
+    const logEntries: WorkflowLogEntry[] = [];
+    const logs: WorkflowLogSink = {
+      append: async (entry) => {
+        logEntries.push(entry);
       },
     };
 
@@ -67,16 +78,14 @@ describe('executeWorkflow', () => {
       ],
     };
 
-    const result = await executeWorkflow(
-      definition,
-      {},
-      {
-        runId: 'trace-run',
-        trace,
-      },
-    );
+    const result = await executeWorkflow(definition, {}, {
+      runId: 'trace-run',
+      trace,
+      logs,
+    });
 
     expect(result.success).toBe(true);
+    await Promise.resolve();
     expect(events).toHaveLength(7);
     expect(events.map((event) => event.type)).toEqual([
       'NODE_STARTED',
@@ -105,5 +114,8 @@ describe('executeWorkflow', () => {
     startedEvents.forEach((event) => {
       expect(event.level).toBe('info');
     });
+
+    expect(logEntries.length).toBeGreaterThan(0);
+    expect(logEntries.some((entry) => entry.message.includes('[Console Log]'))).toBe(true);
   });
 });

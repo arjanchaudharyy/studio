@@ -116,6 +116,41 @@ describe('ExecutionContext', () => {
     });
   });
 
+  it('should forward logger output to log collector', () => {
+    const logEntries: Array<{
+      stream: string;
+      level?: string;
+      message: string;
+    }> = [];
+
+    const context = createExecutionContext({
+      runId: 'run-log',
+      componentRef: 'log.component',
+      logCollector: (entry) => {
+        logEntries.push({
+          stream: entry.stream,
+          level: entry.level,
+          message: entry.message,
+        });
+      },
+    });
+
+    context.logger.info('hello world');
+    context.logger.error('something went wrong');
+
+    expect(logEntries).toHaveLength(2);
+    expect(logEntries[0]).toMatchObject({
+      stream: 'stdout',
+      level: 'info',
+      message: 'hello world',
+    });
+    expect(logEntries[1]).toMatchObject({
+      stream: 'stderr',
+      level: 'error',
+      message: 'something went wrong',
+    });
+  });
+
   it('should work without optional services', () => {
     const context = createExecutionContext({
       runId: 'test-run',

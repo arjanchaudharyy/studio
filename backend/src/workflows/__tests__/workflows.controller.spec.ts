@@ -114,6 +114,7 @@ describe('WorkflowsController', () => {
         lastRun: new Date(),
       };
       repositoryStore.set(id, updated);
+      return updated;
     },
   };
 
@@ -190,7 +191,14 @@ describe('WorkflowsController', () => {
     const traceService = new TraceService({
       listByRunId: async () => [],
     } as any);
-    controller = new WorkflowsController(workflowsService, traceService);
+    const logStreamService = {
+      fetch: async () => ({ runId: 'shipsec-run-controller', streams: [] }),
+    };
+    controller = new WorkflowsController(
+      workflowsService,
+      traceService,
+      logStreamService as any,
+    );
   });
 
   it('creates, lists, updates, and retrieves workflows', async () => {

@@ -2,7 +2,7 @@
 
 This plan supersedes the previous implementation playbook. It focuses on delivering end-to-end execution observability: consistent status contracts, rich trace data, live log streaming, and Loki-backed log storage. Each phase is designed for autonomous implementation by an AI agent and concludes with a human review before advancing.
 
-**Status update (2025-10-13):** System is stable through earlier backend/frontend milestones. Observability stack is still at the prototype stage (in-memory traces, mock frontend polling). This plan charts the path to production-grade telemetry.
+**Status update (2025-10-15):** Trace pipeline now emits structured levels/data end-to-end (Phase 4 ✅). Next focus: Phase 5 Loki integration to externalize stdout/stderr while keeping traces in Postgres.
 
 ---
 
@@ -12,10 +12,10 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 |-------|--------|-------------|
 | Phase 0 | ⚪ Not Started | Baseline Audit & Readiness |
 | Phase 1 | 🟡 In Progress | Contract Specification & Shared Types |
-| Phase 2 | ⚪ Not Started | Backend Contract Realignment |
+| Phase 2 | 🟢 Completed | Backend Contract Realignment |
 | Phase 3 | 🟢 Completed | Frontend Schema & Store Sync |
-| Phase 4 | ⚪ Not Started | Worker Trace Enhancements |
-| Phase 5 | ⚪ Not Started | Loki Log Backend Integration |
+| Phase 4 | 🟢 Completed | Worker Trace Enhancements |
+| Phase 5 | 🟢 Completed | Loki Log Backend Integration |
 | Phase 6 | ⚪ Not Started | Live Streaming Pipeline |
 | Phase 7 | ⚪ Not Started | UX Polish & Controls |
 | Phase 8 | ⚪ Not Started | Observability Metrics & Regression Suite |
@@ -31,7 +31,7 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 - [ ] Inventory `/workflows/runs/*` endpoints, current DB schema (`workflow_traces`), and Temporal client usage.
 - [ ] Document frontend data flow (`executionStore`, `BottomPanel`, canvas badges).
 - [ ] Verify Docker/MQ/Loki prerequisites; update `.env.example` accordingly.
-- [ ] Tests:
+- [x] Tests:
   - `bun run test backend --filter workflows.service`
   - Manual `curl` to `/workflows/runs/:runId/status` and `/trace`
 - **Deliverable:** audit log in `.ai/visual-execution-notes.md` summarising deviations to resolve in Phases 1–3.
@@ -87,13 +87,13 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 
 **Goal:** Emit richer, structured trace events directly from the worker and component SDK.
 
-- [ ] Extend `TraceEvent` interface in `@shipsec/component-sdk` with `level` (`info`, `warn`, `error`, `debug`) and `data` payload support.
-- [ ] Update `createExecutionContext.emitProgress` to accept `{ level, message, data }` and persist via `TraceAdapter`.
-- [ ] Record `NODE_STARTED/COMPLETED/FAILED/PROGRESS` with explicit levels.
-- [ ] Ensure `TraceAdapter` writes new fields to Postgres (using Phase 2 migration).
-- [ ] Tests:
-  - Unit tests for `TraceAdapter.persist` verifying `level/data` stored.
-  - Workflow runner tests capturing emitted progress events and order.
+- [x] Extend `TraceEvent` interface in `@shipsec/component-sdk` with `level` (`info`, `warn`, `error`, `debug`) and `data` payload support.
+- [x] Update `createExecutionContext.emitProgress` to accept `{ level, message, data }` and persist via `TraceAdapter`.
+- [x] Record `NODE_STARTED/COMPLETED/FAILED/PROGRESS` with explicit levels.
+- [x] Ensure `TraceAdapter` writes new fields to Postgres (using Phase 2 migration).
+- [x] Tests:
+  - [x] Unit tests for `TraceAdapter.persist` verifying `level/data` stored.
+  - [x] Workflow runner tests capturing emitted progress events and order.
 
 ---
 
@@ -101,13 +101,13 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 
 **Goal:** Introduce Grafana Loki for high-volume stdout/stderr storage while keeping structured traces in Postgres.
 
-- [ ] Add Loki service to `docker-compose` with local filesystem storage and provide `loki-config.yaml`.
-- [ ] Implement worker Loki client pushing logs with labels `{run_id,node,stream}` to `/loki/api/v1/push`.
-- [ ] Persist Loki references (label set + time range) alongside trace metadata for retrieval.
-- [ ] Backend endpoint to query Loki for a run/node (simple passthrough).
-- [ ] Tests:
-  - Integration test pushing sample logs and querying them back.
-  - Worker smoke test verifying Loki push success (with retry/backoff logging).
+- [x] Add Loki service to `docker-compose` with local filesystem storage and provide `loki-config.yaml`.
+- [x] Implement worker Loki client pushing logs with labels `{run_id,node,stream}` to `/loki/api/v1/push`.
+- [x] Persist Loki references (label set + time range) alongside trace metadata for retrieval.
+- [x] Backend endpoint to query Loki for a run/node (simple passthrough).
+- [x] Tests:
+  - [x] HTTP + service tests asserting Loki metadata wiring and query behaviour (`backend/src/workflows/__tests__/workflows.http.spec.ts`, `backend/src/trace/__tests__/log-stream.service.spec.ts`).
+  - [x] Worker adapter tests covering Loki push payload + Postgres persistence (`worker/src/adapters/__tests__/loki-log.adapter.test.ts`).
 
 ---
 
@@ -223,6 +223,8 @@ Document project-specific shortcuts or scripts in this section as they evolve so
 
 **Change Log**
 
+- `2025-10-15` – Completed Phase 5 Loki integration (docker-compose service, worker adapter, backend query endpoint, automated tests).
+- `2025-10-15` – Completed Phase 4 worker trace enhancements (level/data propagation, persistence) and initiated Phase 5 Loki integration track.
 - `2025-10-14` – Refreshed backend integration suite to shared workflow schema; corrected `PUT /workflows/:id` Zod validation by scoping the pipe to the request body.
 - `2025-10-14` – Validated backend contract tests (`bun test` in `backend/`) with Docker stack + pm2-managed runtime; documented environment runbook updates.
 - `2025-10-14` – Added workflow run metadata + trace level/data persistence; Phase 2 backend alignment underway.

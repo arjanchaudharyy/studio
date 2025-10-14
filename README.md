@@ -6,12 +6,12 @@ This repository powers ShipSec Studio: a Temporal-backed, component-driven workf
 
 - Docker (minimum 8 GB RAM allocated to Docker Desktop or your runtime).
 - [Bun](https://bun.sh) and `pm2` installed globally (`npm install -g pm2`).
-- `.env` created from `.env.example` with credentials for Temporal, Postgres, MinIO, and (once implemented) Loki.
+- `.env` created from `.env.example` with credentials for Temporal, Postgres, MinIO, and Loki.
 - Node modules installed: `bun install` at the repo root.
 
 ## Bring Up Core Infrastructure
 
-Temporal, Postgres, and MinIO (plus Loki in later phases) live in the root `docker-compose.yml`.
+Temporal, Postgres, MinIO, and Loki live in the root `docker-compose.yml`.
 
 ```bash
 docker compose up -d

@@ -24,6 +24,7 @@ import {
 } from './dto/workflow-graph.dto';
 import { TraceService } from '../trace/trace.service';
 import { WorkflowsService } from './workflows.service';
+import { LogStreamService } from '../trace/log-stream.service';
 
 @ApiTags('workflows')
 @Controller('workflows')
@@ -31,6 +32,7 @@ export class WorkflowsController {
   constructor(
     private readonly workflowsService: WorkflowsService,
     private readonly traceService: TraceService,
+    private readonly logStreamService: LogStreamService,
   ) {}
 
   @Post()
@@ -206,6 +208,27 @@ export class WorkflowsController {
   async trace(@Param('runId') runId: string) {
     const { events, cursor } = await this.traceService.list(runId);
     return { runId, events, cursor };
+  }
+
+  @Get('/runs/:runId/logs')
+  @ApiOkResponse({
+    description: 'Log streams for a workflow run',
+  })
+  async logs(
+    @Param('runId') runId: string,
+    @Query('nodeRef') nodeRef?: string,
+    @Query('stream') stream?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+    const safeLimit = Number.isNaN(parsedLimit ?? NaN) ? undefined : parsedLimit;
+    const normalizedLimit = safeLimit && safeLimit > 0 ? safeLimit : undefined;
+
+    return this.logStreamService.fetch(runId, {
+      nodeRef,
+      stream,
+      limit: normalizedLimit,
+    });
   }
 
   @Get()

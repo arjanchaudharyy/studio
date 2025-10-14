@@ -47,6 +47,16 @@ export interface ProgressEventInput {
   data?: unknown;
 }
 
+export interface LogEventInput {
+  runId: string;
+  nodeRef: string;
+  stream: 'stdout' | 'stderr' | 'console';
+  message: string;
+  level?: TraceEventLevel;
+  timestamp: string;
+  data?: unknown;
+}
+
 export type ComponentPortType = 'string' | 'array' | 'object' | 'file' | 'any';
 
 export interface ComponentPortMetadata {
@@ -134,6 +144,7 @@ export interface ExecutionContext {
   componentRef: string;
   logger: Logger;
   emitProgress: (progress: ProgressEventInput | string) => void;
+  logCollector?: (entry: LogEventInput) => void;
 
   // Service interfaces - implemented by adapters
   storage?: IFileStorageService;

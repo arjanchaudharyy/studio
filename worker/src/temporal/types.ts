@@ -55,3 +55,17 @@ export interface RunWorkflowActivityOutput {
   error?: string;
 }
 
+export type WorkflowLogStream = 'stdout' | 'stderr' | 'console';
+
+export interface WorkflowLogEntry {
+  runId: string;
+  nodeRef: string;
+  stream: WorkflowLogStream;
+  message: string;
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  timestamp?: Date;
+}
+
+export interface WorkflowLogSink {
+  append(entry: WorkflowLogEntry): Promise<void>;
+}

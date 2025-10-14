@@ -1,19 +1,26 @@
 import '../../components'; // Register all components
 import { executeWorkflow } from '../workflow-runner';
-import type { RunWorkflowActivityInput, RunWorkflowActivityOutput } from '../types';
+import type {
+  RunWorkflowActivityInput,
+  RunWorkflowActivityOutput,
+  WorkflowLogSink,
+} from '../types';
 import type { IFileStorageService, ITraceService } from '@shipsec/component-sdk';
 import { TraceAdapter } from '../../adapters';
 
 // Global service container (set by worker initialization)
 let globalStorage: IFileStorageService | undefined;
 let globalTrace: ITraceService | undefined;
+let globalLogs: WorkflowLogSink | undefined;
 
 export function initializeActivityServices(
   storage: IFileStorageService,
   trace: ITraceService,
+  logs?: WorkflowLogSink,
 ) {
   globalStorage = storage;
   globalTrace = trace;
+  globalLogs = logs;
 }
 
 export async function runWorkflowActivity(
@@ -36,6 +43,7 @@ export async function runWorkflowActivity(
         runId: input.runId,
         storage: globalStorage,
         trace: globalTrace,
+        logs: globalLogs,
       },
     );
 

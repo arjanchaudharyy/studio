@@ -46,16 +46,32 @@ export class TestingWebhookController {
       {},
     );
 
+    const normalizedQuery = Object.entries(request.query).reduce<
+      Record<string, string | string[]>
+    >((acc, [key, raw]) => {
+      if (Array.isArray(raw)) {
+        acc[key] = raw.map((item) =>
+          typeof item === 'string' ? item : JSON.stringify(item),
+        );
+        return acc;
+      }
+      if (typeof raw === 'string') {
+        acc[key] = raw;
+        return acc;
+      }
+      if (raw === undefined || raw === null) {
+        acc[key] = '';
+        return acc;
+      }
+      acc[key] = JSON.stringify(raw);
+      return acc;
+    }, {});
+
     const record: TestingWebhookRecord = {
       id,
       method: request.method,
       path: request.path,
-      query: Object.fromEntries(
-        Object.entries(request.query).map(([key, value]) => [
-          key,
-          Array.isArray(value) ? [...value] : value ?? '',
-        ]),
-      ),
+      query: normalizedQuery,
       headers: normalizedHeaders,
       body,
       receivedAt,

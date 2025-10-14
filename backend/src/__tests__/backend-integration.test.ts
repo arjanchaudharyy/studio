@@ -47,7 +47,11 @@ const normalizeNode = (override: Partial<WorkflowNodePayload> = {}): WorkflowNod
   },
 });
 
-const buildWorkflowGraph = (overrides: Partial<WorkflowPayload> = {}): WorkflowPayload => ({
+type WorkflowGraphOverrides = Partial<Omit<WorkflowPayload, 'nodes'>> & {
+  nodes?: Array<Partial<WorkflowNodePayload>>;
+};
+
+const buildWorkflowGraph = (overrides: WorkflowGraphOverrides = {}): WorkflowPayload => ({
   name: overrides.name ?? `Test Workflow ${randomUUID().slice(0, 8)}`,
   description: overrides.description ?? 'Integration test workflow',
   nodes: (overrides.nodes ?? [normalizeNode()]).map((node) => normalizeNode(node)),

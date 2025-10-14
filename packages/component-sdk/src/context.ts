@@ -1,4 +1,6 @@
-import type { ExecutionContext, Logger, ProgressEventInput } from './types';
+import { format } from 'node:util';
+
+import type { ExecutionContext, Logger, ProgressEventInput, LogEventInput } from './types';
 import type {
   IFileStorageService,
   ISecretsService,
@@ -13,14 +15,43 @@ export interface CreateContextOptions {
   secrets?: ISecretsService;
   artifacts?: IArtifactService;
   trace?: ITraceService;
+  logCollector?: (entry: LogEventInput) => void;
 }
 
 export function createExecutionContext(options: CreateContextOptions): ExecutionContext {
-  const { runId, componentRef, storage, secrets, artifacts, trace } = options;
+  const { runId, componentRef, storage, secrets, artifacts, trace, logCollector } = options;
+
+  const pushLog = (
+    stream: LogEventInput['stream'],
+    level: LogEventInput['level'],
+    args: unknown[],
+  ) => {
+    if (!logCollector || args.length === 0) {
+      return;
+    }
+    const message = format(...args);
+    if (message.length === 0) {
+      return;
+    }
+    logCollector({
+      runId,
+      nodeRef: componentRef,
+      stream,
+      level,
+      message,
+      timestamp: new Date().toISOString(),
+    });
+  };
 
   const logger: Logger = {
-    info: (...args: unknown[]) => console.log(`[${componentRef}]`, ...args),
-    error: (...args: unknown[]) => console.error(`[${componentRef}]`, ...args),
+    info: (...args: unknown[]) => {
+      pushLog('stdout', 'info', args);
+      console.log(`[${componentRef}]`, ...args);
+    },
+    error: (...args: unknown[]) => {
+      pushLog('stderr', 'error', args);
+      console.error(`[${componentRef}]`, ...args);
+    },
   };
 
   const emitProgress = (progress: ProgressEventInput | string) => {
@@ -52,6 +83,6 @@ export function createExecutionContext(options: CreateContextOptions): Execution
     secrets,
     artifacts,
     trace,
+    logCollector,
   };
 }
-

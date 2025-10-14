@@ -63,6 +63,18 @@ services:
       - minio-data:/data
     restart: unless-stopped
 
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: shipsec-loki
+    command: -config.file=/etc/loki/config/loki-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/config/loki-config.yaml:ro
+      - loki-data:/loki
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   minio-data:
+  loki-data:

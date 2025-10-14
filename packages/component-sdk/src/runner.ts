@@ -61,12 +61,30 @@ async function runComponentInDocker<I, O>(
     let stderr = '';
 
     proc.stdout.on('data', (data) => {
-      stdout += data.toString();
+      const chunk = data.toString();
+      stdout += chunk;
+      context.logCollector?.({
+        runId: context.runId,
+        nodeRef: context.componentRef,
+        stream: 'stdout',
+        level: 'info',
+        message: chunk,
+        timestamp: new Date().toISOString(),
+      });
     });
 
     proc.stderr.on('data', (data) => {
-      stderr += data.toString();
-      context.logger.info(`[Docker] stderr: ${data.toString().trim()}`);
+      const chunk = data.toString();
+      stderr += chunk;
+      context.logCollector?.({
+        runId: context.runId,
+        nodeRef: context.componentRef,
+        stream: 'stderr',
+        level: 'error',
+        message: chunk,
+        timestamp: new Date().toISOString(),
+      });
+      console.error(`[${context.componentRef}] [Docker] stderr: ${chunk.trim()}`);
     });
 
     proc.on('error', (error) => {
@@ -131,5 +149,4 @@ export async function runComponentWithRunner<I, O>(
       throw new Error(`Unsupported runner type ${(runner as any).kind}`);
   }
 }
-
 

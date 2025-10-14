@@ -6,7 +6,12 @@ import { Client } from 'minio';
 import { Worker, NativeConnection } from '@temporalio/worker';
 import { config } from 'dotenv';
 import { runWorkflowActivity, initializeActivityServices } from '../activities/run-workflow.activity';
-import { FileStorageAdapter, TraceAdapter } from '../../adapters';
+import {
+  FileStorageAdapter,
+  LokiLogAdapter,
+  LokiLogClient,
+  TraceAdapter,
+} from '../../adapters';
 import * as schema from '../../adapters/schema';
 
 // Load environment variables from .env file
@@ -58,8 +63,27 @@ async function main() {
   const storageAdapter = new FileStorageAdapter(minioClient, db, minioBucketName);
   const traceAdapter = new TraceAdapter(db);
 
+  const lokiUrl = process.env.LOKI_URL;
+  let logAdapter: LokiLogAdapter | undefined;
+  if (lokiUrl) {
+    try {
+      const lokiClient = new LokiLogClient({
+        baseUrl: lokiUrl,
+        tenantId: process.env.LOKI_TENANT_ID,
+        username: process.env.LOKI_USERNAME,
+        password: process.env.LOKI_PASSWORD,
+      });
+      logAdapter = new LokiLogAdapter(lokiClient, db);
+      console.log(`✅ Loki logging enabled (${lokiUrl})`);
+    } catch (error) {
+      console.error('⚠️ Failed to initialize Loki logging, continuing without it', error);
+    }
+  } else {
+    console.warn('⚠️ LOKI_URL not set; Loki log streaming disabled');
+  }
+
   // Initialize global services for activities
-  initializeActivityServices(storageAdapter, traceAdapter);
+  initializeActivityServices(storageAdapter, traceAdapter, logAdapter);
 
   console.log(`✅ Service adapters initialized`);
 
