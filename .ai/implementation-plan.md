@@ -13,7 +13,7 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 | Phase 0 | ⚪ Not Started | Baseline Audit & Readiness |
 | Phase 1 | 🟡 In Progress | Contract Specification & Shared Types |
 | Phase 2 | ⚪ Not Started | Backend Contract Realignment |
-| Phase 3 | ⚪ Not Started | Frontend Schema & Store Sync |
+| Phase 3 | 🟢 Completed | Frontend Schema & Store Sync |
 | Phase 4 | ⚪ Not Started | Worker Trace Enhancements |
 | Phase 5 | ⚪ Not Started | Loki Log Backend Integration |
 | Phase 6 | ⚪ Not Started | Live Streaming Pipeline |
@@ -72,14 +72,14 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 
 **Goal:** Replace placeholder schemas, align polling/store logic with the new backend payloads, and expose the data in the UI.
 
-- [ ] Update `frontend/src/schemas/execution.ts` with shared types (string IDs, uppercase statuses, structured failure fields).
-- [ ] Refactor `useExecutionStore` to ingest backend status/logs directly (remove manual level inference and UUID assumptions).
-- [ ] Update BottomPanel and canvas overlays to display progress counts, failure reasons, log levels.
-- [ ] Ensure `apiClient.runWorkflow` forwards runtime inputs in the request body.
+- [x] Update `frontend/src/schemas/execution.ts` with shared types (string IDs, uppercase statuses, structured failure fields).
+- [x] Refactor `useExecutionStore` to ingest backend status/logs directly (remove manual level inference and UUID assumptions).
+- [x] Update BottomPanel and canvas overlays to display progress counts, failure reasons, log levels.
+- [x] Ensure `apiClient.runWorkflow` forwards runtime inputs in the request body.
 - [ ] Tests:
-  - Store unit tests covering incremental log merges and terminal states.
-  - Component tests (BottomPanel, node badges) for info/error rendering.
-  - Manual workflow run confirming UI no longer raises false alerts.
+  - [x] Store unit tests covering incremental log merges and terminal states.
+  - [x] Component tests (BottomPanel, node badges) for info/error rendering.
+  - [x] Manual workflow run confirming UI no longer raises false alerts.
 
 ---
 
@@ -131,6 +131,7 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 
 - [ ] Node-level badges (running/completed/error) with counts; tooltip showing last log line.
 - [ ] Collapse/expand per-node log panes; filter by level and stream.
+- [ ] Run selector with per-run log timeline; allow switching between historical runs.
 - [ ] Artefact download links and summary view (wired to S3 + Loki).
 - [ ] Retention controls allowing users to purge run logs/artifacts from the UI.
 - [ ] Tests: visual regression or screenshot tests covering node states; integration tests for artefact download.

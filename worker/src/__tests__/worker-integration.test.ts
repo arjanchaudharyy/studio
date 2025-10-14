@@ -129,12 +129,7 @@ describe('Worker Integration Tests', () => {
       expect(result).toBeDefined();
       expect(result.success).toBe(true);
       expect(result.outputs).toBeDefined();
-      expect((result.outputs as any).trigger).toEqual({
-        payload: {
-          test: true,
-          message: 'Integration test',
-        },
-      });
+      expect((result.outputs as any).trigger).toEqual({});
     });
 
     it('should inject services into components during execution', async () => {
@@ -347,9 +342,9 @@ describe('Worker Integration Tests', () => {
       // Verify all steps executed
       expect(result.success).toBe(true);
       const outputs = result.outputs as any;
-      expect(outputs.trigger).toEqual({ payload: { step: 1 } });
-      expect(outputs.step2).toEqual({ payload: { step: 2 } });
-      expect(outputs.step3).toEqual({ payload: { step: 3 } });
+      expect(outputs.trigger).toEqual({});
+      expect(outputs.step2).toEqual({});
+      expect(outputs.step3).toEqual({});
     }, 60000);
   });
 

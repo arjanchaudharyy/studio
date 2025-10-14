@@ -1,81 +1,28 @@
 import { z } from 'zod'
+import {
+  ExecutionStatusSchema as SharedExecutionStatusSchema,
+  TraceEventSchema as SharedTraceEventSchema,
+  TraceStreamEnvelopeSchema as SharedTraceStreamEnvelopeSchema,
+  TraceEventLevelSchema,
+  TraceEventTypeSchema,
+  WorkflowRunStatusSchema as SharedWorkflowRunStatusSchema,
+  type ExecutionStatus as SharedExecutionStatus,
+  type TraceEventPayload,
+  type TraceStreamEnvelope,
+  type WorkflowRunStatusPayload,
+} from '@shipsec/shared'
 
-export const ExecutionStatusEnum = z.enum([
-  'pending',
-  'running',
-  'completed',
-  'failed',
-  'cancelled'
-])
+export const ExecutionStatusEnum = SharedExecutionStatusSchema
+export type ExecutionStatus = SharedExecutionStatus
 
-export type ExecutionStatus = z.infer<typeof ExecutionStatusEnum>
+export const TraceEventSchema = SharedTraceEventSchema
+export type ExecutionLog = TraceEventPayload
 
-export const ExecutionLogLevelEnum = z.enum([
-  'info',
-  'warn',
-  'error',
-  'debug'
-])
+export const TraceEventLevelEnum = TraceEventLevelSchema
+export const TraceEventTypeEnum = TraceEventTypeSchema
 
-export type ExecutionLogLevel = z.infer<typeof ExecutionLogLevelEnum>
+export const TraceStreamEnvelopeSchema = SharedTraceStreamEnvelopeSchema
+export type ExecutionTraceStream = TraceStreamEnvelope
 
-export const ExecutionLogSchema = z.object({
-  id: z.string().uuid(),
-  executionId: z.string().uuid(),
-  nodeId: z.string().optional(),
-  level: ExecutionLogLevelEnum,
-  message: z.string(),
-  timestamp: z.string().datetime(),
-  metadata: z.record(z.string(), z.any()).optional(),
-})
-
-export type ExecutionLog = z.infer<typeof ExecutionLogSchema>
-
-/**
- * Node execution result
- */
-export const NodeResultSchema = z.object({
-  nodeId: z.string(),
-  status: z.enum(['pending', 'running', 'success', 'error']),
-  startedAt: z.string().datetime().optional(),
-  completedAt: z.string().datetime().optional(),
-  outputs: z.record(z.string(), z.any()).optional(), // Output port values
-  error: z.string().optional(),
-})
-
-export type NodeResult = z.infer<typeof NodeResultSchema>
-
-/**
- * Execution status response (used for polling)
- */
-export const ExecutionStatusResponseSchema = z.object({
-  executionId: z.string().uuid(),
-  workflowId: z.string().uuid(),
-  status: ExecutionStatusEnum,
-  startedAt: z.string().datetime(),
-  completedAt: z.string().datetime().optional(),
-
-  // Node-level results
-  nodeResults: z.record(z.string(), NodeResultSchema),
-
-  // Logs
-  logs: z.array(ExecutionLogSchema).default([]),
-})
-
-export type ExecutionStatusResponse = z.infer<typeof ExecutionStatusResponseSchema>
-
-/**
- * Full execution record
- */
-export const ExecutionSchema = z.object({
-  id: z.string().uuid(),
-  workflowId: z.string().uuid(),
-  status: ExecutionStatusEnum,
-  startedAt: z.string().datetime(),
-  completedAt: z.string().datetime().optional(),
-  logs: z.array(ExecutionLogSchema).default([]),
-  result: z.record(z.string(), z.any()).optional(),
-  error: z.string().optional(),
-})
-
-export type Execution = z.infer<typeof ExecutionSchema>
+export const ExecutionStatusResponseSchema = SharedWorkflowRunStatusSchema
+export type ExecutionStatusResponse = WorkflowRunStatusPayload

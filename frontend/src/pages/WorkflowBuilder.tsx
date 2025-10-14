@@ -142,17 +142,12 @@ function WorkflowBuilderContent() {
       await api.workflows.commit(workflowId)
       
       // Then run it with runtime inputs if provided
-      const result = await api.workflows.run(workflowId, runtimeData ? { inputs: runtimeData } : undefined)
-      
-      // Start polling for execution status
-      const runId = (result as any).runId
+      const runId = await useExecutionStore.getState().startExecution(
+        workflowId,
+        runtimeData
+      )
+
       if (runId) {
-        useExecutionStore.setState({ 
-          currentExecutionId: runId, 
-          status: 'running' 
-        })
-        useExecutionStore.getState().pollStatus(runId)
-        
         alert(`Workflow started! Execution ID: ${runId}\n\nCheck the bottom panel for execution status.`)
       } else {
         alert('Workflow started but no run ID returned')

@@ -18,6 +18,13 @@
 - **Integration suite:** Enabled via `RUN_BACKEND_INTEGRATION=true bun test` while backend runs under pm2. Updated fixtures to align with shared workflow schema and uncovered a validation bug—`PUT /workflows/:id` applied the Zod pipe to the `id` route param, returning 400. Fixed by moving the pipe onto `@Body(...)` so updates now succeed end-to-end.
 - **Observations:** `pm2.config.cjs` invokes `bun --watch`; pm2 restarts can stack if manual runs leave orphan processes. Always clean stray Bun processes (`lsof -i :3211`) before restarting pm2 to avoid port conflicts.
 
+## 2025-10-14 · Phase 3 Frontend Sync
+
+- **Shared types:** Frontend schemas now re-export `WorkflowRunStatus`/`TraceEvent` from `@shipsec/shared`, dropping UUID assumptions and preserving uppercase statuses (`frontend/src/schemas/execution.ts`).
+- **Execution store:** Rebuilt `useExecutionStore` to call real backend APIs, merge trace envelopes idempotently, and derive node states and lifecycle from shared enums (`frontend/src/store/executionStore.ts`).
+- **UI wiring:** TopBar surfaces queue/progress/failure metadata from the new status payload; BottomPanel renders structured trace levels and message fallbacks.
+- **Tests:** Added `frontend/src/store/__tests__/executionStore.test.ts` verifying log dedupe + terminal state handling plus component coverage for TopBar & BottomPanel, all wired into `bun run test`.
+
 ## Live Run UX
 - Canvas node states: idle, running (pulsing), success (green), failure (shaking red). Edges animate data flow.
 - Bottom console streams structured logs per node; supports filters and artifact previews.

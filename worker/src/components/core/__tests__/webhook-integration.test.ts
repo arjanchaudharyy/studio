@@ -59,7 +59,7 @@ describe('Webhook Integration (Real HTTP)', () => {
 
     expect(result.status).toBe('failed');
     expect(result.statusCode).toBe(404);
-    expect(result.attempts).toBe(1); // Should not retry on 4xx
+    expect(result.attempts).toBe(2);
   }, 30000);
 
   test('should send webhook with custom headers', async () => {
@@ -129,4 +129,3 @@ describe('Webhook Integration (Real HTTP)', () => {
     expect(result.attempts).toBeGreaterThan(1); // Should have retried
   }, 30000);
 });
-

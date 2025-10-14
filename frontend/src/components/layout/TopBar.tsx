@@ -18,8 +18,8 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
   const [isSaving, setIsSaving] = useState(false)
 
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
-  const { status, reset } = useExecutionStore()
-  const isRunning = status === 'running'
+  const { status, runStatus, reset } = useExecutionStore()
+  const isRunning = status === 'running' || status === 'queued'
 
   const handleSave = async () => {
     if (onSave) {
@@ -101,14 +101,32 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
           </Button>
         )}
 
+        {status === 'queued' && (
+          <span className="text-sm text-muted-foreground font-medium">
+            Queued…
+          </span>
+        )}
+
+        {runStatus?.progress && (
+          <span className="text-sm text-muted-foreground font-medium">
+            {runStatus.progress.completedActions}/{runStatus.progress.totalActions} actions
+          </span>
+        )}
+
         {status === 'completed' && (
           <span className="text-sm text-green-600 font-medium">
             ✓ Completed
           </span>
         )}
+
         {status === 'failed' && (
           <span className="text-sm text-red-600 font-medium">
             ✗ Failed
+          </span>
+        )}
+        {status === 'failed' && runStatus?.failure?.reason && (
+          <span className="text-sm text-red-600">
+            {runStatus.failure.reason}
           </span>
         )}
       </div>

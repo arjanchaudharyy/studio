@@ -56,7 +56,7 @@ export function BottomPanel() {
   }
 
   const clearLogs = () => {
-    useExecutionStore.getState().reset()
+    useExecutionStore.setState({ logs: [] })
   }
 
   return (
@@ -156,7 +156,9 @@ export function BottomPanel() {
                           [{log.nodeId}]
                         </span>
                       )}
-                      <span className={getLevelColor(log.level)}>{log.message}</span>
+                      <span className={getLevelColor(log.level)}>
+                        {log.message ?? log.error?.message ?? log.type}
+                      </span>
                     </div>
                   ))}
                   <div ref={logsEndRef} />

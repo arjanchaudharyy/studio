@@ -13,9 +13,9 @@ import {
 } from '@/schemas/component'
 import {
   ExecutionStatusResponseSchema,
-  ExecutionLogSchema,
-  type ExecutionLog,
+  TraceStreamEnvelopeSchema,
   type ExecutionStatusResponse,
+  type ExecutionTraceStream,
 } from '@/schemas/execution'
 
 /**
@@ -188,9 +188,10 @@ export const api = {
      */
     start: async (
       workflowId: string,
-      _parameters?: Record<string, any>
+      inputs?: Record<string, unknown>
     ): Promise<{ executionId: string }> => {
-      const response = await apiClient.runWorkflow(workflowId)
+      const payload = inputs ? { inputs } : undefined
+      const response = await apiClient.runWorkflow(workflowId, payload)
       if (response.error) throw new Error('Failed to start execution')
       return { executionId: (response.data as any).runId }
     },
@@ -205,12 +206,12 @@ export const api = {
     },
 
     /**
-     * Get execution logs
+     * Get execution trace events
      */
-    getLogs: async (executionId: string): Promise<ExecutionLog[]> => {
+    getTrace: async (executionId: string): Promise<ExecutionTraceStream> => {
       const response = await apiClient.getWorkflowRunTrace(executionId)
       if (response.error) throw new Error('Failed to fetch execution logs')
-      return ((response.data as any).events || []).map((log: unknown) => ExecutionLogSchema.parse(log))
+      return TraceStreamEnvelopeSchema.parse(response.data)
     },
 
     /**

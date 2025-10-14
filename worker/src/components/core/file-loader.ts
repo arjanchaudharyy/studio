@@ -8,20 +8,24 @@ const inputSchema = z.object({
 type Input = z.infer<typeof inputSchema>;
 
 type Output = {
-  fileId: string;
-  fileName: string;
-  mimeType: string;
-  size: number;
-  content: string; // base64 encoded for downstream components
+  file: {
+    id: string;
+    name: string;
+    mimeType: string;
+    size: number;
+    content: string; // base64 encoded
+  };
   textContent: string; // decoded text content
 };
 
 const outputSchema = z.object({
-  fileId: z.string(),
-  fileName: z.string(),
-  mimeType: z.string(),
-  size: z.number(),
-  content: z.string(),
+  file: z.object({
+    id: z.string(),
+    name: z.string(),
+    mimeType: z.string(),
+    size: z.number(),
+    content: z.string(),
+  }),
   textContent: z.string(),
 });
 
@@ -101,15 +105,16 @@ const definition: ComponentDefinition<Input, Output> = {
     const textContent = buffer.toString('utf-8');
 
     return {
-      fileId: metadata.id,
-      fileName: metadata.fileName,
-      mimeType: metadata.mimeType,
-      size: metadata.size,
-      content,
+      file: {
+        id: metadata.id,
+        name: metadata.fileName,
+        mimeType: metadata.mimeType,
+        size: metadata.size,
+        content,
+      },
       textContent,
     };
   },
 };
 
 componentRegistry.register(definition);
-

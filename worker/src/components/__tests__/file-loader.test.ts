@@ -53,11 +53,12 @@ describe('file-loader component', () => {
 
     const result = await component.execute(params, context) as any;
 
-    expect(result.fileId).toBe(testFileId);
-    expect(result.fileName).toBe('test.txt');
-    expect(result.mimeType).toBe('text/plain');
-    expect(result.size).toBe(13);
-    expect(result.content).toBe(Buffer.from('Hello, World!').toString('base64'));
+    expect(result.file.id).toBe(testFileId);
+    expect(result.file.name).toBe('test.txt');
+    expect(result.file.mimeType).toBe('text/plain');
+    expect(result.file.size).toBe(13);
+    expect(result.file.content).toBe(Buffer.from('Hello, World!').toString('base64'));
+    expect(result.textContent).toBe('Hello, World!');
   });
 
   it('should throw error when storage service is not available', async () => {
@@ -113,8 +114,7 @@ describe('file-loader component', () => {
 
     const result = await component.execute(params, context) as any;
 
-    expect(result.mimeType).toBe('image/png');
-    expect(result.content).toBe(binaryData.toString('base64'));
+    expect(result.file.mimeType).toBe('image/png');
+    expect(result.file.content).toBe(binaryData.toString('base64'));
   });
 });
-
