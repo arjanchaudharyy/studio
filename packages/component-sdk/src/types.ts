@@ -61,7 +61,14 @@ export interface LogEventInput {
   metadata?: ExecutionContextMetadata;
 }
 
-export type ComponentPortType = 'string' | 'array' | 'object' | 'file' | 'any';
+export type ComponentPortType =
+  | 'string'
+  | 'array'
+  | 'object'
+  | 'file'
+  | 'any'
+  | 'secret'
+  | 'number';
 
 export interface ComponentPortMetadata {
   id: string;

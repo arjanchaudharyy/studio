@@ -146,10 +146,12 @@ const db = drizzle(pool);
 
 // Create adapters
 const storageAdapter = new FileStorageAdapter(minioClient, db);
-const traceAdapter = new TraceAdapter();
+const traceAdapter = new TraceAdapter(db);
+const secretsAdapter = new SecretsAdapter(db);
+const logAdapter = new LokiLogAdapter(new LokiLogClient({ baseUrl: process.env.LOKI_URL! }), db);
 
 // Inject into activities
-initializeActivityServices(storageAdapter, traceAdapter);
+initializeActivityServices(storageAdapter, traceAdapter, logAdapter, secretsAdapter);
 
 // Start worker
 const worker = await Worker.create({
@@ -312,4 +314,3 @@ component-sdk
 - [ ] Artifact storage service
 - [ ] Real-time trace streaming via WebSockets
 - [ ] Component marketplace
-

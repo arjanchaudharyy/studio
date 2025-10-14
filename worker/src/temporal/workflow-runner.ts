@@ -21,6 +21,8 @@ import {
 } from './workflow-scheduler';
 import { buildActionParams } from './input-resolver';
 
+type RegisteredComponent = NonNullable<ReturnType<typeof componentRegistry.get>>;
+
 export interface ExecuteWorkflowOptions {
   runId?: string;
   storage?: IFileStorageService;
@@ -170,7 +172,7 @@ export async function executeWorkflow(
           runId,
           nodeRef: action.ref,
           timestamp: new Date().toISOString(),
-          outputSummary: output,
+          outputSummary: maskSecretOutputs(component, output),
           level: 'info',
           context: {
             runId,
@@ -220,4 +222,27 @@ export async function executeWorkflow(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function maskSecretOutputs(component: RegisteredComponent, output: unknown): unknown {
+  const secretPorts = component.metadata?.outputs?.filter((port) => port.type === 'secret') ?? [];
+  if (secretPorts.length === 0) {
+    return output;
+  }
+
+  if (secretPorts.some((port) => port.id === '__self__')) {
+    return '***';
+  }
+
+  if (output && typeof output === 'object' && !Array.isArray(output)) {
+    const clone = { ...(output as Record<string, unknown>) };
+    for (const port of secretPorts) {
+      if (Object.prototype.hasOwnProperty.call(clone, port.id)) {
+        clone[port.id] = '***';
+      }
+    }
+    return clone;
+  }
+
+  return '***';
 }

@@ -98,7 +98,7 @@ export class ComponentsController {
               properties: {
                 id: { type: 'string' },
                 label: { type: 'string' },
-                type: { type: 'string', enum: ['string', 'array', 'object', 'file', 'any'] },
+                type: { type: 'string', enum: ['string', 'array', 'object', 'file', 'any', 'secret'] },
                 required: { type: 'boolean' },
                 description: { type: 'string', nullable: true },
               },
@@ -111,7 +111,7 @@ export class ComponentsController {
               properties: {
                 id: { type: 'string' },
                 label: { type: 'string' },
-                type: { type: 'string', enum: ['string', 'array', 'object', 'file', 'any'] },
+                type: { type: 'string', enum: ['string', 'array', 'object', 'file', 'any', 'secret'] },
                 description: { type: 'string', nullable: true },
               },
             },
@@ -125,7 +125,16 @@ export class ComponentsController {
                 label: { type: 'string' },
                 type: {
                   type: 'string',
-                  enum: ['text', 'textarea', 'number', 'boolean', 'select', 'multi-select', 'json'],
+                  enum: [
+                    'text',
+                    'textarea',
+                    'number',
+                    'boolean',
+                    'select',
+                    'multi-select',
+                    'json',
+                    'secret',
+                  ],
                 },
                 required: { type: 'boolean' },
                 default: { nullable: true },
