@@ -96,6 +96,53 @@ export class WorkflowsService {
     return flattened;
   }
 
+  async listRuns(options: {
+    workflowId?: string;
+    status?: string;
+    limit?: number;
+  } = {}) {
+    const runs = await this.runRepository.list(options);
+    const enrichedRuns = [];
+
+    for (const run of runs) {
+      // Get workflow name
+      const workflow = await this.repository.findById(run.workflowId);
+      const workflowName = workflow?.name ?? 'Unknown Workflow';
+
+      // Get event count
+      const eventCount = await this.traceRepository.countByType(run.runId, 'NODE_STARTED');
+
+      // Get current status from Temporal
+      let currentStatus = 'UNKNOWN';
+      try {
+        const status = await this.temporalService.describeWorkflow({
+          workflowId: run.runId,
+          runId: run.temporalRunId,
+        });
+        currentStatus = this.normalizeStatus(status.status);
+      } catch (error) {
+        this.logger.warn(`Failed to get status for run ${run.runId}: ${error}`);
+      }
+
+      enrichedRuns.push({
+        id: run.runId,
+        workflowId: run.workflowId,
+        status: currentStatus,
+        startTime: run.createdAt,
+        endTime: run.completedAt,
+        temporalRunId: run.temporalRunId,
+        workflowName,
+        eventCount,
+      });
+    }
+
+    // Sort by start time (newest first)
+    enrichedRuns.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+
+    this.logger.log(`Loaded ${enrichedRuns.length} workflow run(s) for timeline`);
+    return { runs: enrichedRuns };
+  }
+
   async commit(id: string): Promise<WorkflowDefinition> {
     const workflow = await this.findById(id);
     this.logger.log(`Compiling workflow ${workflow.id}`);

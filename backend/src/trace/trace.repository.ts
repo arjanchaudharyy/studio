@@ -51,7 +51,7 @@ export class TraceRepository implements OnModuleDestroy {
     const channel = `trace_events_${runId}`;
 
     try {
-      await client.query(`LISTEN ${channel}`);
+      await client.query(`LISTEN "${channel}"`);
 
       client.on('notification', (msg) => {
         if (msg.channel === channel && msg.payload) {
@@ -62,7 +62,7 @@ export class TraceRepository implements OnModuleDestroy {
       // Return unsubscribe function
       return async () => {
         try {
-          await client.query(`UNLISTEN ${channel}`);
+          await client.query(`UNLISTEN "${channel}"`);
         } finally {
           client.release();
         }
@@ -78,7 +78,7 @@ export class TraceRepository implements OnModuleDestroy {
    */
   async notifyRun(runId: string, payload: string): Promise<void> {
     const channel = `trace_events_${runId}`;
-    await this.pool.query(`NOTIFY ${channel}, $1`, [payload]);
+    await this.pool.query(`NOTIFY "${channel}", $1`, [payload]);
   }
 
   async append(event: PersistedTraceEvent): Promise<void> {

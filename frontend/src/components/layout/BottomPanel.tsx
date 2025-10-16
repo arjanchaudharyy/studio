@@ -1,23 +1,42 @@
 import { useState, useEffect, useRef } from 'react'
-import { ChevronUp, ChevronDown, Terminal, X, ArrowDown, Pause, Play } from 'lucide-react'
+import { ChevronUp, ChevronDown, Terminal, X, ArrowDown, Pause, Play, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useExecutionStore } from '@/store/executionStore'
+import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
+import { RunSelector } from '@/components/timeline/RunSelector'
+import { ExecutionTimeline } from '@/components/timeline/ExecutionTimeline'
+import { EventInspector } from '@/components/timeline/EventInspector'
 
 export function BottomPanel() {
   const [isExpanded, setIsExpanded] = useState(false)
-  const [activeTab, setActiveTab] = useState<'logs' | 'results' | 'history'>('logs')
+  const [activeTab, setActiveTab] = useState<'logs' | 'results' | 'history' | 'timeline'>('logs')
   const [autoScroll, setAutoScroll] = useState(true)
-  const { logs, status, streamingMode } = useExecutionStore()
+  const {
+    logs: liveLogs,
+    status,
+    streamingMode,
+    runId: liveRunId,
+  } = useExecutionStore()
+  const {
+    selectedRunId,
+    events: timelineEvents,
+  } = useExecutionTimelineStore()
   const logsEndRef = useRef<HTMLDivElement>(null)
   const logsContainerRef = useRef<HTMLDivElement>(null)
+
+  const hasSelectedRun = Boolean(selectedRunId)
+  const isCurrentRunSelected = hasSelectedRun && liveRunId === selectedRunId
+  const hasTimelineEvents = hasSelectedRun && timelineEvents.length > 0
+  const useTimelineLogs = hasSelectedRun && (!isCurrentRunSelected || hasTimelineEvents)
+  const displayLogs = useTimelineLogs ? timelineEvents : liveLogs
 
   // Auto-scroll to bottom when new logs arrive (if enabled)
   useEffect(() => {
     if (isExpanded && activeTab === 'logs' && autoScroll) {
       logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [logs, isExpanded, activeTab, autoScroll])
+  }, [displayLogs, isExpanded, activeTab, autoScroll])
 
   // Disable auto-scroll when user manually scrolls up
   const handleScroll = () => {
@@ -72,6 +91,9 @@ export function BottomPanel() {
   }
 
   const clearLogs = () => {
+    if (useTimelineLogs) {
+      return
+    }
     useExecutionStore.setState({ logs: [] })
   }
 
@@ -96,7 +118,7 @@ export function BottomPanel() {
   return (
     <div
       className={`border-t bg-background transition-all duration-300 ${
-        isExpanded ? 'h-[300px]' : 'h-[40px]'
+        isExpanded ? 'h-[400px]' : 'h-[40px]'
       }`}
     >
       <div className="h-[40px] flex items-center px-4 border-b">
@@ -110,11 +132,20 @@ export function BottomPanel() {
               }`}
             >
               Logs
-              {logs.length > 0 && (
+              {displayLogs.length > 0 && (
                 <span className="ml-1.5 text-xs text-muted-foreground">
-                  ({logs.length})
+                  ({displayLogs.length})
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab('timeline')}
+              className={`text-sm font-medium ${
+                activeTab === 'timeline' ? 'text-foreground' : 'text-muted-foreground'
+              }`}
+            >
+              <Clock className="inline h-3 w-3 mr-1" />
+              Timeline
             </button>
             <button
               onClick={() => setActiveTab('results')}
@@ -148,7 +179,7 @@ export function BottomPanel() {
           )}
 
           {/* Log scroll controls */}
-          {isExpanded && activeTab === 'logs' && logs.length > 0 && (
+          {isExpanded && activeTab === 'logs' && displayLogs.length > 0 && (
             <>
               {!autoScroll && (
                 <Button
@@ -180,7 +211,7 @@ export function BottomPanel() {
             </>
           )}
 
-          {logs.length > 0 && (
+          {displayLogs.length > 0 && !useTimelineLogs && (
             <Button
               variant="ghost"
               size="sm"
@@ -208,52 +239,79 @@ export function BottomPanel() {
       </div>
 
       {isExpanded && (
-        <div
-          ref={logsContainerRef}
-          className="h-[260px] overflow-y-auto p-4"
-          onScroll={handleScroll}
-        >
+        <div className="h-[360px]">
           {activeTab === 'logs' && (
-            <div className="space-y-2 font-mono text-sm">
-              {logs.length === 0 ? (
-                <div className="text-muted-foreground text-center py-8">
-                  No logs yet. Run a workflow to see execution logs.
-                </div>
-              ) : (
-                <>
-                  {logs.map((log) => (
-                    <div key={log.id} className="flex items-start gap-3">
-                      <span className="text-muted-foreground text-xs whitespace-nowrap">
-                        {formatTime(log.timestamp)}
-                      </span>
-                      <Badge
-                        variant={getLevelBadgeVariant(log.level)}
-                        className="text-xs px-1.5 py-0 whitespace-nowrap"
-                      >
-                        {log.level.toUpperCase()}
-                      </Badge>
-                      {log.nodeId && (
-                        <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">
-                          [{log.nodeId}]
-                        </span>
-                      )}
-                      <span className={getLevelColor(log.level)}>
-                        {log.message ?? log.error?.message ?? log.type}
-                      </span>
+            <div className="h-full flex flex-col">
+              <div className="flex-shrink-0 border-b px-4 py-3">
+                <RunSelector />
+              </div>
+              <div
+                ref={logsContainerRef}
+                className="flex-1 overflow-y-auto p-4"
+                onScroll={handleScroll}
+              >
+                <div className="space-y-2 font-mono text-sm">
+                  {displayLogs.length === 0 ? (
+                    <div className="text-muted-foreground text-center py-8">
+                      {hasSelectedRun
+                        ? 'No logs recorded for this run.'
+                        : 'No logs yet. Run a workflow or select a past run to view execution logs.'}
                     </div>
-                  ))}
-                  <div ref={logsEndRef} />
-                </>
-              )}
+                  ) : (
+                    <>
+                      {displayLogs.map((log) => (
+                        <div key={log.id} className="flex items-start gap-3">
+                          <span className="text-muted-foreground text-xs whitespace-nowrap">
+                            {formatTime(log.timestamp)}
+                          </span>
+                          <Badge
+                            variant={getLevelBadgeVariant(log.level)}
+                            className="text-xs px-1.5 py-0 whitespace-nowrap"
+                          >
+                            {log.level.toUpperCase()}
+                          </Badge>
+                          {log.nodeId && (
+                            <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">
+                              [{log.nodeId}]
+                            </span>
+                          )}
+                          <span className={getLevelColor(log.level)}>
+                            {log.message ?? log.error?.message ?? log.type}
+                          </span>
+                        </div>
+                      ))}
+                      <div ref={logsEndRef} />
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'timeline' && (
+            <div className="h-full flex flex-col">
+              <div className="flex-shrink-0 border-b p-3">
+                <RunSelector />
+              </div>
+              <div className="flex-shrink-0">
+                <ExecutionTimeline />
+              </div>
+              <div className="flex-1 min-h-0">
+                <EventInspector />
+              </div>
             </div>
           )}
 
           {activeTab === 'results' && (
-            <div className="text-muted-foreground">Results will appear here</div>
+            <div className="h-full overflow-y-auto p-4 text-muted-foreground">
+              Results will appear here
+            </div>
           )}
 
           {activeTab === 'history' && (
-            <div className="text-muted-foreground">Execution history will appear here</div>
+            <div className="h-full overflow-y-auto p-4 text-muted-foreground">
+              Execution history will appear here
+            </div>
           )}
         </div>
       )}

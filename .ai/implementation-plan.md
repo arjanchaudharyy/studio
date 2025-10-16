@@ -17,7 +17,7 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 | Phase 4 | 🟢 Completed | Worker Trace Enhancements |
 | Phase 5 | 🟢 Completed | Loki Log Backend Integration |
 | Phase 6 | 🟢 Completed | Live Streaming Pipeline |
-| Phase 7 | ⚪ Not Started | UX Polish & Controls |
+| Phase 7 | 🟡 In Progress | Visual Execution Timeline & Replay System |
 | Phase 8 | ⚪ Not Started | Observability Metrics & Regression Suite |
 
 **Primary Objective:** Deliver a magical, real-time execution experience for workflows (e.g., run `7528ea47-0c0f-4236-b864-5072d8e5b6ce`) where every node streams status, progress, and logs while running.
@@ -125,16 +125,57 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 
 ---
 
-## Phase 7 – UX Polish & Controls
+## Phase 7 – Visual Execution Timeline & Replay System
 
-**Goal:** Deliver a delightful, informative execution UI.
+**Goal:** Create a time-travel debugger for workflows - unified interface showing live execution or historical replay with data flow animations and event inspection.
 
-- [ ] Node-level badges (running/completed/error) with counts; tooltip showing last log line.
-- [ ] Collapse/expand per-node log panes; filter by level and stream.
-- [ ] Run selector with per-run log timeline; allow switching between historical runs.
-- [ ] Artefact download links and summary view (wired to S3 + Loki).
-- [ ] Retention controls allowing users to purge run logs/artifacts from the UI.
-- [ ] Tests: visual regression or screenshot tests covering node states; integration tests for artefact download.
+### Core Vision
+- **Unified Interface**: Same visual language for live and historical runs
+- **Time-Travel Debugging**: Scrub through any execution at variable speeds (0.1x-10x)
+- **Data Flow Visualization**: Animated packets flowing along edges showing data movement
+- **Interactive Canvas**: Click nodes to inspect events, hover edges to see data packets
+
+### Implementation Tasks
+
+#### Timeline & Run Selection
+- [ ] Run selector dropdown showing all executions with metadata (status, duration, node count)
+- [ ] Timeline component with scrubber, play/pause controls, and speed adjustment (0.1x-10x)
+- [ ] Live mode with auto-scrolling playhead vs replay mode with full seeking
+- [ ] Event markers on timeline (node starts, completions, errors, data flows)
+
+#### Enhanced Canvas Visualization
+- [ ] Node visual states with pulsing borders, progress rings, and event count badges
+- [ ] Data packet animations flowing along edges at replay speed
+- [ ] Edge hover effects showing packet content preview
+- [ ] Error glow effects with expandable error details
+- [ ] Multiple simultaneous flows for parallel execution
+
+#### Event Inspection System
+- [ ] Event inspector panel showing detailed event information
+- [ ] Input/output data visualization for each node
+- [ ] Log timeline per-node with filtering capabilities
+- [ ] Related data flow highlighting between nodes
+
+#### Animation & Interaction Engine
+- [ ] Playback controller supporting step-through, looping, bookmarks
+- [ ] Smooth data packet animations with configurable speeds
+- [ ] Node state transitions (idle → running → success/error)
+- [ ] Timeline seeking with instant canvas state restoration
+
+#### Backend Integration
+- [ ] `/runs` endpoint returning list of all executions
+- [ ] `/runs/:id/events` returning complete event timeline
+- [ ] `/runs/:id/dataflows` returning data flow graph
+- [ ] Enhanced SSE including data flow events
+- [ ] Event ordering and timestamp accuracy
+
+#### User Experience
+- [ ] Seamless switching between live and replay modes
+- [ ] Keyboard shortcuts for playback controls
+- [ ] Responsive timeline for mobile/desktop
+- [ ] Performance optimization for large executions
+
+- [ ] Tests: timeline scrubbing accuracy, animation smoothness, event inspector correctness.
 
 ---
 

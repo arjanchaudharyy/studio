@@ -16,14 +16,21 @@ import 'reactflow/dist/style.css'
 
 import { WorkflowNode } from './WorkflowNode'
 import { ConfigPanel } from './ConfigPanel'
+import { DataFlowEdge } from '../timeline/DataFlowEdge'
 import { validateConnection } from '@/utils/connectionValidation'
 import { useComponentStore } from '@/store/componentStore'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
+import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
 import type { NodeData } from '@/schemas/node'
 
 const nodeTypes = {
   workflow: WorkflowNode,
+}
+
+const edgeTypes = {
+  dataFlow: DataFlowEdge,
+  default: DataFlowEdge, // Default to our enhanced edge
 }
 
 const initialNodes: Node[] = []
@@ -41,6 +48,7 @@ export function Canvas({ className }: CanvasProps) {
   const { getComponent } = useComponentStore()
   const { nodeStates } = useExecutionStore()
   const { markDirty } = useWorkflowStore()
+  const { selectedRunId, dataFlows, selectedNodeId, selectNode, selectEvent } = useExecutionTimelineStore()
 
   // Enhanced edge change handler that also updates input mappings
   const onEdgesChange = useCallback((changes: any[]) => {
@@ -104,12 +112,17 @@ export function Canvas({ className }: CanvasProps) {
         return
       }
 
-      // Add the edge
-      setEdges((eds) => addEdge({
+      // Add the edge with data flow support
+      const newEdge = {
         ...params,
-        type: 'smoothstep',
+        type: 'default', // Use our enhanced DataFlowEdge
         animated: false,
-      }, eds))
+        data: {
+          packets: [], // Will be populated by timeline store
+          isHighlighted: selectedNodeId === params.source || selectedNodeId === params.target,
+        },
+      }
+      setEdges((eds) => addEdge(newEdge, eds))
 
       // Update target node's input mapping
       if (params.target && params.targetHandle && params.source && params.sourceHandle) {
@@ -197,9 +210,29 @@ export function Canvas({ className }: CanvasProps) {
 
 
   // Handle node click for config panel
-  const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
+  const onNodeClick: NodeMouseHandler = useCallback((event, node) => {
+    if (selectedRunId) {
+      event.preventDefault()
+      event.stopPropagation()
+
+      selectNode(node.id)
+
+      const { events, seek } = useExecutionTimelineStore.getState()
+      const nodeEvents = events.filter((timelineEvent) => timelineEvent.nodeId === node.id)
+
+      if (nodeEvents.length > 0) {
+        const latestEvent = nodeEvents[nodeEvents.length - 1]
+        selectEvent(latestEvent.id)
+        seek(latestEvent.offsetMs)
+      } else {
+        selectEvent(null)
+      }
+
+      return
+    }
+
     setSelectedNode(node as Node<NodeData>)
-  }, [])
+  }, [selectedRunId, selectNode, selectEvent])
 
   // Handle pane click to deselect
   const onPaneClick = useCallback(() => {
@@ -232,6 +265,24 @@ export function Canvas({ className }: CanvasProps) {
       }
     }
   }, [nodes, selectedNode])
+
+  // Update edges with data flow highlighting and packet data
+  useEffect(() => {
+    setEdges((eds) =>
+      eds.map((edge) => ({
+        ...edge,
+        data: {
+          ...edge.data,
+          packets: dataFlows.filter(
+            packet =>
+              packet.sourceNode === edge.source &&
+              packet.targetNode === edge.target
+          ),
+          isHighlighted: selectedNodeId === edge.source || selectedNodeId === edge.target,
+        },
+      }))
+    )
+  }, [dataFlows, selectedNodeId, setEdges])
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -284,8 +335,28 @@ export function Canvas({ className }: CanvasProps) {
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             attributionPosition="bottom-left"
           >
+            {/* SVG markers for edges */}
+            <svg style={{ position: 'absolute', width: 0, height: 0 }}>
+              <defs>
+                <marker
+                  id="arrowhead"
+                  markerWidth="10"
+                  markerHeight="10"
+                  refX="9"
+                  refY="3"
+                  orient="auto"
+                >
+                  <polygon
+                    points="0 0, 10 3, 0 6"
+                    fill="#6b7280"
+                  />
+                </marker>
+              </defs>
+            </svg>
+
             <Background color="#aaa" gap={16} />
             <Controls position="bottom-left" />
             <MiniMap

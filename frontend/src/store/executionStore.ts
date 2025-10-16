@@ -37,6 +37,9 @@ interface ExecutionStoreActions {
   reset: () => void
   connectStream: (runId: string) => void
   disconnectStream: () => void
+  getNodeLogs: (nodeId: string) => ExecutionLog[]
+  getNodeLogCounts: (nodeId: string) => { total: number; errors: number; warnings: number }
+  getLastLogMessage: (nodeId: string) => string | null
 }
 
 type ExecutionStore = ExecutionStoreState & ExecutionStoreActions
@@ -337,5 +340,27 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       existing.close()
     }
     set({ eventSource: null, streamingMode: 'none' })
+  },
+
+  getNodeLogs: (nodeId: string) => {
+    const { logs } = get()
+    return logs.filter(log => log.nodeId === nodeId)
+  },
+
+  getNodeLogCounts: (nodeId: string) => {
+    const nodeLogs = get().getNodeLogs(nodeId)
+    return {
+      total: nodeLogs.length,
+      errors: nodeLogs.filter(log => log.level === 'error').length,
+      warnings: nodeLogs.filter(log => log.level === 'warn').length,
+    }
+  },
+
+  getLastLogMessage: (nodeId: string) => {
+    const nodeLogs = get().getNodeLogs(nodeId)
+    if (nodeLogs.length === 0) return null
+
+    const lastLog = nodeLogs[nodeLogs.length - 1]
+    return lastLog.message || lastLog.error?.message || `${lastLog.type}`
   },
 }))

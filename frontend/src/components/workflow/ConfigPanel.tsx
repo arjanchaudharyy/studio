@@ -3,7 +3,7 @@ import * as LucideIcons from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useComponentStore } from '@/store/componentStore'
-import { ComponentBadges } from './ComponentBadge'
+import { ComponentInfoButton } from './ComponentBadge'
 import { ParameterFieldWrapper } from './ParameterField'
 import type { Node } from 'reactflow'
 import type { NodeData } from '@/schemas/node'
@@ -118,11 +118,13 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
             )} />
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="font-semibold text-sm mb-1">{component.name}</h4>
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <h4 className="font-semibold text-sm truncate">{component.name}</h4>
+              <ComponentInfoButton component={component} align="end" />
+            </div>
             <p className="text-xs text-muted-foreground mb-2">
               {component.description}
             </p>
-            <ComponentBadges component={component} />
           </div>
         </div>
       </div>

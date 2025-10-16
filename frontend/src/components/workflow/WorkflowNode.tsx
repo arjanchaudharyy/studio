@@ -1,10 +1,11 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { Handle, Position, type NodeProps, useReactFlow } from 'reactflow'
-import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useComponentStore } from '@/store/componentStore'
-import { ComponentBadges } from './ComponentBadge'
+import { useExecutionTimelineStore, type NodeVisualState } from '@/store/executionTimelineStore'
+import { ComponentInfoButton } from './ComponentBadge'
 import { getNodeStyle, getTypeBorderColor } from './nodeStyles'
 import type { NodeData } from '@/schemas/node'
 
@@ -17,14 +18,26 @@ const STATUS_ICONS = {
 } as const
 
 /**
- * WorkflowNode - Visual representation of a workflow component
+ * Enhanced WorkflowNode - Visual representation with timeline states
  */
 export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) => {
   const { getComponent, loading } = useComponentStore()
   const { getNodes, getEdges } = useReactFlow()
+  const { nodeStates, selectedRunId, selectNode } = useExecutionTimelineStore()
+  const [isHovered, setIsHovered] = useState(false)
 
   // Cast to access extended frontend fields (componentId, componentSlug, status, etc.)
   const nodeData = data as any
+
+  // Get timeline visual state for this node
+  const visualState: NodeVisualState = nodeStates[id] || {
+    status: 'idle',
+    progress: 0,
+    startTime: 0,
+    eventCount: 0,
+    lastEvent: null,
+    dataFlow: { input: [], output: [] }
+  }
 
   // Get component metadata
   const componentRef: string | undefined = nodeData.componentId ?? nodeData.componentSlug
@@ -53,12 +66,18 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   const iconName = component.icon && component.icon in LucideIcons ? component.icon : 'Box'
   const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>
 
-  // Get styling based on execution status
-  const nodeStyle = getNodeStyle(nodeData.status || 'idle')
+  // Get styling based on visual state (prioritize timeline over node data)
+  const effectiveStatus = selectedRunId ? visualState.status : (nodeData.status || 'idle')
+  const nodeStyle = getNodeStyle(effectiveStatus)
   const typeBorderColor = getTypeBorderColor(component.type)
 
   // Get status icon
-  const StatusIcon = nodeData.status ? STATUS_ICONS[nodeData.status as keyof typeof STATUS_ICONS] : null
+  const StatusIcon = STATUS_ICONS[effectiveStatus as keyof typeof STATUS_ICONS]
+
+  // Enhanced styling for timeline visualization
+  const isTimelineActive = selectedRunId && visualState.status !== 'idle'
+  const shouldShowProgress = isTimelineActive && visualState.status === 'running' && visualState.progress > 0
+  const hasEvents = visualState.eventCount > 0
 
   // Display label (custom or component name)
   const displayLabel = data.label || component.name
@@ -102,22 +121,82 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
       return !nodeData.inputs?.[input.id] // No connection to this input
     })
 
+  // Progress ring component
+  const ProgressRing = ({ progress, size = 32 }: { progress: number; size?: number }) => (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg
+        className="transform -rotate-90"
+        width={size}
+        height={size}
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={size / 2 - 2}
+          stroke="currentColor"
+          strokeWidth="2"
+          fill="none"
+          className="text-muted opacity-30"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={size / 2 - 2}
+          stroke="currentColor"
+          strokeWidth="2"
+          fill="none"
+          strokeDasharray={`${(progress / 100) * (Math.PI * (size - 4))} ${Math.PI * (size - 4)}`}
+          className={cn(
+            "transition-all duration-300",
+            effectiveStatus === 'running' ? "text-blue-500" : "text-green-500"
+          )}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center text-xs font-medium">
+        {Math.round(progress)}%
+      </div>
+    </div>
+  )
+
+  // Event count badge
+  const EventBadge = ({ count }: { count: number }) => (
+    <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-medium shadow-lg">
+      {count > 99 ? '99+' : count}
+    </div>
+  )
+
   return (
     <div
       className={cn(
-        'shadow-lg rounded-lg border-2 min-w-[240px] max-w-[280px] bg-background transition-all',
+        'shadow-lg rounded-lg border-2 min-w-[240px] max-w-[280px] bg-background transition-all relative',
+        // Enhanced border styling for timeline
+        isTimelineActive && effectiveStatus === 'running' && 'animate-pulse border-blue-400',
+        isTimelineActive && effectiveStatus === 'error' && 'border-red-400 bg-red-50/20',
+        isTimelineActive && effectiveStatus === 'success' && 'border-green-400 bg-green-50/20',
+
+        // Existing styling
         nodeData.status ? nodeStyle.border : typeBorderColor,
         nodeData.status && nodeData.status !== 'idle' ? nodeStyle.bg : 'bg-background',
         selected && 'ring-2 ring-blue-500 ring-offset-2',
-        hasUnfilledRequired && !nodeData.status && 'border-red-300 shadow-red-100'
+        hasUnfilledRequired && !nodeData.status && 'border-red-300 shadow-red-100',
+
+        // Interactive states
+        isHovered && 'shadow-xl transform scale-[1.02]',
+        selectedRunId && 'cursor-pointer'
       )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={() => selectedRunId && selectNode(id)}
     >
       {/* Header */}
-      <div className="px-3 py-2 border-b border-border/50">
+      <div className="px-3 py-2 border-b border-border/50 relative">
+        {/* Event count badge */}
+        {hasEvents && <EventBadge count={visualState.eventCount} />}
+
         <div className="flex items-start gap-2">
           {component.logo ? (
-            <img 
-              src={component.logo} 
+            <img
+              src={component.logo}
               alt={component.name}
               className="h-5 w-5 mt-0.5 flex-shrink-0 object-contain"
               onError={(e) => {
@@ -133,16 +212,51 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
           )} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold truncate">{displayLabel}</h3>
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 className="text-sm font-semibold truncate">{displayLabel}</h3>
+                <ComponentInfoButton component={component} align="end" />
+              </div>
               <div className="flex items-center gap-1">
                 {hasUnfilledRequired && !nodeData.status && (
                   <span className="text-red-500 text-xs" title="Required fields missing">!</span>
                 )}
                 {StatusIcon && (
-                  <StatusIcon className={cn('h-4 w-4 flex-shrink-0', nodeStyle.iconClass)} />
+                  <StatusIcon className={cn(
+                    'h-4 w-4 flex-shrink-0',
+                    nodeStyle.iconClass,
+                    isTimelineActive && effectiveStatus === 'running' && 'animate-spin',
+                    isTimelineActive && effectiveStatus === 'error' && 'animate-bounce'
+                  )} />
                 )}
               </div>
             </div>
+
+            {/* Timeline status info */}
+            {isTimelineActive && (
+              <div className="flex items-center gap-2 mt-1">
+                {visualState.status === 'running' && (
+                  <div className="flex items-center gap-1 text-xs text-blue-600">
+                    <Activity className="h-3 w-3" />
+                    Running
+                  </div>
+                )}
+                {visualState.status === 'success' && (
+                  <div className="flex items-center gap-1 text-xs text-green-600">
+                    <CheckCircle className="h-3 w-3" />
+                    Completed
+                  </div>
+                )}
+                {visualState.status === 'error' && (
+                  <div className="flex items-center gap-1 text-xs text-red-600">
+                    <AlertCircle className="h-3 w-3" />
+                    Failed
+                  </div>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  {visualState.eventCount} events
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -259,29 +373,56 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
           </div>
         )}
 
-        {/* Execution Status Messages */}
-        {nodeData.status === 'success' && nodeData.executionTime && (
+        {/* Enhanced Execution Status Messages */}
+        {isTimelineActive && (
+          <div className="pt-2 border-t border-border/50">
+            {shouldShowProgress && (
+              <div className="flex items-center justify-center py-2">
+                <ProgressRing progress={visualState.progress} size={40} />
+              </div>
+            )}
+
+            {visualState.lastEvent && (
+              <div className="text-xs text-muted-foreground mt-2">
+                <div className="font-medium">
+                  Last: {visualState.lastEvent.type.replace('_', ' ')}
+                </div>
+                {visualState.lastEvent.message && (
+                  <div className="truncate mt-1" title={visualState.lastEvent.message}>
+                    {visualState.lastEvent.message}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Legacy status messages */}
+            {!isTimelineActive && nodeData.status === 'success' && nodeData.executionTime && (
+              <div className="text-xs text-green-600">
+                ✓ Completed in {nodeData.executionTime}ms
+              </div>
+            )}
+
+            {!isTimelineActive && nodeData.status === 'error' && nodeData.error && (
+              <div className="text-xs text-red-600 truncate" title={nodeData.error}>
+                ✗ {nodeData.error}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Legacy status messages (when not in timeline mode) */}
+        {!isTimelineActive && nodeData.status === 'success' && nodeData.executionTime && (
           <div className="text-xs text-green-600 pt-2 border-t border-green-200">
             ✓ Completed in {nodeData.executionTime}ms
           </div>
         )}
 
-        {nodeData.status === 'error' && nodeData.error && (
+        {!isTimelineActive && nodeData.status === 'error' && nodeData.error && (
           <div className="text-xs text-red-600 pt-2 border-t border-red-200 truncate" title={nodeData.error}>
             ✗ {nodeData.error}
           </div>
         )}
       </div>
-
-      {/* Footer */}
-      <div className="px-3 py-2 border-t border-border/50 bg-muted/30">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] text-muted-foreground font-mono">v{component.version}</span>
-          <ComponentBadges component={component} />
-        </div>
-      </div>
     </div>
   )
 })
-
-WorkflowNode.displayName = 'WorkflowNode'

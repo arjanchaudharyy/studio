@@ -57,4 +57,22 @@ export class WorkflowRunRepository {
       .limit(1);
     return record;
   }
+
+  async list(options: {
+    workflowId?: string;
+    status?: string;
+    limit?: number;
+  } = {}): Promise<WorkflowRunRecord[]> {
+    let query = this.db.select().from(workflowRunsTable);
+
+    // Add filters
+    if (options.workflowId) {
+      query = query.where(eq(workflowRunsTable.workflowId, options.workflowId));
+    }
+
+    // Add ordering and limit
+    query = query.orderBy(workflowRunsTable.createdAt).limit(options.limit ?? 50);
+
+    return await query;
+  }
 }

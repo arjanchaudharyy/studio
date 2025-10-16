@@ -52,6 +52,49 @@ export class WorkflowsController {
     return this.workflowsService.update(id, body);
   }
 
+  @Get('/runs')
+  @ApiOkResponse({
+    description: 'List all workflow runs with metadata',
+    schema: {
+      type: 'object',
+      properties: {
+        runs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              workflowId: { type: 'string' },
+              status: {
+                type: 'string',
+                enum: ['RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'CONTINUED_AS_NEW', 'TIMED_OUT', 'UNKNOWN']
+              },
+              startTime: { type: 'string', format: 'date-time' },
+              endTime: { type: 'string', format: 'date-time', nullable: true },
+              temporalRunId: { type: 'string' },
+              workflowName: { type: 'string' },
+              eventCount: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async listRuns(
+    @Query('workflowId') workflowId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 50;
+    const safeLimit = Number.isNaN(parsedLimit) ? 50 : Math.min(parsedLimit, 200);
+
+    return this.workflowsService.listRuns({
+      workflowId,
+      status,
+      limit: safeLimit,
+    });
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.workflowsService.findById(id);

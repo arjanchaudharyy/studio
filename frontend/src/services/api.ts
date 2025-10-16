@@ -231,6 +231,30 @@ export const api = {
       if (response.error) throw new Error('Failed to cancel execution')
       return { success: true }
     },
+
+    /**
+     * List all workflow runs for timeline
+     */
+    listRuns: async (options?: {
+      workflowId?: string;
+      status?: string;
+      limit?: number;
+    }) => {
+      const params = new URLSearchParams()
+      if (options?.workflowId) params.set('workflowId', options.workflowId)
+      if (options?.status) params.set('status', options.status)
+      if (options?.limit) params.set('limit', String(options.limit))
+
+      const query = params.toString()
+      const response = await fetch(`${API_BASE_URL}/workflows/runs${query ? `?${query}` : ''}`)
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch runs: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      return data
+    },
   },
 
   /**
