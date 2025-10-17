@@ -117,7 +117,7 @@ export class WorkflowsService {
       try {
         const status = await this.temporalService.describeWorkflow({
           workflowId: run.runId,
-          runId: run.temporalRunId,
+          runId: run.temporalRunId ?? undefined,
         });
         currentStatus = this.normalizeStatus(status.status);
       } catch (error) {
@@ -129,8 +129,8 @@ export class WorkflowsService {
         workflowId: run.workflowId,
         status: currentStatus,
         startTime: run.createdAt,
-        endTime: run.completedAt,
-        temporalRunId: run.temporalRunId,
+        endTime: run.updatedAt,
+        temporalRunId: run.temporalRunId ?? undefined,
         workflowName,
         eventCount,
       });

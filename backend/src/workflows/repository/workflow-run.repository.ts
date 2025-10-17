@@ -63,16 +63,13 @@ export class WorkflowRunRepository {
     status?: string;
     limit?: number;
   } = {}): Promise<WorkflowRunRecord[]> {
-    let query = this.db.select().from(workflowRunsTable);
+    const baseQuery = this.db.select().from(workflowRunsTable);
+    const filteredQuery = options.workflowId
+      ? baseQuery.where(eq(workflowRunsTable.workflowId, options.workflowId))
+      : baseQuery;
 
-    // Add filters
-    if (options.workflowId) {
-      query = query.where(eq(workflowRunsTable.workflowId, options.workflowId));
-    }
-
-    // Add ordering and limit
-    query = query.orderBy(workflowRunsTable.createdAt).limit(options.limit ?? 50);
-
-    return await query;
+    return await filteredQuery
+      .orderBy(workflowRunsTable.createdAt)
+      .limit(options.limit ?? 50);
   }
 }

@@ -362,7 +362,7 @@ export class WorkflowsController {
     try {
       const traceRepo = (this.traceService as any).repository;
       if (traceRepo && typeof traceRepo.subscribeToRun === 'function') {
-        unsubscribe = await traceRepo.subscribeToRun(runId, async (payload) => {
+        unsubscribe = await traceRepo.subscribeToRun(runId, async (payload: string) => {
           if (!active) return;
 
           try {
