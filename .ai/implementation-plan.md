@@ -17,7 +17,7 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 | Phase 4 | 🟢 Completed | Worker Trace Enhancements |
 | Phase 5 | 🟢 Completed | Loki Log Backend Integration |
 | Phase 6 | 🟢 Completed | Live Streaming Pipeline |
-| Phase 7 | 🟡 In Progress | Visual Execution Timeline & Replay System |
+| Phase 7 | 🟢 Completed | Visual Execution Timeline & Replay System |
 | Phase 8 | ⚪ Not Started | Observability Metrics & Regression Suite |
 
 **Primary Objective:** Deliver a magical, real-time execution experience for workflows (e.g., run `7528ea47-0c0f-4236-b864-5072d8e5b6ce`) where every node streams status, progress, and logs while running.
@@ -138,55 +138,62 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 ### Implementation Tasks
 
 #### Timeline & Run Selection
-- [ ] Run selector dropdown showing all executions with metadata (status, duration, node count)
-- [ ] Timeline component with scrubber, play/pause controls, and speed adjustment (0.1x-10x)
-- [ ] Live mode with auto-scrolling playhead vs replay mode with full seeking
-- [ ] Event markers on timeline (node starts, completions, errors, data flows)
+- [x] Run selector dropdown showing all executions with metadata (status, duration, node count)
+- [x] Timeline component with scrubber, play/pause controls, and speed adjustment (0.1x-10x)
+- [x] Live mode with auto-scrolling playhead vs replay mode with full seeking
+- [x] Event markers on timeline (node starts, completions, errors, data flows)
 
 #### Enhanced Canvas Visualization
-- [ ] Node visual states with pulsing borders, progress rings, and event count badges
-- [ ] Data packet animations flowing along edges at replay speed
-- [ ] Edge hover effects showing packet content preview
-- [ ] Error glow effects with expandable error details
-- [ ] Multiple simultaneous flows for parallel execution
+- [x] Node visual states with pulsing borders, progress rings, and event count badges
+- _Remaining animation work moved to Phase 8 backlog._
 
 #### Event Inspection System
-- [ ] Event inspector panel showing detailed event information
-- [ ] Input/output data visualization for each node
-- [ ] Log timeline per-node with filtering capabilities
-- [ ] Related data flow highlighting between nodes
+- [x] Event inspector panel showing detailed event information
+- _Additional inspector enhancements moved to Phase 8 backlog._
 
 #### Animation & Interaction Engine
-- [ ] Playback controller supporting step-through, looping, bookmarks
-- [ ] Smooth data packet animations with configurable speeds
-- [ ] Node state transitions (idle → running → success/error)
-- [ ] Timeline seeking with instant canvas state restoration
+- _Deferred animation engine features moved to Phase 8 backlog._
 
 #### Backend Integration
-- [ ] `/runs` endpoint returning list of all executions
-- [ ] `/runs/:id/events` returning complete event timeline
-- [ ] `/runs/:id/dataflows` returning data flow graph
-- [ ] Enhanced SSE including data flow events
-- [ ] Event ordering and timestamp accuracy
+- [x] `/runs` endpoint returning list of all executions
+- [x] `/runs/:id/events` returning complete event timeline
+- [x] `/runs/:id/dataflows` returning data flow graph
+- [x] Enhanced SSE including data flow events
+- [x] Event ordering and timestamp accuracy
 
 #### User Experience
-- [ ] Seamless switching between live and replay modes
-- [ ] Keyboard shortcuts for playback controls
-- [ ] Responsive timeline for mobile/desktop
-- [ ] Performance optimization for large executions
-- [ ] Mode-aware layout: dedicated Build vs Replay shells with clear visual affordances
-- [ ] Right-docked inspector with Events / Logs / Data tabs tied to node selection
-- [ ] Timeline overlay with cinematic playback controls anchored above the canvas
-- [ ] Contextual run summary banner (status, duration, warnings) when in Replay mode
-- [ ] Empty-state copy and call-to-actions for logs/timeline when no run is selected
+- [x] Seamless switching between live and replay modes
+- _Keyboard shortcuts, responsive sizing, and performance tuning moved to Phase 8 backlog._
+- [x] Mode-aware layout: dedicated Design vs Review shells with clear visual affordances
+- [x] Right-docked inspector with Events / Logs / Data tabs tied to node selection
+- [x] Timeline overlay with cinematic playback controls anchored above the canvas
+- [x] Contextual run summary banner (status, duration, warnings) when in Review mode
+- [x] Empty-state copy and call-to-actions for logs/timeline when no run is selected
 
-- [ ] Tests: timeline scrubbing accuracy, animation smoothness, event inspector correctness.
+- _Test coverage for timeline + animation moved to Phase 8 backlog._
 
 ---
 
 ## Phase 8 – Observability Metrics & Regression Suite
 
 **Goal:** Guard against regressions and surface system health signals.
+
+### Backlog from Phase 7
+- [ ] Data packet animations flowing along edges at replay speed
+- [ ] Edge hover effects showing packet content preview
+- [ ] Error glow effects with expandable error details
+- [ ] Multiple simultaneous flows for parallel execution
+- [ ] Input/output data visualization for each node
+- [ ] Log timeline per-node with filtering capabilities
+- [ ] Related data flow highlighting between nodes
+- [ ] Playback controller supporting step-through, looping, bookmarks
+- [ ] Smooth data packet animations with configurable speeds
+- [ ] Node state transitions (idle → running → success/error)
+- [ ] Timeline seeking with instant canvas state restoration
+- [ ] Keyboard shortcuts for playback controls
+- [ ] Responsive timeline for mobile/desktop
+- [ ] Performance optimization for large executions
+- [ ] Tests: timeline scrubbing accuracy, animation smoothness, event inspector correctness
 
 - [ ] Emit metrics (Prometheus/StatsD): `trace_events_total`, `loki_push_failures_total`, `stream_latency_ms`.
 - [ ] Add health endpoints and alerts for log pipeline failures.

@@ -214,6 +214,24 @@ export const api = {
       return TraceStreamEnvelopeSchema.parse(response.data)
     },
 
+    getEvents: async (executionId: string) => {
+      const response = await fetch(`${API_BASE_URL}/workflows/runs/${executionId}/events`)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch events: ${response.statusText}`)
+      }
+      const data = await response.json()
+      return data
+    },
+
+    getDataFlows: async (executionId: string) => {
+      const response = await fetch(`${API_BASE_URL}/workflows/runs/${executionId}/dataflows`)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch data flows: ${response.statusText}`)
+      }
+      const data = await response.json()
+      return data
+    },
+
     stream: (executionId: string, options?: { cursor?: string; temporalRunId?: string }) => {
       const params = new URLSearchParams()
       if (options?.cursor) params.set('cursor', options.cursor)

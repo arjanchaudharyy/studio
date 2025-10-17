@@ -28,6 +28,7 @@ export interface DataPacket {
   id: string
   sourceNode: string
   targetNode: string
+  inputKey?: string
   payload: any
   timestamp: number
   size: number // bytes
@@ -106,6 +107,7 @@ export interface TimelineActions {
   // Live updates
   updateFromLiveEvent: (event: ExecutionLog) => void
   switchToLiveMode: () => void
+  appendDataFlows: (packets: DataPacket[]) => void
 
   // Cleanup
   reset: () => void
@@ -281,10 +283,12 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
           status: run.status.toLowerCase() as ExecutionStatus,
           startTime: run.startTime,
           endTime: run.endTime,
-          duration: run.endTime ?
-            new Date(run.endTime).getTime() - new Date(run.startTime).getTime() :
-            Date.now() - new Date(run.startTime).getTime(),
-          nodeCount: 0, // TODO: Get from workflow
+          duration: typeof run.duration === 'number'
+            ? run.duration
+            : run.endTime
+              ? new Date(run.endTime).getTime() - new Date(run.startTime).getTime()
+              : Date.now() - new Date(run.startTime).getTime(),
+          nodeCount: typeof run.nodeCount === 'number' ? run.nodeCount : 0,
           eventCount: run.eventCount,
           createdAt: run.startTime,
           isLive: !run.endTime && run.status === 'RUNNING'
@@ -303,15 +307,29 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
 
     loadTimeline: async (runId: string) => {
       try {
-        // Get trace events from backend
-        const traceResponse = await api.executions.getTrace(runId)
-        const { events, totalDuration, timelineStartTime } = prepareTimelineEvents(traceResponse.events)
+        const [eventsResponse, dataFlowResponse] = await Promise.all([
+          api.executions.getEvents(runId),
+          api.executions.getDataFlows(runId)
+        ])
+
+        const { events, totalDuration, timelineStartTime } = prepareTimelineEvents(eventsResponse.events)
+        const dataFlows: DataPacket[] = (dataFlowResponse.packets ?? []).map((packet: any) => ({
+          id: packet.id,
+          sourceNode: packet.sourceNode,
+          targetNode: packet.targetNode,
+          inputKey: packet.inputKey,
+          payload: packet.payload,
+          timestamp: packet.timestamp,
+          size: packet.size,
+          type: packet.type,
+          visualTime: typeof packet.visualTime === 'number' ? packet.visualTime : 0,
+        }))
 
         const initialCurrentTime = get().playbackMode === 'live' ? totalDuration : 0
 
         set({
           events,
-          dataFlows: [], // TODO: Load data flows from separate endpoint
+          dataFlows,
           totalDuration,
           currentTime: initialCurrentTime,
           timelineStartTime,
@@ -395,6 +413,15 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
 
     setTimelineZoom: (zoom: number) => {
       set({ timelineZoom: Math.max(0.5, Math.min(2.0, zoom)) })
+    },
+
+    appendDataFlows: (packets: DataPacket[]) => {
+      if (!packets || packets.length === 0) {
+        return
+      }
+      set(state => ({
+        dataFlows: [...state.dataFlows, ...packets]
+      }))
     },
 
     updateFromLiveEvent: (event: ExecutionLog) => {

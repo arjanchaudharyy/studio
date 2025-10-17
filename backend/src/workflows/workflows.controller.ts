@@ -256,6 +256,21 @@ export class WorkflowsController {
     return { runId, events, cursor };
   }
 
+  @Get('/runs/:runId/events')
+  @ApiOkResponse({ description: 'Full event timeline for a workflow run' })
+  async events(@Param('runId') runId: string) {
+    const { events, cursor } = await this.traceService.list(runId);
+    return { runId, events, cursor };
+  }
+
+  @Get('/runs/:runId/dataflows')
+  @ApiOkResponse({ description: 'Derived data flow packets for a workflow run' })
+  async dataflows(@Param('runId') runId: string) {
+    const { events } = await this.traceService.list(runId);
+    const packets = await this.workflowsService.buildDataFlows(runId, events);
+    return { runId, packets };
+  }
+
   @Get('/runs/:runId/stream')
   @ApiOkResponse({ description: 'Server-sent events stream for workflow run updates' })
   async stream(
@@ -289,6 +304,8 @@ export class WorkflowsController {
     let lastStatusSignature: string | null = null;
     let intervalId: NodeJS.Timeout | undefined;
     let heartbeatId: NodeJS.Timeout | undefined;
+    let earliestEventTimestamp: number | null = null;
+    let latestEventTimestamp: number | null = null;
 
     const send = (event: string, payload: unknown) => {
       if (!active) {
@@ -316,6 +333,9 @@ export class WorkflowsController {
           console.error('Error unsubscribing from trace events:', error);
         }
       }
+      await this.workflowsService.releaseFlowContext(runId).catch((error) => {
+        console.warn('Failed to clear flow context:', error);
+      });
       res.end();
     };
 
@@ -335,6 +355,29 @@ export class WorkflowsController {
             }
           }
           send('trace', { events, cursor: cursor ?? lastSequence.toString() });
+
+          const timestamps = events
+            .map((event) => Date.parse(event.timestamp))
+            .filter((value) => !Number.isNaN(value));
+          if (timestamps.length > 0) {
+            const first = Math.min(...timestamps);
+            const last = Math.max(...timestamps);
+            if (earliestEventTimestamp === null || first < earliestEventTimestamp) {
+              earliestEventTimestamp = first;
+            }
+            if (latestEventTimestamp === null || last > latestEventTimestamp) {
+              latestEventTimestamp = last;
+            }
+
+            const packets = await this.workflowsService.buildDataFlows(runId, events, {
+              baseTimestamp: earliestEventTimestamp ?? first,
+              latestTimestamp: latestEventTimestamp ?? last,
+            });
+
+            if (packets.length > 0) {
+              send('dataflow', { packets });
+            }
+          }
         }
       } catch (error) {
         send('error', { message: 'trace_fetch_failed', detail: String(error) });
@@ -378,6 +421,29 @@ export class WorkflowsController {
                   }
                 }
                 send('trace', { events, cursor: lastSequence.toString() });
+
+                const timestamps = events
+                  .map((event) => Date.parse(event.timestamp))
+                  .filter((value) => !Number.isNaN(value));
+                if (timestamps.length > 0) {
+                  const first = Math.min(...timestamps);
+                  const last = Math.max(...timestamps);
+                  if (earliestEventTimestamp === null || first < earliestEventTimestamp) {
+                    earliestEventTimestamp = first;
+                  }
+                  if (latestEventTimestamp === null || last > latestEventTimestamp) {
+                    latestEventTimestamp = last;
+                  }
+
+                  const packets = await this.workflowsService.buildDataFlows(runId, events, {
+                    baseTimestamp: earliestEventTimestamp ?? first,
+                    latestTimestamp: latestEventTimestamp ?? last,
+                  });
+
+                  if (packets.length > 0) {
+                    send('dataflow', { packets });
+                  }
+                }
               }
             }
           } catch (error) {

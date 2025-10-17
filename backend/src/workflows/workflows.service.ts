@@ -19,6 +19,7 @@ import {
   ExecutionStatus,
   FailureSummary,
   WorkflowRunStatusPayload,
+  TraceEventPayload,
 } from '@shipsec/shared';
 
 export interface WorkflowRunRequest {
@@ -35,9 +36,36 @@ export interface WorkflowRunHandle {
 
 const SHIPSEC_WORKFLOW_TYPE = 'shipsecWorkflowRun';
 
+export interface DataFlowPacketDto {
+  id: string;
+  runId: string;
+  sourceNode: string;
+  targetNode: string;
+  inputKey: string;
+  payload: unknown;
+  timestamp: number;
+  visualTime: number;
+  size: number;
+  type: 'file' | 'json' | 'text' | 'binary';
+}
+
+interface FlowContext {
+  workflowId: string;
+  definition: WorkflowDefinition;
+  targetsBySource: Map<
+    string,
+    Array<{
+      targetRef: string;
+      sourceHandle: string;
+      inputKey: string;
+    }>
+  >;
+}
+
 @Injectable()
 export class WorkflowsService {
   private readonly logger = new Logger(WorkflowsService.name);
+  private readonly flowContexts = new Map<string, FlowContext>();
 
   constructor(
     private readonly repository: WorkflowRepository,
@@ -96,6 +124,15 @@ export class WorkflowsService {
     return flattened;
   }
 
+  private computeDuration(start: Date, end?: Date | null): number {
+    const startTime = new Date(start).getTime();
+    const endTime = end ? new Date(end).getTime() : Date.now();
+    if (Number.isNaN(startTime) || Number.isNaN(endTime)) {
+      return 0;
+    }
+    return Math.max(0, endTime - startTime);
+  }
+
   async listRuns(options: {
     workflowId?: string;
     status?: string;
@@ -108,6 +145,8 @@ export class WorkflowsService {
       // Get workflow name
       const workflow = await this.repository.findById(run.workflowId);
       const workflowName = workflow?.name ?? 'Unknown Workflow';
+      const graph = workflow?.graph as { nodes?: unknown[] } | undefined;
+      const nodeCount = Array.isArray(graph?.nodes) ? graph!.nodes!.length : 0;
 
       // Get event count
       const eventCount = await this.traceRepository.countByType(run.runId, 'NODE_STARTED');
@@ -133,6 +172,8 @@ export class WorkflowsService {
         temporalRunId: run.temporalRunId ?? undefined,
         workflowName,
         eventCount,
+        nodeCount,
+        duration: this.computeDuration(run.createdAt, run.updatedAt),
       });
     }
 
@@ -254,6 +295,199 @@ export class WorkflowsService {
       `Cancelling workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
     );
     await this.temporalService.cancelWorkflow({ workflowId: runId, runId: temporalRunId });
+  }
+
+  async buildDataFlows(
+    runId: string,
+    events: TraceEventPayload[],
+    options: { baseTimestamp?: number; latestTimestamp?: number } = {},
+  ): Promise<DataFlowPacketDto[]> {
+    if (!events || events.length === 0) {
+      return [];
+    }
+
+    const context = await this.getFlowContext(runId);
+    const packets: DataFlowPacketDto[] = [];
+
+    let earliest = options.baseTimestamp ?? null;
+    let latest = options.latestTimestamp ?? null;
+
+    for (const event of events) {
+      if (event.type !== 'COMPLETED' || !event.nodeId) {
+        continue;
+      }
+
+      const targets = context.targetsBySource.get(event.nodeId);
+      if (!targets || targets.length === 0) {
+        continue;
+      }
+
+      const summary = event.outputSummary as Record<string, unknown> | undefined;
+      if (!summary || Object.keys(summary).length === 0) {
+        continue;
+      }
+
+      const timestamp = Date.parse(event.timestamp);
+      if (Number.isNaN(timestamp)) {
+        continue;
+      }
+
+      if (earliest === null || timestamp < earliest) {
+        earliest = timestamp;
+      }
+      if (latest === null || timestamp > latest) {
+        latest = timestamp;
+      }
+
+      let index = 0;
+      for (const target of targets) {
+        const payload = this.resolveMappingValue(summary, target.sourceHandle);
+        if (payload === undefined) {
+          continue;
+        }
+
+        packets.push({
+          id: `${runId}:${event.id ?? 'event'}:${target.targetRef}:${index++}`,
+          runId,
+          sourceNode: event.nodeId,
+          targetNode: target.targetRef,
+          inputKey: target.inputKey,
+          payload,
+          timestamp,
+          size: this.estimatePayloadSize(payload),
+          type: this.inferPayloadType(payload),
+          visualTime: 0,
+        });
+      }
+    }
+
+    if (packets.length === 0) {
+      return packets;
+    }
+
+    packets.sort((a, b) => a.timestamp - b.timestamp);
+
+    const base = options.baseTimestamp ?? earliest ?? packets[0].timestamp;
+    const top = options.latestTimestamp ?? latest ?? packets[packets.length - 1].timestamp;
+    const span = Math.max(1, top - base);
+
+    packets.forEach((packet) => {
+      packet.visualTime = (packet.timestamp - base) / span;
+    });
+
+    return packets;
+  }
+
+  async releaseFlowContext(runId: string): Promise<void> {
+    this.flowContexts.delete(runId);
+  }
+
+  private async getFlowContext(runId: string): Promise<FlowContext> {
+    const cached = this.flowContexts.get(runId);
+    if (cached) {
+      return cached;
+    }
+
+    const run = await this.runRepository.findByRunId(runId);
+    if (!run) {
+      throw new NotFoundException(`Run ${runId} not found`);
+    }
+
+    const workflow = await this.repository.findById(run.workflowId);
+    if (!workflow) {
+      throw new NotFoundException(`Workflow ${run.workflowId} not found for run ${runId}`);
+    }
+
+    const definition = this.ensureDefinition(workflow);
+    const targetsBySource = this.buildTargetsIndex(definition);
+
+    const context: FlowContext = {
+      workflowId: workflow.id,
+      definition,
+      targetsBySource,
+    };
+
+    this.flowContexts.set(runId, context);
+    return context;
+  }
+
+  private ensureDefinition(workflow: WorkflowRecord): WorkflowDefinition {
+    if (workflow.compiledDefinition) {
+      return workflow.compiledDefinition as WorkflowDefinition;
+    }
+
+    const graph = WorkflowGraphSchema.parse(workflow.graph);
+    return compileWorkflowGraph(graph);
+  }
+
+  private buildTargetsIndex(
+    definition: WorkflowDefinition,
+  ): FlowContext['targetsBySource'] {
+    const map = new Map<string, Array<{ targetRef: string; sourceHandle: string; inputKey: string }>>();
+
+    for (const action of definition.actions) {
+      const mappings = action.inputMappings ?? {};
+      for (const [inputKey, mapping] of Object.entries(mappings)) {
+        const list = map.get(mapping.sourceRef) ?? [];
+        list.push({
+          targetRef: action.ref,
+          sourceHandle: mapping.sourceHandle,
+          inputKey,
+        });
+        map.set(mapping.sourceRef, list);
+      }
+    }
+
+    return map;
+  }
+
+  private resolveMappingValue(
+    sourceOutput: Record<string, unknown> | undefined,
+    sourceHandle: string,
+  ): unknown {
+    if (!sourceOutput) {
+      return undefined;
+    }
+
+    if (sourceHandle === '__self__') {
+      return sourceOutput;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(sourceOutput, sourceHandle)) {
+      return sourceOutput[sourceHandle];
+    }
+
+    return undefined;
+  }
+
+  private inferPayloadType(value: unknown): 'file' | 'json' | 'text' | 'binary' {
+    if (typeof value === 'string') {
+      return 'text';
+    }
+    if (value && typeof value === 'object') {
+      return 'json';
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return 'json';
+    }
+    return 'binary';
+  }
+
+  private estimatePayloadSize(value: unknown): number {
+    try {
+      if (typeof value === 'string') {
+        return Buffer.byteLength(value, 'utf8');
+      }
+      if (typeof value === 'number' || typeof value === 'boolean') {
+        return Buffer.byteLength(String(value), 'utf8');
+      }
+      if (value && typeof value === 'object') {
+        return Buffer.byteLength(JSON.stringify(value), 'utf8');
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to estimate payload size: ${error}`);
+    }
+    return 0;
   }
 
   private parse(dto: WorkflowGraphDto) {

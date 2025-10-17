@@ -285,6 +285,19 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         }
       })
 
+      source.addEventListener('dataflow', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { packets?: any[] }
+          if (!payload.packets || payload.packets.length === 0) {
+            return
+          }
+          const { useExecutionTimelineStore } = require('./executionTimelineStore')
+          useExecutionTimelineStore.getState().appendDataFlows(payload.packets)
+        } catch (error) {
+          console.error('Failed to parse dataflow payload from stream', error)
+        }
+      })
+
       source.addEventListener('ready', (event) => {
         try {
           const payload = JSON.parse((event as MessageEvent).data) as {
