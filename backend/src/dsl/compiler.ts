@@ -2,7 +2,13 @@ import { WorkflowGraph } from '../workflows/dto/workflow-graph.dto';
 // Ensure all worker components are registered before accessing the registry
 import '../../../worker/src/components';
 import { componentRegistry } from '@shipsec/component-sdk';
-import { WorkflowAction, WorkflowDefinition, WorkflowDefinitionSchema } from './types';
+import {
+  WorkflowAction,
+  WorkflowDefinition,
+  WorkflowDefinitionSchema,
+  WorkflowEdge,
+  WorkflowNodeMetadata,
+} from './types';
 
 function topoSort(nodes: string[], edges: Array<{ source: string; target: string }>): string[] {
   const incoming = new Map<string, number>();
@@ -69,6 +75,14 @@ export function compileWorkflowGraph(graph: WorkflowGraph): WorkflowDefinition {
     edgesByTarget.get(edge.target)?.push(edge);
   }
 
+  const nodesMetadata: Record<string, WorkflowNodeMetadata> = {};
+  for (const node of graph.nodes) {
+    nodesMetadata[node.id] = {
+      ref: node.id,
+      label: node.data?.label,
+    };
+  }
+
   const actions: WorkflowAction[] = orderedIds.map((id) => {
     const node = graph.nodes.find((n) => n.id === id)!;
     const params = node.data?.config ?? {};
@@ -99,10 +113,28 @@ export function compileWorkflowGraph(graph: WorkflowGraph): WorkflowDefinition {
 
   const entryNode = orderedIds[0];
 
+  const dependencyCounts: Record<string, number> = {};
+  for (const action of actions) {
+    dependencyCounts[action.ref] = action.dependsOn.length;
+  }
+
+  const edges: WorkflowEdge[] = graph.edges.map((edge) => ({
+    id: edge.id,
+    sourceRef: edge.source,
+    targetRef: edge.target,
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
+    kind: 'success',
+  }));
+
   const definition: WorkflowDefinition = {
+    version: 2,
     title: graph.name,
     description: graph.description,
     entrypoint: { ref: entryNode },
+    nodes: nodesMetadata,
+    edges,
+    dependencyCounts,
     actions,
     config: { environment: 'default', timeoutSeconds: 0 },
   };

@@ -16,10 +16,35 @@ export interface WorkflowAction {
   >;
 }
 
+export type WorkflowEdgeKind = 'success' | 'error';
+
+export interface WorkflowEdge {
+  id: string;
+  sourceRef: string;
+  targetRef: string;
+  sourceHandle?: string;
+  targetHandle?: string;
+  kind: WorkflowEdgeKind;
+}
+
+export type WorkflowJoinStrategy = 'all' | 'any' | 'first';
+
+export interface WorkflowNodeMetadata {
+  ref: string;
+  label?: string;
+  joinStrategy?: WorkflowJoinStrategy;
+  maxConcurrency?: number;
+  groupId?: string;
+}
+
 export interface WorkflowDefinition {
+  version: number;
   title: string;
   description?: string;
   entrypoint: { ref: string };
+  nodes: Record<string, WorkflowNodeMetadata>;
+  edges: WorkflowEdge[];
+  dependencyCounts: Record<string, number>;
   actions: WorkflowAction[];
   config: {
     environment: string;

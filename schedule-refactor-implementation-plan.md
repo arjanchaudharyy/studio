@@ -25,11 +25,12 @@ This document lays out the refactor required to bring our workflow runtime on pa
 
 **Goal:** Document exactly how the current compiler/runtime behave and identify all blockers to parallel execution.
 
-- [ ] Diagram current `WorkflowDefinition` (fields emitted by `compileWorkflowGraph`) and how edges/handles map to params.
-- [ ] Trace the existing worker loop (`executeWorkflow`) to highlight serialization points, shared state, and trace emissions.
-- [ ] Review Temporal worker setup to confirm activity boundaries, retry policies, and service injection.
-- [ ] Capture findings in `.ai/visual-execution-notes.md`, especially pain points to resolve in later phases.
-- [ ] Tests to run: `bun --cwd worker test`, manual run of a multi-branch workflow to confirm current behaviour.
+- [x] Diagram current `WorkflowDefinition` (fields emitted by `compileWorkflowGraph`) and how edges/handles map to params.
+- [x] Trace the existing worker loop (`executeWorkflow`) to highlight serialization points, shared state, and trace emissions.
+- [x] Review Temporal worker setup to confirm activity boundaries, retry policies, and service injection.
+- [x] Capture findings in `.ai/visual-execution-notes.md`, especially pain points to resolve in later phases.
+- [x] Run `bun --cwd worker test` to validate current runtime.
+- [x] Manual dry-run of a multi-branch workflow via Temporal to observe baseline behaviour.
 
 **Deliverable:** Audit notes with explicit TODOs feeding into Phases 1–4.
 
@@ -39,16 +40,18 @@ This document lays out the refactor required to bring our workflow runtime on pa
 
 **Goal:** Have the DSL compiler emit the full DAG (nodes + edges + metadata) so the worker can schedule without guesswork.
 
-- [ ] Extend `WorkflowDefinition` (`worker/src/temporal/types.ts`) with:
+- [x] Extend `WorkflowDefinition` (`worker/src/temporal/types.ts`) with:
   - `edges` array (source, target, edgeType, handles).
   - `incomingCounts` or equivalent indegree metadata.
   - Optional `joinStrategy`, `groupId`, `runnerConfig` overrides.
-- [ ] Update `backend/src/dsl/compiler.ts` to build the enriched structure (retain adjacency, join metadata).
-- [ ] Ensure component metadata (e.g., concurrency hints) is passed through.
-- [ ] Version the schema (e.g., `definitionVersion`) so stored workflows can be migrated.
-- [ ] Tests:
+- [x] Update `backend/src/dsl/compiler.ts` to build the enriched structure (retain adjacency, join metadata).
+- [x] Ensure component metadata (e.g., concurrency hints) is passed through. *(Added metadata fields; runtime currently supplies labels only until richer hints exist.)*
+- [x] Version the schema (e.g., `definitionVersion`) so stored workflows can be migrated.
+- [x] Tests:
   - Unit tests for compiler (`backend/src/dsl/__tests__/compiler.spec.ts` or new) with diamonds, scatter-like graphs.
   - Validate Zod schema or shared type definitions.
+
+> **Implementation sketch:** Introduce `WorkflowEdge` (`{ id, sourceRef, targetRef, sourceHandle?, targetHandle?, kind: 'success' | 'error' }`) and `WorkflowNodeMetadata` (`{ ref, joinStrategy?: 'all' | 'any' | 'first', maxConcurrency?: number, groupId?: string }`). `WorkflowDefinition` should gain `version`, `nodes` (map of metadata), `edges`, and retain `actions` for backward compatibility during migration. Compiler must populate these structures directly from `WorkflowGraph`, preserving all handles and categories.
 
 **Deliverable:** New workflow definition type + compiler output validated by tests.
 
@@ -167,4 +170,3 @@ This document lays out the refactor required to bring our workflow runtime on pa
 ### Change Log
 
 - `2025-10-15` – Initial version drafted: parallel scheduler refactor plan.
-

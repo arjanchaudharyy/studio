@@ -198,14 +198,16 @@ describe('Worker Integration Tests', () => {
       expect(result.success).toBe(true);
       const loader = (result.outputs as any).loader;
       expect(loader).toBeDefined();
-      expect(loader.fileId).toBe(fileId);
-      expect(loader.fileName).toBe(fileName);
-      expect(loader.mimeType).toBe('text/plain');
-      expect(loader.size).toBe(buffer.length);
+      expect(loader.file).toBeDefined();
+      expect(loader.file.id).toBe(fileId);
+      expect(loader.file.name).toBe(fileName);
+      expect(loader.file.mimeType).toBe('text/plain');
+      expect(loader.file.size).toBe(buffer.length);
 
       // Content should be base64 encoded
-      const decodedContent = Buffer.from(loader.content, 'base64').toString();
+      const decodedContent = Buffer.from(loader.file.content, 'base64').toString();
       expect(decodedContent).toBe(content);
+      expect(loader.textContent).toBe(content);
 
       // Cleanup
       await minioClient.removeObject(
