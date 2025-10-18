@@ -107,6 +107,40 @@ describe('TraceAdapter', () => {
       expect(events[0].message).toBe('Step 1 complete');
       expect(events[1].error).toBe('Timeout error');
     });
+
+    it('should handle concurrent event recording without loss', async () => {
+      const runId = 'concurrent-run';
+      const total = 50;
+      const timestamps = Array.from({ length: total }, (_, index) =>
+        new Date(Date.now() + index).toISOString(),
+      );
+
+      await Promise.all(
+        timestamps.map(
+          (timestamp, index) =>
+            new Promise<void>((resolve) => {
+              setTimeout(() => {
+                adapter.record({
+                  type: index % 2 === 0 ? 'NODE_PROGRESS' : 'NODE_COMPLETED',
+                  runId,
+                  nodeRef: `node-${index % 5}`,
+                  timestamp,
+                  level: 'info',
+                  message: `event-${index}`,
+                });
+                resolve();
+              }, Math.floor(Math.random() * 5));
+            }),
+        ),
+      );
+
+      const recorded = adapter.getEvents(runId);
+      expect(recorded).toHaveLength(total);
+      const messages = recorded.map((event) => event.message);
+      timestamps.forEach((_, index) => {
+        expect(messages).toContain(`event-${index}`);
+      });
+    });
   });
 
   describe('getEvents', () => {
@@ -182,6 +216,21 @@ describe('TraceAdapter', () => {
 
       const events = adapter.getEvents('run-order');
       expect(events.map((e) => e.timestamp)).toEqual(timestamps);
+    });
+
+    it('should return empty array when buffering is disabled', () => {
+      const nonBuffered = new TraceAdapter(undefined, { buffer: false, logger: noopLogger });
+      nonBuffered.record({
+        type: 'NODE_STARTED',
+        runId: 'run-no-buffer',
+        nodeRef: 'node-1',
+        timestamp: new Date().toISOString(),
+        level: 'info',
+      });
+
+      expect(nonBuffered.getEvents('run-no-buffer')).toHaveLength(0);
+      nonBuffered.clear();
+      nonBuffered.finalizeRun('run-no-buffer');
     });
   });
 
