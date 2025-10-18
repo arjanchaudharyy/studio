@@ -35,7 +35,7 @@ export async function shipsecWorkflowRun(
 
   try {
     await runWorkflowWithScheduler(input.definition, {
-      run: async (actionRef) => {
+      run: async (actionRef, schedulerContext) => {
         const action = actionsByRef.get(actionRef);
         if (!action) {
           throw new Error(`Action not found: ${actionRef}`);
@@ -54,7 +54,7 @@ export async function shipsecWorkflowRun(
 
         const nodeMetadata = input.definition.nodes?.[action.ref];
         const streamId = nodeMetadata?.streamId ?? nodeMetadata?.groupId ?? action.ref;
-        const joinStrategy = nodeMetadata?.joinStrategy;
+        const joinStrategy = nodeMetadata?.joinStrategy ?? schedulerContext.joinStrategy;
 
         const activityInput: RunComponentActivityInput = {
           runId: input.runId,
@@ -69,6 +69,7 @@ export async function shipsecWorkflowRun(
             streamId,
             joinStrategy,
             groupId: nodeMetadata?.groupId,
+            triggeredBy: schedulerContext.triggeredBy,
           },
         };
 

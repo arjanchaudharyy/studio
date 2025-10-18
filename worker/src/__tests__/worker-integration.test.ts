@@ -429,8 +429,18 @@ describe('Worker Integration Tests', () => {
         branchB: { ref: 'branchB' },
       },
       edges: [
-        { id: 'trigger->branchA', sourceRef: 'trigger', targetRef: 'branchA', kind: 'success' },
-        { id: 'trigger->branchB', sourceRef: 'trigger', targetRef: 'branchB', kind: 'success' },
+        {
+          id: 'trigger->branchA',
+          sourceRef: 'trigger',
+          targetRef: 'branchA',
+          kind: 'success' as const,
+        },
+        {
+          id: 'trigger->branchB',
+          sourceRef: 'trigger',
+          targetRef: 'branchB',
+          kind: 'success' as const,
+        },
       ],
       dependencyCounts: {
         trigger: 0,

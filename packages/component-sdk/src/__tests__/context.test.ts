@@ -219,6 +219,7 @@ describe('ExecutionContext', () => {
         correlationId: 'run-meta:meta.component:activity-123',
         streamId: 'stream-42',
         joinStrategy: 'all',
+        triggeredBy: 'parent-node',
       },
       trace: {
         record: (event: TraceEvent) => {
@@ -235,6 +236,7 @@ describe('ExecutionContext', () => {
       correlationId: 'run-meta:meta.component:activity-123',
       streamId: 'stream-42',
       joinStrategy: 'all',
+      triggeredBy: 'parent-node',
     });
     expect(Object.isFrozen(context.metadata)).toBe(true);
 
@@ -252,6 +254,7 @@ describe('ExecutionContext', () => {
       correlationId: 'run-meta:meta.component:activity-123',
       streamId: 'stream-42',
       joinStrategy: 'all',
+      triggeredBy: 'parent-node',
     });
   });
 });

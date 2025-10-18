@@ -144,6 +144,10 @@ export class LokiLogAdapter implements WorkflowLogSink {
       labels.join_strategy = entry.metadata.joinStrategy;
     }
 
+    if (entry.metadata?.triggeredBy) {
+      labels.triggered_by = entry.metadata.triggeredBy;
+    }
+
     return labels;
   }
 

@@ -130,6 +130,7 @@ function createMetadata(
     correlationId: metadata?.correlationId,
     streamId: metadata?.streamId,
     joinStrategy: metadata?.joinStrategy,
+    triggeredBy: metadata?.triggeredBy,
   };
 
   return Object.freeze(scoped);

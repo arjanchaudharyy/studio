@@ -61,6 +61,7 @@ export async function runComponentActivity(
   const nodeMetadata = input.metadata ?? {};
   const streamId = nodeMetadata.streamId ?? nodeMetadata.groupId ?? action.ref;
   const joinStrategy = nodeMetadata.joinStrategy;
+  const triggeredBy = nodeMetadata.triggeredBy;
   const correlationId = `${input.runId}:${action.ref}:${activityInfo.activityId}`;
 
   const trace = globalTrace;
@@ -78,6 +79,7 @@ export async function runComponentActivity(
       correlationId,
       streamId,
       joinStrategy,
+      triggeredBy,
     },
   });
 
@@ -98,6 +100,7 @@ export async function runComponentActivity(
         correlationId,
         streamId,
         joinStrategy,
+        triggeredBy,
       },
     });
   }
@@ -113,6 +116,7 @@ export async function runComponentActivity(
       correlationId,
       streamId,
       joinStrategy,
+      triggeredBy,
     },
     storage: globalStorage,
     secrets: globalSecrets,
@@ -160,6 +164,7 @@ export async function runComponentActivity(
         correlationId,
         streamId,
         joinStrategy,
+        triggeredBy,
       },
     });
 
@@ -181,6 +186,7 @@ export async function runComponentActivity(
         correlationId,
         streamId,
         joinStrategy,
+        triggeredBy,
       },
     });
     throw error;

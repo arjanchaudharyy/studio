@@ -59,6 +59,7 @@ describe('LokiLogAdapter', () => {
       correlationId: 'corr-1',
       streamId: 'stream-1',
       joinStrategy: 'all',
+      triggeredBy: 'parent-node',
     },
     ...overrides,
   });
@@ -89,6 +90,7 @@ describe('LokiLogAdapter', () => {
       correlation_id: 'corr-1',
       stream_id: 'stream-1',
       join_strategy: 'all',
+      triggered_by: 'parent-node',
     });
     expect(call.lines).toHaveLength(2);
     expect(call.lines[0]).toMatchObject({

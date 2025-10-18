@@ -84,6 +84,7 @@ export interface ExecutionContextMetadata {
   correlationId?: string;
   streamId?: string;
   joinStrategy?: 'all' | 'any' | 'first';
+  triggeredBy?: string;
 }
 
 export interface TraceEvent {

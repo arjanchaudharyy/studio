@@ -14,7 +14,7 @@ import type {
   WorkflowRunResult,
   WorkflowLogSink,
 } from './types';
-import { runWorkflowWithScheduler } from './workflow-scheduler';
+import { runWorkflowWithScheduler, type WorkflowSchedulerRunContext } from './workflow-scheduler';
 import { buildActionParams } from './input-resolver';
 
 export interface ExecuteWorkflowOptions {
@@ -61,11 +61,16 @@ export async function executeWorkflow(
     : undefined;
 
   try {
-    const runAction = async (actionRef: string): Promise<void> => {
+    const runAction = async (
+      actionRef: string,
+      schedulerContext: WorkflowSchedulerRunContext,
+    ): Promise<void> => {
       const action = actionsByRef.get(actionRef);
       if (!action) {
         throw new Error(`Action not found: ${actionRef}`);
       }
+
+      const { triggeredBy } = schedulerContext;
 
       const component = componentRegistry.get(action.componentId);
       if (!component) {
@@ -74,7 +79,7 @@ export async function executeWorkflow(
 
       const nodeMetadata = definition.nodes?.[action.ref];
       const streamId = nodeMetadata?.streamId ?? nodeMetadata?.groupId ?? action.ref;
-      const joinStrategy = nodeMetadata?.joinStrategy;
+      const joinStrategy = nodeMetadata?.joinStrategy ?? schedulerContext.joinStrategy;
 
       // Record trace event
       options.trace?.record({
@@ -88,6 +93,7 @@ export async function executeWorkflow(
           componentRef: action.ref,
           streamId,
           joinStrategy,
+          triggeredBy,
         },
       });
 
@@ -107,6 +113,7 @@ export async function executeWorkflow(
             componentRef: action.ref,
             streamId,
             joinStrategy,
+            triggeredBy,
           },
         });
       }
@@ -131,6 +138,7 @@ export async function executeWorkflow(
           streamId,
           joinStrategy,
           correlationId: `${runId}:${action.ref}`,
+          triggeredBy,
         },
         storage: options.storage,
         secrets: options.secrets,
@@ -155,6 +163,7 @@ export async function executeWorkflow(
             componentRef: action.ref,
             streamId,
             joinStrategy,
+            triggeredBy,
           },
         });
       } catch (error) {
@@ -171,6 +180,7 @@ export async function executeWorkflow(
             componentRef: action.ref,
             streamId,
             joinStrategy,
+            triggeredBy,
           },
         });
         throw error;

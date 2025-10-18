@@ -70,6 +70,7 @@ export interface RunComponentActivityInput {
     streamId?: string;
     joinStrategy?: WorkflowJoinStrategy;
     groupId?: string;
+    triggeredBy?: string;
   };
 }
 
@@ -113,6 +114,7 @@ export interface WorkflowLogMetadata {
   correlationId?: string;
   streamId?: string;
   joinStrategy?: WorkflowJoinStrategy;
+  triggeredBy?: string;
 }
 
 export interface WorkflowLogEntry {
