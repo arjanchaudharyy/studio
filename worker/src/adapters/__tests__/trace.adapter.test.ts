@@ -7,6 +7,10 @@ import * as schema from '../schema';
 
 describe('TraceAdapter', () => {
   let adapter: TraceAdapter;
+  const noopLogger = {
+    log: () => {},
+    error: () => {},
+  };
 
   class FakeDb {
     public inserts: Array<{ table: unknown; input: unknown }> = [];
@@ -21,7 +25,7 @@ describe('TraceAdapter', () => {
   }
 
   beforeEach(() => {
-    adapter = new TraceAdapter();
+    adapter = new TraceAdapter(undefined, { buffer: true, logger: noopLogger });
   });
 
   describe('record', () => {
@@ -286,7 +290,10 @@ describe('TraceAdapter', () => {
   describe('persistence', () => {
     it('persists events when database is provided', async () => {
       const fakeDb = new FakeDb();
-      const persistentAdapter = new TraceAdapter(fakeDb as unknown as NodePgDatabase<typeof schema>);
+      const persistentAdapter = new TraceAdapter(
+        fakeDb as unknown as NodePgDatabase<typeof schema>,
+        { logger: noopLogger },
+      );
       const timestamp = new Date('2025-01-01T00:00:00Z').toISOString();
 
       persistentAdapter.setRunMetadata('run-persist', { workflowId: 'workflow-123' });
