@@ -139,9 +139,9 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 
 - [x] Extend worker unit/integration coverage to assert parallel activities, join semantics, and failure reporting.
 - [x] Add determinism tests ensuring repeated executions yield identical trace sequences.
-- [ ] Run long-lived workflows via `worker/scripts/workflow-runner.ts` to confirm logs/traces.
-- [ ] Benchmark serial vs parallel workflows and compare with pre-activity baseline.
-- [ ] Capture regression snapshots (trace timelines, metrics) for future comparisons.
+- [x] Run long-lived workflows via `worker/scripts/run-long-lived-workflow.ts` to confirm logs/traces and persist snapshots.
+- [x] Benchmark serial vs parallel workflows and compare with pre-activity baseline (`worker/scripts/benchmark-scheduler.ts`).
+- [x] Capture regression snapshots (trace timelines, metrics) for future comparisons.
 
 **Implementation Steps**
 1. Build deterministic activity fixtures to simulate success/failure/retry scenarios.
