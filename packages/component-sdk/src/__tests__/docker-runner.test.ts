@@ -11,6 +11,10 @@ describe('Docker Runner', () => {
     context = {
       runId: 'test-run',
       componentRef: 'test-component',
+      metadata: {
+        runId: 'test-run',
+        componentRef: 'test-component',
+      },
       logger: {
         info: (...args: unknown[]) => logs.push(`INFO: ${args.join(' ')}`),
         error: (...args: unknown[]) => logs.push(`ERROR: ${args.join(' ')}`),

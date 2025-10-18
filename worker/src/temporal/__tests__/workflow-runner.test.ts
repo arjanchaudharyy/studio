@@ -48,12 +48,29 @@ describe('executeWorkflow', () => {
     };
 
     const definition: WorkflowDefinition = {
+      version: 1,
       title: 'Trace Ordering',
       description: 'Validate trace ordering and levels',
       entrypoint: { ref: 'node-1' },
       config: {
         environment: 'test',
         timeoutSeconds: 30,
+      },
+      nodes: {
+        'node-1': { ref: 'node-1' },
+        'node-2': { ref: 'node-2' },
+      },
+      edges: [
+        {
+          id: 'node-1->node-2',
+          sourceRef: 'node-1',
+          targetRef: 'node-2',
+          kind: 'success',
+        },
+      ],
+      dependencyCounts: {
+        'node-1': 0,
+        'node-2': 1,
       },
       actions: [
         {
@@ -155,6 +172,7 @@ describe('executeWorkflow', () => {
     }
 
     const definition: WorkflowDefinition = {
+      version: 1,
       title: 'Parallel branches',
       description: 'Two branches should execute concurrently',
       entrypoint: { ref: 'start' },
@@ -162,7 +180,12 @@ describe('executeWorkflow', () => {
         environment: 'test',
         timeoutSeconds: 30,
       },
-      nodes: {},
+      nodes: {
+        start: { ref: 'start' },
+        branchA: { ref: 'branchA' },
+        branchB: { ref: 'branchB' },
+        merge: { ref: 'merge' },
+      },
       edges: [],
       dependencyCounts: {
         start: 0,

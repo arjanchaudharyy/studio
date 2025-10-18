@@ -16,6 +16,10 @@ describe('Subfinder Integration (Docker)', () => {
     context = {
       runId: 'test-run',
       componentRef: 'shipsec.subfinder.run',
+      metadata: {
+        runId: 'test-run',
+        componentRef: 'shipsec.subfinder.run',
+      },
       logger: {
         info: (...args: unknown[]) => {
           const msg = args.join(' ');

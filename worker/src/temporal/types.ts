@@ -101,6 +101,13 @@ export interface RunWorkflowActivityOutput {
 
 export type WorkflowLogStream = 'stdout' | 'stderr' | 'console';
 
+export interface WorkflowLogMetadata {
+  activityId?: string;
+  attempt?: number;
+  correlationId?: string;
+  streamId?: string;
+}
+
 export interface WorkflowLogEntry {
   runId: string;
   nodeRef: string;
@@ -108,6 +115,7 @@ export interface WorkflowLogEntry {
   message: string;
   level?: 'debug' | 'info' | 'warn' | 'error';
   timestamp?: Date;
+  metadata?: WorkflowLogMetadata;
 }
 
 export interface WorkflowLogSink {

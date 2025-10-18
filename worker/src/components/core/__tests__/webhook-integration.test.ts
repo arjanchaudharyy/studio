@@ -82,6 +82,10 @@ describe('Webhook Integration (Real HTTP)', () => {
   const context: ExecutionContext = {
     runId: 'test-run',
     componentRef: 'core.webhook.post',
+    metadata: {
+      runId: 'test-run',
+      componentRef: 'core.webhook.post',
+    },
     logger: {
       info: (...args: unknown[]) => console.log('[INFO]', ...args),
       error: (...args: unknown[]) => console.error('[ERROR]', ...args),

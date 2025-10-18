@@ -124,6 +124,22 @@ export class LokiLogAdapter implements WorkflowLogSink {
       labels.level = entry.level;
     }
 
+    if (entry.metadata?.activityId) {
+      labels.activity_id = entry.metadata.activityId;
+    }
+
+    if (entry.metadata?.attempt !== undefined) {
+      labels.attempt = String(entry.metadata.attempt);
+    }
+
+    if (entry.metadata?.correlationId) {
+      labels.correlation_id = entry.metadata.correlationId;
+    }
+
+    if (entry.metadata?.streamId) {
+      labels.stream_id = entry.metadata.streamId;
+    }
+
     return labels;
   }
 

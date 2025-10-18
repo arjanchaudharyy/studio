@@ -80,6 +80,7 @@ describe('Worker Integration Tests', () => {
 
       // Create a minimal workflow DSL
       const workflowDSL = {
+        version: 1,
         title: 'Test Workflow',
         description: 'Integration test workflow',
         config: {
@@ -88,6 +89,13 @@ describe('Worker Integration Tests', () => {
         },
         entrypoint: {
           ref: 'trigger',
+        },
+        nodes: {
+          trigger: { ref: 'trigger' },
+        },
+        edges: [],
+        dependencyCounts: {
+          trigger: 0,
         },
         actions: [
           {
@@ -98,10 +106,10 @@ describe('Worker Integration Tests', () => {
                 test: true,
                 message: 'Integration test',
               },
+            },
+            dependsOn: [],
+            inputMappings: {},
           },
-          dependsOn: [],
-          inputMappings: {},
-        },
         ],
       };
 
@@ -145,6 +153,7 @@ describe('Worker Integration Tests', () => {
 
       // Create workflow that uses file-loader
       const workflowDSL = {
+        version: 1,
         title: 'File Loader Test',
         description: 'Test service injection',
         config: {
@@ -153,6 +162,22 @@ describe('Worker Integration Tests', () => {
         },
         entrypoint: {
           ref: 'trigger',
+        },
+        nodes: {
+          trigger: { ref: 'trigger' },
+          loader: { ref: 'loader' },
+        },
+        edges: [
+          {
+            id: 'trigger->loader',
+            sourceRef: 'trigger',
+            targetRef: 'loader',
+            kind: 'success' as const,
+          },
+        ],
+        dependencyCounts: {
+          trigger: 0,
+          loader: 1,
         },
         actions: [
           {
@@ -223,6 +248,7 @@ describe('Worker Integration Tests', () => {
       const nonExistentFileId = randomUUID();
       
       const workflowDSL = {
+        version: 1,
         title: 'Failing Workflow',
         description: 'Test error handling',
         config: {
@@ -231,6 +257,13 @@ describe('Worker Integration Tests', () => {
         },
         entrypoint: {
           ref: 'loader',
+        },
+        nodes: {
+          loader: { ref: 'loader' },
+        },
+        edges: [],
+        dependencyCounts: {
+          loader: 0,
         },
         actions: [
           {
@@ -281,6 +314,7 @@ describe('Worker Integration Tests', () => {
 
       // Create workflow with multiple steps
       const workflowDSL = {
+        version: 1,
         title: 'Multi-Step Workflow',
         description: 'Test dependency execution',
         config: {
@@ -289,6 +323,30 @@ describe('Worker Integration Tests', () => {
         },
         entrypoint: {
           ref: 'trigger',
+        },
+        nodes: {
+          trigger: { ref: 'trigger' },
+          step2: { ref: 'step2' },
+          step3: { ref: 'step3' },
+        },
+        edges: [
+          {
+            id: 'trigger->step2',
+            sourceRef: 'trigger',
+            targetRef: 'step2',
+            kind: 'success' as const,
+          },
+          {
+            id: 'step2->step3',
+            sourceRef: 'step2',
+            targetRef: 'step3',
+            kind: 'success' as const,
+          },
+        ],
+        dependencyCounts: {
+          trigger: 0,
+          step2: 1,
+          step3: 1,
         },
         actions: [
           {

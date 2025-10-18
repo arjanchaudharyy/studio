@@ -85,9 +85,21 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 - [ ] Refactor `createExecutionContext` to emit immutable payloads suitable for serialization into activity inputs.
 - [ ] Provide per-activity trace/log adapters (no shared in-memory maps) and ensure trace events include activity IDs/stream IDs.
 - [ ] Preserve branch metadata (`streamId`, `joinStrategy`) across activity boundaries.
+- [ ] Harden secrets/files handles so activity retries cannot double-consume resources.
 - [ ] Tests:
   - Concurrent activity trace/log emission.
   - Adapter unit tests exercising multi-activity persistence.
+  - Temporal integration test proving traces remain ordered when two activities emit simultaneously.
+
+**Implementation Steps**
+1. Introduce serializable context DTO + migration shim for existing components.
+2. Split `TraceService` and logger collectors into lightweight RPC-friendly facades.
+3. Update activity payload builders to include branch metadata and correlation IDs.
+4. Add regression tests covering concurrent trace/log writes and retry safety.
+
+**Dependencies:** Requires Phase 3 activity orchestration deployed behind feature flag. Coordinate with backend trace repository updates (Phase 7).
+
+**Exit Criteria:** Context objects are immutable/serializable, traces include activity correlation, and concurrency tests demonstrate thread safety.
 
 **Deliverable:** Thread-safe, activity-aware context + observability.
 
@@ -101,9 +113,21 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 - [ ] On activity failure, propagate according to policy (fail workflow, skip dependents, route to error edges).
 - [ ] Add cancellation hooks so upstream cancellation can short-circuit queued activities.
 - [ ] Ensure undefined inputs throw deterministic errors (no silent `warn` + continue).
+- [ ] Document per-node retry policy merge rules (component default vs workflow override).
 - [ ] Tests:
   - Unit tests for join strategies with mocked activity outcomes.
   - Failure propagation tests (diamonds, scatter/gather) using activity stubs.
+  - Cancellation contract test ensuring downstream activities never start after upstream cancel.
+
+**Implementation Steps**
+1. Extend scheduler graph model with join metadata and failure policies.
+2. Implement result aggregation + policy evaluation in the orchestrator.
+3. Wire cancellation propagation through Temporal `cancel_activity` / custom signals.
+4. Update shared typings (`@shipsec/shared`) with join strategy enums and failure payloads.
+
+**Dependencies:** Relies on Phase 4 context metadata for branch correlation.
+
+**Exit Criteria:** Joins behave deterministically across strategies, failure matrix documented and validated by automated tests.
 
 **Deliverable:** Behaviour matrix documented + covered by tests.
 
@@ -117,6 +141,17 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 - [ ] Add Temporal replay tests ensuring the workflow remains deterministic with activities.
 - [ ] Run long-lived workflows via `worker/scripts/workflow-runner.ts` to confirm logs/traces.
 - [ ] Benchmark serial vs parallel workflows and compare with pre-activity baseline.
+- [ ] Capture regression snapshots (trace timelines, metrics) for future comparisons.
+
+**Implementation Steps**
+1. Build deterministic activity fixtures to simulate success/failure/retry scenarios.
+2. Author replay tests using Temporal `WorkflowReplayer`.
+3. Create benchmarking harness comparing inline vs activity execution throughput.
+4. Publish validation artifacts (dashboards, logs) for review.
+
+**Dependencies:** Requires Phases 4–5 features behind toggles; schedule to run in staging Temporal namespace.
+
+**Exit Criteria:** Integration suite passes with activities enabled, replay tests green, and performance baselines recorded.
 
 **Deliverable:** Passing integration suite demonstrating the new execution model.
 
@@ -130,9 +165,21 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 - [ ] Adjust frontend stores (`executionTimelineStore`, canvas overlays) to render parallel activity states.
 - [ ] Add UI indicators for per-node retries and activity IDs.
 - [ ] Ensure `@shipsec/shared` exports updated models.
+- [ ] Backfill migrations so existing run records tolerate new fields.
 - [ ] Tests:
   - Frontend unit tests for activity timeline rendering.
   - Manual workflow run verifying UI reflects parallel activities.
+  - Contract tests ensuring backend responses match updated shared DTOs.
+
+**Implementation Steps**
+1. Version backend API responses and add compatibility transforms.
+2. Update shared package typings + regenerate clients.
+3. Refactor frontend timeline components to group events by activity and join.
+4. Run smoke tests against dev environment with activities enabled.
+
+**Dependencies:** Backend trace payloads enhanced in Phase 4, failure semantics from Phase 5.
+
+**Exit Criteria:** UI renders activity-aware runs, contract tests pass, and no breaking changes for existing clients.
 
 **Deliverable:** UI + API aligned with activity-driven execution.
 
@@ -147,6 +194,17 @@ We’re refitting the runtime so each workflow node executes with Temporal-grade
 - [ ] Add feature flags to toggle between inline and activity-based execution during soak.
 - [ ] Document migration/rollback steps and update operational runbooks.
 - [ ] Build regression suite (deterministic workflow snapshot) guarding future changes.
+- [ ] Plan rollout stages (canary orgs, phased enablement) with monitoring thresholds.
+
+**Implementation Steps**
+1. Introduce concurrency config schema + worker enforcement (semaphores).
+2. Expose metrics via Prometheus exporters / Temporal visibility queries.
+3. Wire feature flags into backend + worker boot flow.
+4. Draft rollout playbook with success metrics and rollback triggers.
+
+**Dependencies:** Requires Phases 4–7 complete; coordinate with DevOps for metrics stack.
+
+**Exit Criteria:** Feature-flagged rollout plan approved, guardrails implemented, and monitoring dashboards live.
 
 **Deliverable:** Production-ready runtime with guardrails, observability, and rollout plan.
 

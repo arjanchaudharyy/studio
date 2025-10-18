@@ -1,4 +1,5 @@
 import '../../components';
+import { Context } from '@temporalio/activity';
 import {
   componentRegistry,
   createExecutionContext,
@@ -56,6 +57,8 @@ export async function runComponentActivity(
     throw new Error(`Component not registered: ${action.componentId}`);
   }
 
+  const activityInfo = Context.current().info;
+
   const trace = globalTrace;
   trace?.record({
     type: 'NODE_STARTED',
@@ -82,6 +85,11 @@ export async function runComponentActivity(
   const context = createExecutionContext({
     runId: input.runId,
     componentRef: action.ref,
+    metadata: {
+      activityId: activityInfo.activityId,
+      attempt: activityInfo.attempt,
+      correlationId: `${input.runId}:${action.ref}:${activityInfo.activityId}`,
+    },
     storage: globalStorage,
     secrets: globalSecrets,
     artifacts: globalArtifacts,
@@ -96,11 +104,12 @@ export async function runComponentActivity(
               level: entry.level,
               message: entry.message,
               timestamp: new Date(entry.timestamp),
+              metadata: entry.metadata,
             })
             .catch((error) => {
               console.error('[Logs] Failed to append log entry', error);
             });
-        }
+      }
       : undefined,
   });
 
