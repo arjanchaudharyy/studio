@@ -53,6 +53,13 @@ describe('LokiLogAdapter', () => {
     message: 'hello world',
     level: 'info',
     timestamp: new Date('2025-01-01T00:00:00Z'),
+    metadata: {
+      activityId: 'activity-1',
+      attempt: 2,
+      correlationId: 'corr-1',
+      streamId: 'stream-1',
+      joinStrategy: 'all',
+    },
     ...overrides,
   });
 
@@ -77,6 +84,11 @@ describe('LokiLogAdapter', () => {
       node: 'node-1',
       stream: 'stdout',
       level: 'info',
+      activity_id: 'activity-1',
+      attempt: '2',
+      correlation_id: 'corr-1',
+      stream_id: 'stream-1',
+      join_strategy: 'all',
     });
     expect(call.lines).toHaveLength(2);
     expect(call.lines[0]).toMatchObject({
@@ -113,5 +125,22 @@ describe('LokiLogAdapter', () => {
     await failingAdapter.append(buildEntry());
 
     expect(db.inserted).toHaveLength(0);
+  });
+
+  it('handles concurrent appends without dropping entries', async () => {
+    const entries = Array.from({ length: 10 }, (_, index) =>
+      buildEntry({
+        message: `message-${index}`,
+        timestamp: new Date(`2025-01-01T00:00:${index.toString().padStart(2, '0')}Z`),
+      }),
+    );
+
+    await Promise.all(entries.map((entry) => adapter.append(entry)));
+
+    expect(client.calls).toHaveLength(entries.length);
+    const seenMessages = client.calls.map((call) => call.lines[0]?.message);
+    entries.forEach((entry) => {
+      expect(seenMessages).toContain(entry.message);
+    });
   });
 });
