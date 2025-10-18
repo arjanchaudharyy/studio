@@ -364,6 +364,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
     },
     isLatest: true,
     deprecated: false,
+    example: 'Enumerate subdomains for domains like example.com with optional brute forcing and alterations.',
     inputs: [
       {
         id: 'domains',

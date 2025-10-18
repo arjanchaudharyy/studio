@@ -87,6 +87,7 @@ export const ComponentMetadataSchema = z.object({
   author: ComponentAuthorSchema.optional().nullable(),
   isLatest: z.boolean().optional().default(true),
   deprecated: z.boolean().optional().default(false),
+  example: z.string().optional().nullable(),
   runner: ComponentRunnerSchema,
   inputs: z.array(InputPortSchema).default([]),
   outputs: z.array(OutputPortSchema).default([]),

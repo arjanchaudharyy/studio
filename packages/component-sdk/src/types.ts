@@ -130,6 +130,7 @@ export interface ComponentUiMetadata {
   author?: ComponentAuthorMetadata;
   isLatest?: boolean;
   deprecated?: boolean;
+  example?: string;
   inputs?: ComponentPortMetadata[];
   outputs?: ComponentPortMetadata[];
   parameters?: ComponentParameterMetadata[];
