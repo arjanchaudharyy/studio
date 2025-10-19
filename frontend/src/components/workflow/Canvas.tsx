@@ -204,6 +204,37 @@ export function Canvas({ className }: CanvasProps) {
 
       if (!position) return
 
+      const initialParameters: Record<string, unknown> = {}
+
+      if (Array.isArray(component.parameters)) {
+        component.parameters.forEach((parameter) => {
+          if (parameter.default !== undefined) {
+            const defaultValue = parameter.default
+            if (defaultValue !== null && typeof defaultValue === 'object') {
+              try {
+                initialParameters[parameter.id] = JSON.parse(JSON.stringify(defaultValue))
+              } catch {
+                initialParameters[parameter.id] = defaultValue
+              }
+            } else {
+              initialParameters[parameter.id] = defaultValue
+            }
+          }
+        })
+      }
+
+      if ((component.slug ?? component.id) === 'manual-trigger') {
+        initialParameters.runtimeInputs = [
+          {
+            id: 'input1',
+            label: 'Input 1',
+            type: 'text',
+            required: true,
+            description: '',
+          },
+        ]
+      }
+
       const newNode: Node<NodeData> = {
         id: `${component.slug ?? component.id}-${Date.now()}`,
         type: 'workflow',
@@ -216,7 +247,7 @@ export function Canvas({ className }: CanvasProps) {
           componentId: component.id,
           componentSlug: component.slug ?? component.id,
           componentVersion: component.version,
-          parameters: {},
+          parameters: initialParameters,
           inputs: {},
           status: 'idle',
         },
