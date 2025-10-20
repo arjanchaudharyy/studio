@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, EdgeProps } from 'reactflow'
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, EdgeProps, Position } from 'reactflow'
 import { Package, FileText, Database, Code } from 'lucide-react'
 import { useExecutionTimelineStore, type DataPacket } from '@/store/executionTimelineStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
@@ -68,7 +68,6 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
 
   const {
     currentTime,
-    totalDuration,
     isPlaying,
     playbackSpeed,
     playbackMode,
@@ -96,10 +95,10 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
     const [path] = getBezierPath({
       sourceX,
       sourceY,
-      sourcePosition: 'right',
+      sourcePosition: Position.Right,
       targetX,
       targetY,
-      targetPosition: 'left',
+      targetPosition: Position.Left,
     })
     setEdgePath(path)
   }, [sourceX, sourceY, targetX, targetY])
