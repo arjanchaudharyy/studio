@@ -68,6 +68,22 @@ describe('subfinder component', () => {
     expect(result).toEqual(payload);
   });
 
+  it('should accept a single domain string and normalise to array', () => {
+    const component = componentRegistry.get('shipsec.subfinder.run');
+    if (!component) throw new Error('Component not registered');
+
+    const params = component.inputSchema.parse({ domains: 'example.com' });
+    expect(params.domains).toEqual(['example.com']);
+  });
+
+  it('should accept legacy "domain" key from older workflows', () => {
+    const component = componentRegistry.get('shipsec.subfinder.run');
+    if (!component) throw new Error('Component not registered');
+
+    const params = component.inputSchema.parse({ domain: 'legacy.example.com' });
+    expect(params.domains).toEqual(['legacy.example.com']);
+  });
+
   it('should use docker runner config', () => {
     const component = componentRegistry.get('shipsec.subfinder.run');
     if (!component) throw new Error('Component not registered');

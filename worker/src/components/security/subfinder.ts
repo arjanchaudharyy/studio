@@ -1,9 +1,42 @@
 import { z } from 'zod';
 import { componentRegistry, ComponentDefinition, runComponentWithRunner } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  domains: z.array(z.string()).describe('Array of target domains'),
-});
+const domainValueSchema = z.union([z.string(), z.array(z.string())]);
+
+const inputSchema = z
+  .object({
+    domains: domainValueSchema.optional().describe('Array of target domains'),
+    domain: domainValueSchema.optional().describe('Legacy single domain input'),
+  })
+  .transform(({ domains, domain }) => {
+    const values = new Set<string>();
+
+    const addValue = (value: string | string[] | undefined) => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          const trimmed = item.trim();
+          if (trimmed.length > 0) {
+            values.add(trimmed);
+          }
+        });
+        return;
+      }
+
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed.length > 0) {
+          values.add(trimmed);
+        }
+      }
+    };
+
+    addValue(domains);
+    addValue(domain);
+
+    return {
+      domains: Array.from(values),
+    };
+  });
 
 type Input = z.infer<typeof inputSchema>;
 
@@ -36,7 +69,13 @@ const definition: ComponentDefinition<Input, Output> = {
 
 INPUT=$(cat)
 
-DOMAINS=$(printf "%s" "$INPUT" | tr '"[],{}' '\n' | grep -E '^[A-Za-z0-9.-]+$' | grep -v '^domains$' | sed '/^$/d')
+DOMAINS=$(
+  printf "%s" "$INPUT" |
+  tr '"[],{}' '\n' |
+  grep -E '^[A-Za-z0-9.-]+$' |
+  grep -v '^domains$' |
+  sed '/^$/d' || true
+)
 
 if [ -z "$DOMAINS" ]; then
   printf '{"subdomains":[],"rawOutput":"","domainCount":0,"subdomainCount":0}'
@@ -52,7 +91,11 @@ DOMAIN_COUNT=0
 for DOMAIN in $DOMAINS; do
   if [ -n "$DOMAIN" ]; then
     DOMAIN_COUNT=$((DOMAIN_COUNT + 1))
-    subfinder -silent -d "$DOMAIN" 2>/dev/null | sed 's/\r//g' | sed '/^$/d' >> "$RAW_FILE"
+    (
+      subfinder -silent -d "$DOMAIN" 2>/dev/null |
+      sed 's/\r//g' |
+      sed '/^$/d'
+    ) >> "$RAW_FILE" || true
   fi
 done
 
