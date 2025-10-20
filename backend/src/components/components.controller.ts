@@ -2,7 +2,7 @@ import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 
 // Ensure all worker components are registered before accessing the registry
-import '../../../worker/src/components';
+import '@shipsec/worker/components';
 import { componentRegistry } from '@shipsec/component-sdk';
 
 function serializeComponent(component: ReturnType<typeof componentRegistry.get>) {

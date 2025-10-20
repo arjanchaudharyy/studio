@@ -1,0 +1,570 @@
+import { z } from 'zod';
+import { componentRegistry, ComponentDefinition, runComponentWithRunner } from '@shipsec/component-sdk';
+
+const inputSchema = z.object({
+  targets: z
+    .array(z.string().min(1, 'Target cannot be empty'))
+    .min(1, 'Provide at least one target')
+    .describe('Hostnames or URLs to probe for HTTP services'),
+  followRedirects: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe('Follow HTTP redirects when probing each target'),
+  tlsProbe: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe('Probe TLS endpoints for HTTPS support even if not explicitly specified'),
+  preferHttps: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe('Prefer HTTPS scheme when both HTTP and HTTPS are available'),
+  ports: z
+    .string()
+    .trim()
+    .min(1, 'Ports value cannot be empty')
+    .optional()
+    .describe('Comma-separated list of ports to probe (e.g. "80,443,8080")'),
+  statusCodes: z
+    .string()
+    .trim()
+    .min(1, 'Status codes cannot be empty')
+    .optional()
+    .describe('Comma-separated list of acceptable HTTP status codes (e.g. "200,301,302")'),
+  threads: z
+    .number()
+    .int()
+    .positive()
+    .max(1000)
+    .optional()
+    .describe('Number of concurrent threads to use when probing'),
+  path: z
+    .string()
+    .trim()
+    .min(1, 'Path cannot be empty')
+    .optional()
+    .describe('Specific path to append to each target during probing (e.g. "/admin")'),
+});
+
+type Input = z.infer<typeof inputSchema>;
+
+const findingSchema = z.object({
+  url: z.string(),
+  host: z.string().nullable(),
+  input: z.string().nullable(),
+  statusCode: z.number().nullable(),
+  title: z.string().nullable(),
+  webserver: z.string().nullable(),
+  contentLength: z.number().nullable(),
+  responseTime: z.number().nullable(),
+  port: z.number().nullable(),
+  scheme: z.string().nullable(),
+  finalUrl: z.string().nullable(),
+  location: z.string().nullable(),
+  ip: z.string().nullable(),
+  technologies: z.array(z.string()),
+  chainStatus: z.array(z.number()),
+  timestamp: z.string().nullable(),
+});
+
+type Finding = z.infer<typeof findingSchema>;
+
+const outputSchema = z.object({
+  results: z.array(findingSchema),
+  rawOutput: z.string(),
+  targetCount: z.number(),
+  resultCount: z.number(),
+  options: z.object({
+    followRedirects: z.boolean(),
+    tlsProbe: z.boolean(),
+    preferHttps: z.boolean(),
+    ports: z.string().nullable(),
+    statusCodes: z.string().nullable(),
+    threads: z.number().nullable(),
+    path: z.string().nullable(),
+  }),
+});
+
+type Output = z.infer<typeof outputSchema>;
+
+const httpxRunnerOutputSchema = z.object({
+  results: z.array(z.unknown()).optional().default([]),
+  raw: z.string().optional().default(''),
+  stderr: z.string().optional().default(''),
+  exitCode: z.number().optional().default(0),
+});
+
+const dockerTimeoutSeconds = (() => {
+  const raw = process.env.HTTPX_TIMEOUT_SECONDS;
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed)) {
+    return 240;
+  }
+  return parsed;
+})();
+
+const definition: ComponentDefinition<Input, Output> = {
+  id: 'shipsec.httpx.scan',
+  label: 'httpx Web Probe',
+  category: 'discovery',
+  runner: {
+    kind: 'docker',
+    image: 'projectdiscovery/httpx:latest',
+    entrypoint: 'sh',
+    network: 'bridge',
+    timeoutSeconds: dockerTimeoutSeconds,
+    command: [
+      '-c',
+      String.raw`set -eo pipefail
+
+INPUT=$(cat)
+
+TARGETS_SECTION=$(printf "%s" "$INPUT" | tr -d '\n' | sed -n 's/.*"targets":[[:space:]]*\[\([^]]*\)\].*/\1/p')
+
+if [ -z "$TARGETS_SECTION" ]; then
+  exit 0
+fi
+
+TARGETS=$(printf "%s" "$TARGETS_SECTION" | tr ',' '\n' | sed 's/"//g; s/^[[:space:]]*//; s/[[:space:]]*$//' | sed '/^$/d')
+
+if [ -z "$TARGETS" ]; then
+  exit 0
+fi
+
+extract_string() {
+  key="$1"
+  value=$(printf "%s" "$INPUT" | tr -d '\n' | grep -o "\"$key\":[[:space:]]*\"[^\"]*\"" | head -n1 | sed "s/.*\"$key\":[[:space:]]*\"\([^\"]*\)\".*/\1/" || true)
+  printf "%s" "$value"
+}
+
+extract_number() {
+  key="$1"
+  value=$(printf "%s" "$INPUT" | tr -d '\n' | grep -o "\"$key\":[[:space:]]*[0-9][0-9]*" | head -n1 | sed 's/[^0-9]//g' || true)
+  printf "%s" "$value"
+}
+
+extract_bool() {
+  key="$1"
+  default="$2"
+  value=$(printf "%s" "$INPUT" | tr -d '\n' | grep -o "\"$key\":[[:space:]]*\\(true\\|false\\)" | head -n1 | sed 's/.*://; s/[[:space:]]//g' || true)
+  if [ -z "$value" ]; then
+    echo "$default"
+  elif [ "$value" = "true" ]; then
+    echo "true"
+  else
+    echo "false"
+  fi
+}
+
+PORTS=$(extract_string "ports" | tr -d ' ')
+STATUS_CODES=$(extract_string "statusCodes" | tr -d ' ')
+PATH_VALUE=$(extract_string "path")
+THREADS=$(extract_number "threads")
+FOLLOW_REDIRECTS=$(extract_bool "followRedirects" "false")
+TLS_PROBE=$(extract_bool "tlsProbe" "false")
+PREFER_HTTPS=$(extract_bool "preferHttps" "false")
+
+LIST_FILE=$(mktemp)
+OUTPUT_FILE=$(mktemp)
+STDERR_FILE=$(mktemp)
+
+cleanup() {
+  rm -f "$LIST_FILE" "$OUTPUT_FILE" "$STDERR_FILE"
+}
+
+trap cleanup EXIT
+
+printf "%s\n" $TARGETS > "$LIST_FILE"
+
+set -- httpx -json -silent -l "$LIST_FILE"
+
+if [ -n "$PORTS" ]; then
+  set -- "$@" -ports "$PORTS"
+fi
+if [ -n "$STATUS_CODES" ]; then
+  set -- "$@" -status-code "$STATUS_CODES"
+fi
+if [ -n "$THREADS" ]; then
+  set -- "$@" -threads "$THREADS"
+fi
+if [ -n "$PATH_VALUE" ]; then
+  set -- "$@" -path "$PATH_VALUE"
+fi
+if [ "$FOLLOW_REDIRECTS" = "true" ]; then
+  set -- "$@" -follow-redirects
+fi
+if [ "$TLS_PROBE" = "true" ]; then
+  set -- "$@" -tls-probe
+fi
+if [ "$PREFER_HTTPS" = "true" ]; then
+  set -- "$@" -prefer-https
+fi
+
+set +e
+"$@" > "$OUTPUT_FILE" 2> "$STDERR_FILE"
+STATUS=$?
+set -e
+
+RAW_OUTPUT=$(cat "$OUTPUT_FILE")
+STDERR_OUTPUT=$(cat "$STDERR_FILE")
+
+if [ -s "$OUTPUT_FILE" ]; then
+  RESULTS_JSON=$(awk 'NR==1{printf("[%s", $0); next} {printf(",%s", $0)} END {if (NR==0) printf("[]"); else printf("]");}' "$OUTPUT_FILE")
+else
+  RESULTS_JSON="[]"
+fi
+
+escape_json() {
+  printf '%s' "$1" | awk 'BEGIN { ORS="" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); if (NR > 1) printf "\\n"; printf "%s", $0 }'
+}
+
+RAW_ESCAPED=$(escape_json "$RAW_OUTPUT")
+STDERR_ESCAPED=$(escape_json "$STDERR_OUTPUT")
+
+printf '{"results":%s,"raw":"%s","stderr":"%s","exitCode":%d}' \
+  "$RESULTS_JSON" \
+  "$RAW_ESCAPED" \
+  "$STDERR_ESCAPED" \
+  "$STATUS"
+`,
+    ],
+    env: {
+      HOME: '/root',
+    },
+  },
+  inputSchema,
+  outputSchema,
+  docs: 'Run ProjectDiscovery httpx to probe hosts for live HTTP services, capturing metadata like status codes and titles.',
+  metadata: {
+    slug: 'httpx',
+    version: '1.0.0',
+    type: 'scan',
+    category: 'security-tool',
+    description: 'Identify live HTTP endpoints and collect response metadata using ProjectDiscovery httpx.',
+    documentation: 'ProjectDiscovery httpx documentation details CLI flags for probing hosts, extracting metadata, and filtering responses.',
+    documentationUrl: 'https://github.com/projectdiscovery/httpx',
+    icon: 'Globe',
+    author: {
+      name: 'ShipSecAI',
+      type: 'shipsecai',
+    },
+    isLatest: true,
+    deprecated: false,
+    example: '`httpx -l targets.txt -json -status-code 200,301` - Probe discovered hosts and capture responsive endpoints with matching status codes.',
+    inputs: [
+      {
+        id: 'targets',
+        label: 'Targets',
+        type: 'array',
+        required: true,
+        description: 'Hostnames or URLs to probe for HTTP services.',
+      },
+    ],
+    outputs: [
+      {
+        id: 'results',
+        label: 'HTTP Responses',
+        type: 'array',
+        description: 'Structured metadata for each responsive endpoint.',
+      },
+      {
+        id: 'rawOutput',
+        label: 'Raw Output',
+        type: 'string',
+        description: 'Raw httpx JSON lines for downstream processing.',
+      },
+    ],
+    examples: [
+      'Validate Subfinder or Amass discoveries by probing for live web services.',
+      'Filter Naabu results to identify hosts exposing HTTP/S services on uncommon ports.',
+    ],
+    parameters: [
+      {
+        id: 'ports',
+        label: 'Ports',
+        type: 'text',
+        placeholder: '80,443,8080',
+        description: 'Comma-separated ports to probe instead of the default httpx list.',
+      },
+      {
+        id: 'statusCodes',
+        label: 'Status Codes',
+        type: 'text',
+        placeholder: '200,301,302',
+        description: 'Return only results whose HTTP status codes match the provided list.',
+      },
+      {
+        id: 'threads',
+        label: 'Threads',
+        type: 'number',
+        min: 1,
+        max: 1000,
+        description: 'Concurrency level for probes.',
+      },
+      {
+        id: 'followRedirects',
+        label: 'Follow Redirects',
+        type: 'boolean',
+        default: false,
+        description: 'Request redirect targets and return the final destination metadata.',
+      },
+      {
+        id: 'tlsProbe',
+        label: 'TLS Probe',
+        type: 'boolean',
+        default: false,
+        description: 'Probe TLS endpoints for HTTPS even if a scheme is not specified.',
+      },
+      {
+        id: 'preferHttps',
+        label: 'Prefer HTTPS',
+        type: 'boolean',
+        default: false,
+        description: 'Prefer HTTPS scheme when both HTTP and HTTPS respond.',
+      },
+      {
+        id: 'path',
+        label: 'Path',
+        type: 'text',
+        placeholder: '/admin',
+        description: 'Append a specific path to each target during probing.',
+      },
+    ],
+  },
+  async execute(rawInput, context) {
+    const parsedInput = inputSchema.parse(rawInput);
+
+    const trimmedPorts = parsedInput.ports?.trim();
+    const trimmedStatusCodes = parsedInput.statusCodes?.trim();
+    const trimmedPath = parsedInput.path?.trim();
+
+    const runnerParams: Input = {
+      ...parsedInput,
+      ports: trimmedPorts && trimmedPorts.length > 0 ? trimmedPorts : undefined,
+      statusCodes: trimmedStatusCodes && trimmedStatusCodes.length > 0 ? trimmedStatusCodes : undefined,
+      path: trimmedPath && trimmedPath.length > 0 ? trimmedPath : undefined,
+      followRedirects: parsedInput.followRedirects ?? false,
+      tlsProbe: parsedInput.tlsProbe ?? false,
+      preferHttps: parsedInput.preferHttps ?? false,
+    };
+
+    context.logger.info(
+      `[httpx] Probing ${runnerParams.targets.length} target(s) with options: ports=${runnerParams.ports ?? 'default'}, statusCodes=${runnerParams.statusCodes ?? 'any'}, threads=${runnerParams.threads ?? 'auto'}, followRedirects=${runnerParams.followRedirects}, tlsProbe=${runnerParams.tlsProbe}, preferHttps=${runnerParams.preferHttps}, path=${runnerParams.path ?? 'none'}`,
+    );
+
+    context.emitProgress({
+      message: 'Launching httpx probe…',
+      level: 'info',
+      data: { targets: runnerParams.targets.slice(0, 5) },
+    });
+
+    const result = await runComponentWithRunner(
+      this.runner,
+      async () => ({}) as Output,
+      runnerParams,
+      context,
+    );
+
+    const parsedRunnerResult = httpxRunnerOutputSchema.safeParse(result);
+
+    let runnerOutput = '';
+    let stderrOutput = '';
+    let exitCode = 0;
+
+    if (parsedRunnerResult.success) {
+      const { results, raw, stderr, exitCode: runnerExitCode } = parsedRunnerResult.data;
+      const rawCandidate = raw ?? '';
+      stderrOutput = stderr ?? '';
+      exitCode = runnerExitCode ?? 0;
+
+      const serialisedResults = (results ?? [])
+        .map(entry => {
+          if (typeof entry === 'string') {
+            return entry;
+          }
+          try {
+            return JSON.stringify(entry);
+          } catch (_error) {
+            return null;
+          }
+        })
+        .filter((line): line is string => !!line && line.trim().length > 0)
+        .join('\n');
+
+      runnerOutput = rawCandidate.trim().length > 0 ? rawCandidate : serialisedResults;
+
+      if (exitCode !== 0) {
+        throw new Error(
+          stderrOutput
+            ? `httpx exited with code ${exitCode}: ${stderrOutput}`
+            : `httpx exited with code ${exitCode}`,
+        );
+      }
+    } else if (typeof result === 'string') {
+      runnerOutput = result;
+    } else if (result && typeof result === 'object') {
+      const parsedOutput = outputSchema.safeParse(result);
+      if (parsedOutput.success) {
+        return parsedOutput.data;
+      }
+
+      runnerOutput =
+        'rawOutput' in result
+          ? String((result as Record<string, unknown>).rawOutput ?? '')
+          : JSON.stringify(result);
+    } else {
+      runnerOutput = '';
+    }
+
+    const findings = parseHttpxOutput(runnerOutput);
+
+    if (stderrOutput) {
+      context.logger.info(`[httpx] stderr output: ${stderrOutput}`);
+    }
+
+    context.logger.info(
+      `[httpx] Completed probe with ${findings.length} result(s) from ${runnerParams.targets.length} target(s)`,
+    );
+
+    const output: Output = {
+      results: findings,
+      rawOutput: runnerOutput,
+      targetCount: runnerParams.targets.length,
+      resultCount: findings.length,
+      options: {
+        followRedirects: runnerParams.followRedirects,
+        tlsProbe: runnerParams.tlsProbe,
+        preferHttps: runnerParams.preferHttps,
+        ports: runnerParams.ports ?? null,
+        statusCodes: runnerParams.statusCodes ?? null,
+        threads: runnerParams.threads ?? null,
+        path: runnerParams.path ?? null,
+      },
+    };
+
+    return outputSchema.parse(output);
+  },
+};
+
+function parseHttpxOutput(raw: string): Finding[] {
+  if (!raw || raw.trim().length === 0) {
+    return [];
+  }
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+
+  const findings: Finding[] = [];
+
+  for (const line of lines) {
+    let payload: any = null;
+    try {
+      payload = JSON.parse(line);
+    } catch {
+      payload = null;
+    }
+
+    if (!payload || typeof payload !== 'object') {
+      continue;
+    }
+
+    const urlValue = (() => {
+      if (typeof payload.url === 'string' && payload.url.length > 0) {
+        return payload.url;
+      }
+      if (typeof payload['final-url'] === 'string' && payload['final-url'].length > 0) {
+        return payload['final-url'];
+      }
+      if (typeof payload.final_url === 'string' && payload.final_url.length > 0) {
+        return payload.final_url;
+      }
+      if (typeof payload.input === 'string' && payload.input.length > 0) {
+        return payload.input;
+      }
+      if (typeof payload.host === 'string' && payload.host.length > 0) {
+        return payload.host;
+      }
+      return null;
+    })();
+
+    if (!urlValue) {
+      continue;
+    }
+
+    const technologies = Array.isArray(payload.tech)
+      ? payload.tech.filter((item: unknown): item is string => typeof item === 'string' && item.length > 0)
+      : [];
+
+    const chainStatus = Array.isArray(payload['chain-status'])
+      ? payload['chain-status']
+          .map((value: unknown) => {
+            if (typeof value === 'number' && Number.isFinite(value)) {
+              return value;
+            }
+            if (typeof value === 'string' && value.trim().length > 0) {
+              const parsed = Number.parseInt(value, 10);
+              return Number.isFinite(parsed) ? parsed : null;
+            }
+            return null;
+          })
+          .filter((value: number | null): value is number => value !== null)
+      : [];
+
+    const findingCandidate: Finding = {
+      url: urlValue,
+      host: typeof payload.host === 'string' && payload.host.length > 0 ? payload.host : null,
+      input: typeof payload.input === 'string' && payload.input.length > 0 ? payload.input : null,
+      statusCode: normaliseNumber(payload['status-code'] ?? payload.status_code),
+      title: normaliseString(payload.title),
+      webserver: normaliseString(payload.webserver),
+      contentLength: normaliseNumber(payload['content-length'] ?? payload.content_length),
+      responseTime: normaliseNumber(payload['response-time'] ?? payload.response_time),
+      port: normaliseNumber(payload.port),
+      scheme: normaliseString(payload.scheme),
+      finalUrl: normaliseString(payload['final-url'] ?? payload.final_url),
+      location: normaliseString(payload.location),
+      ip: normaliseString(payload.ip),
+      technologies,
+      chainStatus,
+      timestamp: normaliseString(payload.timestamp),
+    };
+
+    const parsedFinding = findingSchema.safeParse(findingCandidate);
+    if (parsedFinding.success) {
+      findings.push(parsedFinding.data);
+    }
+  }
+
+  return findings;
+}
+
+function normaliseNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+    const parsed = Number.parseFloat(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normaliseString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+}
+
+componentRegistry.register(definition);
+
+export { parseHttpxOutput };

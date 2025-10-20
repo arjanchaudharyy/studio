@@ -5,8 +5,8 @@ const REQUIRED_TABLES = [
   'workflows',
   'workflow_runs',
   'files',
-  'log_streams',
-  'traces',
+  'workflow_log_streams',
+  'workflow_traces',
 ];
 
 @Injectable()
