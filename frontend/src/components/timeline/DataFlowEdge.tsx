@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, EdgeProps } from 'reactflow'
 import { Package, FileText, Database, Code } from 'lucide-react'
 import { useExecutionTimelineStore, type DataPacket } from '@/store/executionTimelineStore'
+import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { cn } from '@/lib/utils'
 
 // Data packet icon mapping
@@ -74,6 +75,7 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
     dataFlows,
     selectedRunId,
   } = useExecutionTimelineStore()
+  const { mode } = useWorkflowUiStore()
 
   const packets = useMemo(() => {
     return data?.packets || dataFlows.filter(
@@ -83,6 +85,11 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
         new Date(packet.timestamp).getTime() <= currentTime
     )
   }, [data?.packets, dataFlows, source, target, currentTime])
+
+  const labelPosition = useMemo(() => ({
+    x: (sourceX + targetX) / 2,
+    y: (sourceY + targetY) / 2,
+  }), [sourceX, targetX, sourceY, targetY])
 
   // Calculate Bezier path for the edge
   useEffect(() => {
@@ -239,10 +246,17 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
       )}
 
       {/* Edge label showing packet count */}
-      {packets.length > 0 && (
+      {mode === 'review' && selectedRunId && packets.length > 0 && (
         <EdgeLabelRenderer>
-          <div className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow-lg">
-            {packets.length}
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelPosition.x}px, ${labelPosition.y - 20}px)`,
+            }}
+          >
+            <div className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow-lg">
+              {packets.length}
+            </div>
           </div>
         </EdgeLabelRenderer>
       )}
