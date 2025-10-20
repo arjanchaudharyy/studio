@@ -12,10 +12,10 @@
     "packages/shared"
   ],
   "scripts": {
-    "dev:frontend": "bun --cwd frontend dev",
-    "dev:backend": "bun --cwd backend run dev",
+    "dev:frontend": "bun --cwd=frontend dev",
+    "dev:backend": "bun --cwd=backend run dev",
     "dev": "bun run dev:frontend",
-    "migrate": "bun --cwd backend run migration:push",
+    "migrate": "bun --cwd=backend run migration:push",
     "typecheck": "(cd packages/component-sdk && bun run typecheck) && (cd worker && bun run typecheck) && (cd backend && bun run typecheck)",
     "test": "(cd packages/component-sdk && bun test) && (cd worker && bun test) && (cd backend && bun test) && (cd frontend && bun run test)"
   },
