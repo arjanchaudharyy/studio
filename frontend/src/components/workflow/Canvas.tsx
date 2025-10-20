@@ -1,16 +1,16 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, type Dispatch, type SetStateAction } from 'react'
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
   addEdge,
-  useNodesState,
-  useEdgesState,
   type Node,
   type Edge,
   type OnConnect,
   type NodeMouseHandler,
+  type NodeChange,
+  type EdgeChange,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 
@@ -34,16 +34,25 @@ const edgeTypes = {
   default: DataFlowEdge, // Default to our enhanced edge
 }
 
-const initialNodes: Node[] = []
-const initialEdges: Edge[] = []
-
 interface CanvasProps {
   className?: string
+  nodes: Node<NodeData>[]
+  edges: Edge[]
+  setNodes: Dispatch<SetStateAction<Node<NodeData>[]>>
+  setEdges: Dispatch<SetStateAction<Edge[]>>
+  onNodesChange: (changes: NodeChange[]) => void
+  onEdgesChange: (changes: EdgeChange[]) => void
 }
 
-export function Canvas({ className }: CanvasProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, originalOnEdgesChange] = useEdgesState(initialEdges)
+export function Canvas({
+  className,
+  nodes,
+  edges,
+  setNodes,
+  setEdges,
+  onNodesChange,
+  onEdgesChange,
+}: CanvasProps) {
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null)
   const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null)
   const { getComponent } = useComponentStore()
@@ -51,6 +60,7 @@ export function Canvas({ className }: CanvasProps) {
   const { markDirty } = useWorkflowStore()
   const { selectedRunId, dataFlows, selectedNodeId, selectNode, selectEvent } = useExecutionTimelineStore()
   const { mode } = useWorkflowUiStore()
+  const applyEdgesChange = onEdgesChange
 
   useEffect(() => {
     if (mode === 'review') {
@@ -62,10 +72,10 @@ export function Canvas({ className }: CanvasProps) {
   }, [mode])
 
   // Enhanced edge change handler that also updates input mappings
-  const onEdgesChange = useCallback((changes: any[]) => {
+  const handleEdgesChange = useCallback((changes: EdgeChange[]) => {
     // Handle edge removals by cleaning up input mappings
     if (mode !== 'design') {
-      originalOnEdgesChange(changes)
+      applyEdgesChange(changes)
       return
     }
 
@@ -95,8 +105,8 @@ export function Canvas({ className }: CanvasProps) {
     }
 
     // Apply the original edge changes
-    originalOnEdgesChange(changes)
-  }, [edges, setNodes, originalOnEdgesChange, mode])
+    applyEdgesChange(changes)
+  }, [edges, setNodes, applyEdgesChange, mode])
 
   // Sync execution node states to canvas nodes
   useEffect(() => {
@@ -383,7 +393,7 @@ export function Canvas({ className }: CanvasProps) {
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
             onInit={setReactFlowInstance}
             onDrop={onDrop}

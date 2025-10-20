@@ -1,6 +1,10 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { ReactFlowProvider, useReactFlow } from 'reactflow'
+import {
+  ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
+} from 'reactflow'
 import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Canvas } from '@/components/workflow/Canvas'
@@ -19,13 +23,15 @@ import {
   deserializeNodes,
   deserializeEdges,
 } from '@/utils/workflowSerializer'
+import type { NodeData } from '@/schemas/node'
 
 function WorkflowBuilderContent() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const isNewWorkflow = id === 'new'
   const { metadata, setMetadata, setWorkflowId, markClean, resetWorkflow } = useWorkflowStore()
-  const { getNodes, getEdges, setNodes, setEdges } = useReactFlow()
+  const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const { getComponent } = useComponentStore()
   const [isLoading, setIsLoading] = useState(false)
   const [runDialogOpen, setRunDialogOpen] = useState(false)
@@ -59,11 +65,11 @@ function WorkflowBuilderContent() {
         })
 
         // Deserialize and set nodes/edges
-        const nodes = deserializeNodes(workflow.nodes)
-        const edges = deserializeEdges(workflow.edges)
+        const workflowNodes = deserializeNodes(workflow.nodes)
+        const workflowEdges = deserializeEdges(workflow.edges)
 
-        setNodes(nodes)
-        setEdges(edges)
+        setNodes(workflowNodes)
+        setEdges(workflowEdges)
 
         // Mark as clean (no unsaved changes)
         markClean()
@@ -90,8 +96,6 @@ function WorkflowBuilderContent() {
   }, [id, isNewWorkflow, navigate, setMetadata, setNodes, setEdges, resetWorkflow, markClean])
 
   const handleRun = async () => {
-    const nodes = getNodes()
-
     if (nodes.length === 0) {
       alert('Add some nodes to the workflow first!')
       return
@@ -168,9 +172,6 @@ function WorkflowBuilderContent() {
 
   const handleSave = async () => {
     try {
-      const nodes = getNodes()
-      const edges = getEdges()
-
       if (nodes.length === 0) {
         alert('Add some nodes to the workflow before saving!')
         return
@@ -307,7 +308,15 @@ function WorkflowBuilderContent() {
 
         <main className="flex-1 relative flex">
           <ReviewRunBanner />
-          <Canvas className="flex-1 h-full relative" />
+          <Canvas
+            className="flex-1 h-full relative"
+            nodes={nodes}
+            edges={edges}
+            setNodes={setNodes}
+            setEdges={setEdges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+          />
           {isInspectorVisible && (
             <aside
               className="relative h-full border-l bg-background"
