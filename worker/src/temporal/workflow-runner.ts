@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import {
   componentRegistry,
   createExecutionContext,
-  runComponentWithRunner,
   type IFileStorageService,
   type ISecretsService,
   type IArtifactService,
@@ -108,7 +107,7 @@ export async function executeWorkflow(
       }
 
       const parsedParams = component.inputSchema.parse(params);
-      
+
       // Create execution context with SDK interfaces
       const context = createExecutionContext({
         runId,
@@ -121,12 +120,7 @@ export async function executeWorkflow(
       });
 
       try {
-        const output = await runComponentWithRunner(
-          component.runner,
-          component.execute,
-          parsedParams,
-          context,
-        );
+        const output = await component.execute(parsedParams, context);
         results.set(action.ref, output);
 
         options.trace?.record({

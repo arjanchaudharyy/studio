@@ -300,12 +300,35 @@ fi
       rateLimit,
     };
 
-    const rawResult = await runComponentWithRunner(
+    let rawResult = await runComponentWithRunner(
       this.runner,
       async () => ({} as Output),
       runnerInput,
       context,
     );
+
+    if (
+      rawResult &&
+      typeof rawResult === 'object' &&
+      !Array.isArray(rawResult)
+    ) {
+      const record = rawResult as Record<string, unknown>;
+      const appearsNormalised =
+        Object.prototype.hasOwnProperty.call(record, 'results') &&
+        Object.prototype.hasOwnProperty.call(record, 'rawOutput');
+
+      if (!appearsNormalised) {
+        try {
+          rawResult = JSON.stringify(record);
+        } catch {
+          rawResult = '';
+        }
+      }
+    }
+
+    if (rawResult === undefined || rawResult === null) {
+      rawResult = '';
+    }
 
     const ensureUnique = (values: string[]) =>
       Array.from(new Set(values.filter((value) => value && value.length > 0)));
