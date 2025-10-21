@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.40",
+    "@ai-sdk/google": "^0.0.40",
+    "@google/genai": "^0.2.0",
     "@shipsec/component-sdk": "*",
     "@grpc/grpc-js": "^1.14.0",
     "@shipsec/shared": "*",

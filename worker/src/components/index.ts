@@ -11,6 +11,8 @@ import './core/text-splitter';
 import './core/console-log';
 import './core/secret-fetch';
 import './core/openai-chat';
+import './core/gemini-chat';
+import './core/ai-agent';
 
 // Security components
 import './security/subfinder';
