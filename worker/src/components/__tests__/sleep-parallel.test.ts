@@ -29,7 +29,11 @@ describe('test.sleep.parallel component', () => {
     });
 
     const started = Date.now();
-    const result = await component.execute(params, context);
+    const result = await component.execute(params, context) as {
+      label: string;
+      startedAt: number;
+      endedAt: number;
+    };
     const ended = Date.now();
 
     expect(result.label).toBe('demo');
@@ -42,4 +46,3 @@ describe('test.sleep.parallel component', () => {
     expect(elapsed).toBeLessThan(200);
   });
 });
-
