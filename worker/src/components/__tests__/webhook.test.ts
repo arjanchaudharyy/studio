@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'bun:test';
 import { createExecutionContext } from '@shipsec/component-sdk';
 import { componentRegistry } from '../index';
+import type { WebhookInput, WebhookOutput } from '../core/webhook';
 
 describe('webhook component', () => {
   beforeAll(async () => {
@@ -12,14 +13,14 @@ describe('webhook component', () => {
   });
 
   it('should be registered', () => {
-    const component = componentRegistry.get('core.webhook.post');
+    const component = componentRegistry.get<WebhookInput, WebhookOutput>('core.webhook.post');
     expect(component).toBeDefined();
-    expect(component?.label).toBe('Webhook');
-    expect(component?.category).toBe('output');
+    expect(component!.label).toBe('Webhook');
+    expect(component!.category).toBe('output');
   });
 
   it('should return sent status (stub)', async () => {
-    const component = componentRegistry.get('core.webhook.post');
+    const component = componentRegistry.get<WebhookInput, WebhookOutput>('core.webhook.post');
     if (!component) throw new Error('Component not registered');
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -43,13 +44,13 @@ describe('webhook component', () => {
       },
     });
 
-    const result = await component.execute(params, context) as any;
+    const result = await component.execute(params, context);
 
     expect(result.status).toBe('sent');
   });
 
   it('should validate URL format', () => {
-    const component = componentRegistry.get('core.webhook.post');
+    const component = componentRegistry.get<WebhookInput, WebhookOutput>('core.webhook.post');
     if (!component) throw new Error('Component not registered');
 
     expect(() =>

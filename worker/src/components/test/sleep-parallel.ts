@@ -14,7 +14,9 @@ const outputSchema = z.object({
   endedAt: z.number(),
 });
 
-const definition: ComponentDefinition<Input, z.infer<typeof outputSchema>> = {
+type Output = z.infer<typeof outputSchema>;
+
+const definition: ComponentDefinition<Input, Output> = {
   id: 'test.sleep.parallel',
   label: 'Parallel Sleep (Test)',
   category: 'transform',
@@ -58,3 +60,5 @@ const definition: ComponentDefinition<Input, z.infer<typeof outputSchema>> = {
 if (!componentRegistry.has(definition.id)) {
   componentRegistry.register(definition);
 }
+
+export type { Input as SleepParallelInput, Output as SleepParallelOutput };

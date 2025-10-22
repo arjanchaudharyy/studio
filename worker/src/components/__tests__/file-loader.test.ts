@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'bun:test';
 import { createExecutionContext } from '@shipsec/component-sdk';
 import type { IFileStorageService } from '@shipsec/component-sdk';
 import { componentRegistry } from '../index';
+import type { FileLoaderInput, FileLoaderOutput } from '../core/file-loader';
 
 describe('file-loader component', () => {
   beforeAll(async () => {
@@ -9,14 +10,14 @@ describe('file-loader component', () => {
   });
 
   it('should be registered', () => {
-    const component = componentRegistry.get('core.file.loader');
+    const component = componentRegistry.get<FileLoaderInput, FileLoaderOutput>('core.file.loader');
     expect(component).toBeDefined();
-    expect(component?.label).toBe('File Loader');
-    expect(component?.category).toBe('input');
+    expect(component!.label).toBe('File Loader');
+    expect(component!.category).toBe('input');
   });
 
   it('should load file from storage', async () => {
-    const component = componentRegistry.get('core.file.loader');
+    const component = componentRegistry.get<FileLoaderInput, FileLoaderOutput>('core.file.loader');
     if (!component) throw new Error('Component not registered');
 
     const testFileId = '123e4567-e89b-12d3-a456-426614174000';
@@ -50,7 +51,7 @@ describe('file-loader component', () => {
       fileId: testFileId,
     });
 
-    const result = await component.execute(params, context) as any;
+    const result = await component.execute(params, context);
 
     expect(result.file.id).toBe(testFileId);
     expect(result.file.name).toBe('test.txt');
@@ -61,7 +62,7 @@ describe('file-loader component', () => {
   });
 
   it('should throw error when storage service is not available', async () => {
-    const component = componentRegistry.get('core.file.loader');
+    const component = componentRegistry.get<FileLoaderInput, FileLoaderOutput>('core.file.loader');
     if (!component) throw new Error('Component not registered');
 
     const context = createExecutionContext({
@@ -80,7 +81,7 @@ describe('file-loader component', () => {
   });
 
   it('should handle binary files', async () => {
-    const component = componentRegistry.get('core.file.loader');
+    const component = componentRegistry.get<FileLoaderInput, FileLoaderOutput>('core.file.loader');
     if (!component) throw new Error('Component not registered');
 
     const imageFileId = '323e4567-e89b-12d3-a456-426614174002';
@@ -111,7 +112,7 @@ describe('file-loader component', () => {
       fileId: imageFileId,
     });
 
-    const result = await component.execute(params, context) as any;
+    const result = await component.execute(params, context);
 
     expect(result.file.mimeType).toBe('image/png');
     expect(result.file.content).toBe(binaryData.toString('base64'));

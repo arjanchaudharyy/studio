@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'bun:test';
 import { createExecutionContext } from '@shipsec/component-sdk';
 import { componentRegistry } from '../index';
+import type { ManualTriggerInput, ManualTriggerOutput } from '../core/trigger-manual';
 
 describe('trigger-manual component', () => {
   beforeAll(async () => {
@@ -8,14 +9,14 @@ describe('trigger-manual component', () => {
   });
 
   it('should be registered', () => {
-    const component = componentRegistry.get('core.trigger.manual');
+    const component = componentRegistry.get<ManualTriggerInput, ManualTriggerOutput>('core.trigger.manual');
     expect(component).toBeDefined();
-    expect(component?.label).toBe('Manual Trigger');
-    expect(component?.category).toBe('trigger');
+    expect(component!.label).toBe('Manual Trigger');
+    expect(component!.category).toBe('trigger');
   });
 
   it('should map runtime inputs to outputs', async () => {
-    const component = componentRegistry.get('core.trigger.manual');
+    const component = componentRegistry.get<ManualTriggerInput, ManualTriggerOutput>('core.trigger.manual');
     if (!component) throw new Error('Component not registered');
 
     const context = createExecutionContext({
@@ -36,7 +37,7 @@ describe('trigger-manual component', () => {
       },
     });
 
-    const result = await component.execute(params, context) as any;
+    const result = await component.execute(params, context);
 
     expect(result).toEqual({
       user: 'alice',
@@ -46,7 +47,7 @@ describe('trigger-manual component', () => {
   });
 
   it('should handle empty runtime input configuration', async () => {
-    const component = componentRegistry.get('core.trigger.manual');
+    const component = componentRegistry.get<ManualTriggerInput, ManualTriggerOutput>('core.trigger.manual');
     if (!component) throw new Error('Component not registered');
 
     const context = createExecutionContext({
@@ -56,13 +57,13 @@ describe('trigger-manual component', () => {
 
     const params = component.inputSchema.parse({});
 
-    const result = await component.execute(params, context) as any;
+    const result = await component.execute(params, context);
 
     expect(result).toEqual({});
   });
 
   it('should throw when required runtime input is missing', async () => {
-    const component = componentRegistry.get('core.trigger.manual');
+    const component = componentRegistry.get<ManualTriggerInput, ManualTriggerOutput>('core.trigger.manual');
     if (!component) throw new Error('Component not registered');
 
     const context = createExecutionContext({

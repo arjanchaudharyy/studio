@@ -5,6 +5,7 @@
  */
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { componentRegistry, createExecutionContext, type ExecutionContext } from '@shipsec/component-sdk';
+import type { AmassInput, AmassOutput } from '../amass';
 import '../amass';
 
 const shouldRunIntegration =
@@ -28,11 +29,16 @@ const shouldRunIntegration =
   test(
     'enumerates subdomains for a known domain',
     async () => {
-      const component = componentRegistry.get('shipsec.amass.enum');
+      const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
       expect(component).toBeDefined();
 
-      const params = { domains: ['owasp.org'], active: false, bruteForce: false, timeoutMinutes: 1 };
-      const result = (await component!.execute(params, context)) as any;
+      const params = component!.inputSchema.parse({
+        domains: ['owasp.org'],
+        active: false,
+        bruteForce: false,
+        timeoutMinutes: 1,
+      });
+      const result = await component!.execute(params, context);
 
       expect(result).toHaveProperty('subdomains');
       expect(Array.isArray(result.subdomains)).toBe(true);

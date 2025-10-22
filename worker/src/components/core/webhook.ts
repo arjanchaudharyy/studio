@@ -248,3 +248,5 @@ const definition: ComponentDefinition<Input, Output> = {
 };
 
 componentRegistry.register(definition);
+
+export type { Input as WebhookInput, Output as WebhookOutput };

@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'bun:test';
 import { componentRegistry, createExecutionContext } from '@shipsec/component-sdk';
+import type { SleepParallelInput, SleepParallelOutput } from '../test/sleep-parallel';
 
 describe('test.sleep.parallel component', () => {
   beforeAll(async () => {
@@ -7,13 +8,13 @@ describe('test.sleep.parallel component', () => {
   });
 
   it('should be registered', () => {
-    const component = componentRegistry.get('test.sleep.parallel');
+    const component = componentRegistry.get<SleepParallelInput, SleepParallelOutput>('test.sleep.parallel');
     expect(component).toBeDefined();
-    expect(component?.label).toBe('Parallel Sleep (Test)');
+    expect(component!.label).toBe('Parallel Sleep (Test)');
   });
 
   it('should respect delay parameter and return timing metadata', async () => {
-    const component = componentRegistry.get('test.sleep.parallel');
+    const component = componentRegistry.get<SleepParallelInput, SleepParallelOutput>('test.sleep.parallel');
     if (!component) {
       throw new Error('test.sleep.parallel not registered');
     }
@@ -29,11 +30,7 @@ describe('test.sleep.parallel component', () => {
     });
 
     const started = Date.now();
-    const result = await component.execute(params, context) as {
-      label: string;
-      startedAt: number;
-      endedAt: number;
-    };
+    const result = await component.execute(params, context);
     const ended = Date.now();
 
     expect(result.label).toBe('demo');

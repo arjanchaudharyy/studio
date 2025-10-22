@@ -362,3 +362,5 @@ cat "$MESSAGE_FILE" | "$@"
 };
 
 componentRegistry.register(definition);
+
+export type { Input as NotifyInput, Output as NotifyOutput };
