@@ -106,7 +106,7 @@ const dockerTimeoutSeconds = (() => {
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.notify.dispatch',
   label: 'ProjectDiscovery Notify',
-  category: 'notifications',
+  category: 'output',
   runner: {
     kind: 'docker',
     image: 'projectdiscovery/notify:latest',
@@ -344,7 +344,7 @@ printf '{"rawOutput":"%s","messageCount":%s,"providers":%s,"recipientIds":%s,"op
         label: 'Provider Configuration',
         type: 'string',
         required: true,
-        description: 'YAML defining provider credentials and channels.',
+        description: 'YAML defining provider credentials and channels (plain text YAML content).',
       },
     ],
     outputs: [
@@ -371,7 +371,9 @@ printf '{"rawOutput":"%s","messageCount":%s,"providers":%s,"recipientIds":%s,"op
     const dockerPayload = {
       messageBase64: Buffer.from(input.messages.join('\n'), 'utf8').toString('base64'),
       providerConfigBase64: Buffer.from(input.providerConfig, 'utf8').toString('base64'),
-      notifyConfigBase64: input.notifyConfig ? Buffer.from(input.notifyConfig, 'utf8').toString('base64') : '',
+      notifyConfigBase64: input.notifyConfig
+        ? Buffer.from(input.notifyConfig, 'utf8').toString('base64')
+        : '',
       providerIdsCsv: (input.providerIds ?? []).join(','),
       recipientIdsCsv: (input.recipientIds ?? []).join(','),
       messageFormatBase64: input.messageFormat ? Buffer.from(input.messageFormat, 'utf8').toString('base64') : '',

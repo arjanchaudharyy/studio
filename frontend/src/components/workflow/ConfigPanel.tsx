@@ -84,6 +84,7 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
   const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>
 
   const componentInputs = component.inputs ?? []
+  const componentOutputs = component.outputs ?? []
   const componentParameters = component.parameters ?? []
   const exampleItems = [
     component.example,
@@ -196,6 +197,33 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                         )}
                       </div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Outputs Section */}
+          {componentOutputs.length > 0 && (
+            <div>
+              <h5 className="text-sm font-semibold mb-3 text-foreground">Outputs</h5>
+              <div className="space-y-3">
+                {componentOutputs.map((output) => (
+                  <div
+                    key={output.id}
+                    className="p-3 rounded-lg border bg-background"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium">{output.label}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-2">
+                      Type: <span className="font-mono">{output.type}</span>
+                    </div>
+                    {output.description && (
+                      <p className="text-xs text-muted-foreground">
+                        {output.description}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
