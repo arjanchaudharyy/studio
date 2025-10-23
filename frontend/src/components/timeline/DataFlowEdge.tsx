@@ -63,7 +63,7 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
   const [hoveredPacket, setHoveredPacket] = useState<DataPacket | null>(null)
   const [animatedPackets, setAnimatedPackets] = useState<AnimatedPacket[]>([])
   const [edgePath, setEdgePath] = useState<string>('')
-  const animationRef = useRef<number>()
+  const animationRef = useRef<number | null>(null)
 
   const {
     currentTime,
@@ -191,13 +191,15 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
       <BaseEdge
         id={id}
         path={edgePath}
-        className={cn(
-          "stroke-2 transition-all duration-300",
-          data?.isHighlighted
-            ? "stroke-blue-500 stroke-[3]"
-            : "stroke-gray-400",
-          packets.length > 0 && "stroke-blue-400"
-        )}
+        style={{
+          stroke: data?.isHighlighted
+            ? '#3b82f6'
+            : packets.length > 0
+              ? '#60a5fa'
+              : '#9ca3af',
+          strokeWidth: data?.isHighlighted ? 3 : 2,
+          transition: 'stroke 0.3s ease, stroke-width 0.3s ease',
+        }}
         markerEnd="url(#arrowhead)"
       />
 
@@ -256,7 +258,7 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
       )}
 
       {/* Edge label showing packet count */}
-      {mode === 'review' && selectedRunId && packets.length > 0 && (
+      {mode === 'execution' && selectedRunId && packets.length > 0 && (
         <EdgeLabelRenderer>
           <div
             className="absolute pointer-events-none"

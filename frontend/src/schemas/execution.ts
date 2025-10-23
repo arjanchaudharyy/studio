@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import {
   ExecutionStatusSchema as SharedExecutionStatusSchema,
   TraceEventSchema as SharedTraceEventSchema,

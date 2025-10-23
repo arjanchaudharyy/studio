@@ -1,5 +1,5 @@
 import type { Node, Edge, Connection } from 'reactflow'
-import type { NodeData } from '@/schemas/node'
+import type { FrontendNodeData } from '@/schemas/node'
 import type { ComponentMetadata } from '@/schemas/component'
 
 export interface ValidationResult {
@@ -49,9 +49,11 @@ function areTypesCompatible(sourceType: string, targetType: string): boolean {
 /**
  * Validate connection between two nodes
  */
+
+
 export function validateConnection(
   connection: Connection,
-  nodes: Node<NodeData>[],
+  nodes: Node<FrontendNodeData>[],
   edges: Edge[],
   getComponent: (slug: string) => ComponentMetadata | null
 ): ValidationResult {
@@ -74,13 +76,18 @@ export function validateConnection(
     return { isValid: false, error: 'Source or target node not found' }
   }
 
+  const sourceComponentSlug = sourceNode.data.componentId ?? sourceNode.data.componentSlug;
+  if (!sourceComponentSlug) {
+    return { isValid: false, error: 'Source component not found' };
+  }
+  const targetComponentSlug = targetNode.data.componentId ?? targetNode.data.componentSlug;
+  if (!targetComponentSlug) {
+    return { isValid: false, error: 'Target component not found' };
+  }
+
   // Get component metadata
-  const sourceComponent = getComponent(
-    (sourceNode.data as any).componentId ?? (sourceNode.data as any).componentSlug
-  )
-  const targetComponent = getComponent(
-    (targetNode.data as any).componentId ?? (targetNode.data as any).componentSlug
-  )
+  const sourceComponent = getComponent(sourceComponentSlug);
+  const targetComponent = getComponent(targetComponentSlug);
 
   if (!sourceComponent || !targetComponent) {
     return { isValid: false, error: 'Component metadata not found' }
@@ -96,7 +103,7 @@ export function validateConnection(
   
   // Special case: Manual Trigger has dynamic outputs based on runtimeInputs parameter
   if (sourceComponent.slug === 'manual-trigger') {
-    const sourceNodeData = sourceNode.data as any
+    const sourceNodeData = sourceNode.data
     const runtimeInputsParam = sourceNodeData.parameters?.runtimeInputs
     
     if (runtimeInputsParam) {
@@ -180,7 +187,7 @@ function wouldCreateCycle(newConnection: Connection, existingEdges: Edge[]): boo
  * Get validation warnings for a node (e.g., required inputs not connected)
  */
 export function getNodeValidationWarnings(
-  node: Node<NodeData>,
+  node: Node<FrontendNodeData>,
   edges: Edge[],
   component: ComponentMetadata
 ): string[] {
@@ -201,7 +208,7 @@ export function getNodeValidationWarnings(
   // Check for required parameters that are not set
   component.parameters.forEach((param) => {
     if (param.required) {
-      const value = (node.data as any).parameters?.[param.id]
+      const value = node.data.parameters?.[param.id]
       if (value === undefined || value === null || value === '') {
         warnings.push(`Required parameter "${param.label}" is not set`)
       }

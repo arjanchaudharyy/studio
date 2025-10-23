@@ -10,11 +10,13 @@ import { CreateWorkflowSchema, UpdateWorkflowSchema } from '@/schemas/workflow'
  * Frontend: { id, type: 'workflow', position, data: { componentId, componentSlug, label, parameters, status, ... } }
  * Backend: { id, type: componentId, position, data: { label, config } }
  */
-export function serializeNodes(reactFlowNodes: ReactFlowNode<NodeData>[]): Node[] {
+import type { FrontendNodeData } from '@/schemas/node';
+
+export function serializeNodes(reactFlowNodes: ReactFlowNode<FrontendNodeData>[]): Node[] {
   return reactFlowNodes.map((node) => {
     const componentId =
-      (node.data as any).componentId ||
-      (node.data as any).componentSlug ||
+      node.data.componentId ||
+      node.data.componentSlug ||
       node.type
 
     const cleanNode = {
@@ -23,7 +25,7 @@ export function serializeNodes(reactFlowNodes: ReactFlowNode<NodeData>[]): Node[
       position: node.position,
       data: {
         label: node.data.label || '',
-        config: (node.data as any).parameters || node.data.config || {},
+        config: node.data.parameters || node.data.config || {},
       },
     }
 
@@ -61,7 +63,7 @@ export function serializeEdges(reactFlowEdges: ReactFlowEdge[]): Edge[] {
 export function serializeWorkflowForCreate(
   name: string,
   description: string | undefined,
-  nodes: ReactFlowNode<NodeData>[],
+  nodes: ReactFlowNode<FrontendNodeData>[],
   edges: ReactFlowEdge[]
 ) {
   const serializedNodes = serializeNodes(nodes)

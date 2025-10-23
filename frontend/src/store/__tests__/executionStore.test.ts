@@ -1,10 +1,13 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from 'bun:test'
+import { describe, it, beforeEach, afterEach, expect, mock } from 'bun:test'
 
 // Mock EventSource for streaming tests
 class MockEventSource {
   static events: Record<string, ((event: MessageEvent) => void)[]> = {}
   url: string
   readyState: number = 0
+  onopen: ((event: Event) => void) | null = null
+  onmessage: ((event: MessageEvent) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
 
   constructor(url: string) {
     this.url = url
@@ -45,18 +48,18 @@ class MockEventSource {
 const originalEventSource = global.EventSource
 
 const mockExecutions = {
-  start: vi.fn(),
-  getStatus: vi.fn(),
-  getTrace: vi.fn(),
-  cancel: vi.fn(),
-  stream: vi.fn(),
+  start: mock(),
+  getStatus: mock(),
+  getTrace: mock(),
+  cancel: mock(),
+  stream: mock(),
 }
 
-vi.mock('@/services/api', () => ({
+mock.module('@/services/api', () => ({
   api: {
     executions: {
       ...mockExecutions,
-      stream: vi.fn((runId: string, options?: any) => {
+      stream: mock((runId: string, _options?: any) => {
         return new MockEventSource(`/api/workflows/runs/${runId}/stream`)
       }),
     },
@@ -89,7 +92,7 @@ const event = (overrides: Partial<ExecutionLog> = {}): ExecutionLog => ({
 
 beforeEach(() => {
   useExecutionStore.getState().reset()
-  vi.resetAllMocks()
+  mock.clearAllMocks()
   MockEventSource.reset()
 
   // Mock EventSource globally

@@ -11,7 +11,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Upload, Play, Loader2 } from 'lucide-react'
+import { Play, Loader2 } from 'lucide-react'
 import { api } from '@/services/api'
 
 interface RuntimeInputDefinition {
@@ -33,7 +33,7 @@ interface RunWorkflowDialogProps {
 export function RunWorkflowDialog({
   open,
   onOpenChange,
-  workflowId,
+  workflowId: _workflowId,
   runtimeInputs,
   onRun,
 }: RunWorkflowDialogProps) {
@@ -173,9 +173,9 @@ export function RunWorkflowDialog({
               />
               {isUploading && <Loader2 className="h-4 w-4 animate-spin" />}
             </div>
-            {inputs[input.id] && (
+            {inputs[input.id] != null && (
               <p className="text-xs text-green-600">
-                ✓ File uploaded: {inputs[input.id] as string}
+                ✓ File uploaded: {(typeof inputs[input.id] === 'string' ? inputs[input.id] : String(inputs[input.id])) as React.ReactNode}
               </p>
             )}
             {input.description && (

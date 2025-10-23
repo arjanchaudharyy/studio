@@ -24,7 +24,7 @@ const formatDuration = (duration?: number) => {
   return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
 }
 
-export function ReviewRunBanner() {
+export function ExecutionRunBanner() {
   const {
     selectedRunId,
     availableRuns,
@@ -38,7 +38,7 @@ export function ReviewRunBanner() {
     availableRuns.find(run => run.id === selectedRunId)
   ), [availableRuns, selectedRunId])
 
-  if (mode !== 'review') {
+  if (mode !== 'execution') {
     return null
   }
 
@@ -80,7 +80,7 @@ export function ReviewRunBanner() {
         {selectedRun.nodeCount > 0 && <span>{selectedRun.nodeCount} nodes</span>}
         <span className="flex items-center gap-1">
           <span className={cn('h-2 w-2 rounded-full', liveLabel ? 'bg-red-500 animate-pulse' : 'bg-blue-500')} />
-          {liveLabel ? (isPlaying ? 'Live • following' : 'Live • paused') : 'Review mode'}
+          {liveLabel ? (isPlaying ? 'Live • following' : 'Live • paused') : 'Execution mode'}
         </span>
       </div>
     </div>

@@ -92,7 +92,7 @@ export interface TimelineState {
   // UI state
   showTimeline: boolean
   showEventInspector: boolean
-  timelineZoom: number // 0.5 - 2.0
+  timelineZoom: number // 1.0 - 100.0
 }
 
 export interface TimelineActions {
@@ -545,7 +545,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
     },
 
     setTimelineZoom: (zoom: number) => {
-      set({ timelineZoom: Math.max(0.5, Math.min(2.0, zoom)) })
+      set({ timelineZoom: Math.max(1.0, Math.min(100.0, zoom)) })
     },
 
     appendDataFlows: (packets: RawDataPacket[]) => {
@@ -629,7 +629,7 @@ export const initializeTimelineStore = () => {
   const { useExecutionStore } = require('./executionStore')
 
   unsubscribeExecutionStore = useExecutionStore.subscribe(
-    (state) => state.logs,
+    (state: { logs: ExecutionLog[] }) => state.logs,
     (logs: ExecutionLog[]) => {
       const executionState = useExecutionStore.getState()
       const timelineStore = useExecutionTimelineStore.getState()

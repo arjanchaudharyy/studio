@@ -324,6 +324,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SecretsController_listSecrets"];
+        put?: never;
+        post: operations["SecretsController_createSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SecretsController_getSecret"];
+        put?: never;
+        post?: never;
+        delete: operations["SecretsController_deleteSecret"];
+        options?: never;
+        head?: never;
+        patch: operations["SecretsController_updateSecret"];
+        trace?: never;
+    };
+    "/secrets/{id}/value": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SecretsController_getSecretValue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets/{id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SecretsController_rotateSecret"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/testing/webhooks": {
         parameters: {
             query?: never;
@@ -444,6 +508,53 @@ export interface components {
             inputs?: {
                 [key: string]: unknown;
             };
+        };
+        SecretVersionResponse: {
+            id: string;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            createdBy?: string;
+        };
+        SecretSummaryResponse: {
+            id: string;
+            name: string;
+            description?: string;
+            tags?: string[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Metadata about the active version (value is never returned) */
+            activeVersion?: components["schemas"]["SecretVersionResponse"];
+        };
+        SecretValueResponse: {
+            secretId: string;
+            version: number;
+            /** @description Decrypted secret value */
+            value: string;
+        };
+        CreateSecretDto: {
+            /** @description Human-readable unique secret name */
+            name: string;
+            /** @description Secret plaintext value */
+            value: string;
+            /** @description Optional description for operators */
+            description?: string;
+            /** @description Optional tags to help organize secrets */
+            tags?: string[];
+        };
+        RotateSecretDto: {
+            /** @description New plaintext secret value */
+            value: string;
+        };
+        UpdateSecretDto: {
+            /** @description Updated secret name (must remain unique) */
+            name?: string;
+            /** @description Updated description for the secret */
+            description?: string;
+            /** @description Updated tags for the secret */
+            tags?: string[];
         };
     };
     responses: never;
@@ -1011,9 +1122,14 @@ export interface operations {
                         category?: string;
                         /** @example Load files from filesystem */
                         description?: string;
+                        documentation?: string | null;
+                        documentationUrl?: string | null;
                         /** @example FileUp */
                         icon?: string;
                         logo?: string | null;
+                        isLatest?: boolean | null;
+                        deprecated?: boolean | null;
+                        example?: string | null;
                         author?: {
                             name?: string;
                             /** @enum {string} */
@@ -1033,7 +1149,7 @@ export interface operations {
                             id?: string;
                             label?: string;
                             /** @enum {string} */
-                            type?: "string" | "array" | "object" | "file" | "any";
+                            type?: "string" | "array" | "object" | "file" | "any" | "secret";
                             required?: boolean;
                             description?: string | null;
                         }[];
@@ -1041,14 +1157,14 @@ export interface operations {
                             id?: string;
                             label?: string;
                             /** @enum {string} */
-                            type?: "string" | "array" | "object" | "file" | "any";
+                            type?: "string" | "array" | "object" | "file" | "any" | "secret";
                             description?: string | null;
                         }[];
                         parameters?: {
                             id?: string;
                             label?: string;
                             /** @enum {string} */
-                            type?: "text" | "textarea" | "number" | "boolean" | "select" | "multi-select" | "json";
+                            type?: "text" | "textarea" | "number" | "boolean" | "select" | "multi-select" | "json" | "secret";
                             required?: boolean;
                             default?: unknown;
                             placeholder?: string | null;
@@ -1062,6 +1178,7 @@ export interface operations {
                             max?: number | null;
                             rows?: number | null;
                         }[];
+                        examples?: string[];
                     }[];
                 };
             };
@@ -1214,6 +1331,162 @@ export interface operations {
                 };
                 content: {
                     "application/octet-stream": string;
+                };
+            };
+        };
+    };
+    SecretsController_listSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSummaryResponse"][];
+                };
+            };
+        };
+    };
+    SecretsController_createSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSecretDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSummaryResponse"];
+                };
+            };
+        };
+    };
+    SecretsController_getSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSummaryResponse"];
+                };
+            };
+        };
+    };
+    SecretsController_deleteSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SecretsController_updateSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSecretDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSummaryResponse"];
+                };
+            };
+        };
+    };
+    SecretsController_getSecretValue: {
+        parameters: {
+            query?: {
+                /** @description Optional secret version to retrieve (defaults to active version) */
+                version?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretValueResponse"];
+                };
+            };
+        };
+    };
+    SecretsController_rotateSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateSecretDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSummaryResponse"];
                 };
             };
         };

@@ -1,9 +1,9 @@
-import { describe, it, beforeEach, expect, vi } from 'bun:test'
+import { describe, it, beforeEach, expect, mock } from 'bun:test'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { SecretSummary } from '@/schemas/secret'
 
-vi.mock('@/components/ui/dialog', () => {
+mock.module('@/components/ui/dialog', () => {
   const Dialog = ({ open, children }: any) => (open ? <>{children}</> : null)
   const DialogContent = ({ children, ...props }: any) => (
     <div role="dialog" {...props}>
@@ -28,24 +28,24 @@ vi.mock('@/components/ui/dialog', () => {
   }
 })
 
-vi.mock('@/store/secretStore', () => {
+mock.module('@/store/secretStore', () => {
   const createMockState = () => ({
     secrets: [],
     loading: false,
     error: null,
     initialized: false,
-    fetchSecrets: vi.fn().mockResolvedValue(undefined),
-    createSecret: vi.fn(),
-    rotateSecret: vi.fn(),
-    updateSecret: vi.fn(),
-    deleteSecret: vi.fn(),
-    getSecretById: vi.fn(),
-    refresh: vi.fn().mockResolvedValue(undefined),
+    fetchSecrets: mock().mockResolvedValue(undefined),
+    createSecret: mock(),
+    rotateSecret: mock(),
+    updateSecret: mock(),
+    deleteSecret: mock(),
+    getSecretById: mock(),
+    refresh: mock().mockResolvedValue(undefined),
   })
 
   const store = createMockState()
 
-  const useSecretStore = vi.fn((selector?: (state: typeof store) => unknown) => {
+  const useSecretStore = mock((selector?: (state: typeof store) => unknown) => {
     if (selector) {
       return selector(store)
     }
@@ -118,13 +118,13 @@ const setupStore = (overrides: Partial<MockStoreState> = {}) => {
     loading: false,
     error: null,
     initialized: true,
-    fetchSecrets: overrides.fetchSecrets ?? vi.fn().mockResolvedValue(undefined),
-    createSecret: overrides.createSecret ?? vi.fn().mockResolvedValue(baseSecret),
-    rotateSecret: overrides.rotateSecret ?? vi.fn().mockResolvedValue(baseSecret),
-    updateSecret: overrides.updateSecret ?? vi.fn().mockResolvedValue(baseSecret),
-    deleteSecret: overrides.deleteSecret ?? vi.fn().mockResolvedValue(undefined),
-    getSecretById: overrides.getSecretById ?? vi.fn(),
-    refresh: overrides.refresh ?? vi.fn().mockResolvedValue(undefined),
+    fetchSecrets: overrides.fetchSecrets ?? mock().mockResolvedValue(undefined),
+    createSecret: overrides.createSecret ?? mock().mockResolvedValue(baseSecret),
+    rotateSecret: overrides.rotateSecret ?? mock().mockResolvedValue(baseSecret),
+    updateSecret: overrides.updateSecret ?? mock().mockResolvedValue(baseSecret),
+    deleteSecret: overrides.deleteSecret ?? mock().mockResolvedValue(undefined),
+    getSecretById: overrides.getSecretById ?? mock(),
+    refresh: overrides.refresh ?? mock().mockResolvedValue(undefined),
   }
 
   useSecretStoreMock.__setState(state)
@@ -143,11 +143,11 @@ describe('SecretsManager edit dialog', () => {
   })
 
   it('updates metadata without rotating when only metadata changes', async () => {
-    const updateSecret = vi.fn().mockResolvedValue({
+    const updateSecret = mock().mockResolvedValue({
       ...baseSecret,
       name: 'Updated Secret',
     })
-    const rotateSecret = vi.fn().mockResolvedValue(baseSecret)
+    const rotateSecret = mock().mockResolvedValue(baseSecret)
 
     setupStore({ updateSecret, rotateSecret })
 
@@ -173,8 +173,8 @@ describe('SecretsManager edit dialog', () => {
   })
 
   it('rotates secret value without updating metadata when only new value is provided', async () => {
-    const rotateSecret = vi.fn().mockResolvedValue(baseSecret)
-    const updateSecret = vi.fn().mockResolvedValue(baseSecret)
+    const rotateSecret = mock().mockResolvedValue(baseSecret)
+    const updateSecret = mock().mockResolvedValue(baseSecret)
 
     setupStore({ rotateSecret, updateSecret })
 
@@ -201,8 +201,8 @@ describe('SecretsManager edit dialog', () => {
       name: 'Prod API Key v2',
       updatedAt: '2024-02-01T00:00:00.000Z',
     }
-    const updateSecret = vi.fn().mockResolvedValue(updatedSecret)
-    const rotateSecret = vi.fn().mockResolvedValue(updatedSecret)
+    const updateSecret = mock().mockResolvedValue(updatedSecret)
+    const rotateSecret = mock().mockResolvedValue(updatedSecret)
 
     setupStore({ updateSecret, rotateSecret })
 
@@ -229,8 +229,8 @@ describe('SecretsManager edit dialog', () => {
   })
 
   it('does not call update or rotate when no changes are submitted', async () => {
-    const updateSecret = vi.fn().mockResolvedValue(baseSecret)
-    const rotateSecret = vi.fn().mockResolvedValue(baseSecret)
+    const updateSecret = mock().mockResolvedValue(baseSecret)
+    const rotateSecret = mock().mockResolvedValue(baseSecret)
 
     setupStore({ updateSecret, rotateSecret })
 

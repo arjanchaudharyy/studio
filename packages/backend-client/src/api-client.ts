@@ -80,7 +80,7 @@ export class ShipSecApiClient {
     });
   }
 
-  async runWorkflow(id: string, body?: paths['/workflows/{id}/run']['post']['requestBody']['content']['application/json']) {
+  async runWorkflow(id: string, body: paths['/workflows/{id}/run']['post']['requestBody']['content']['application/json'] = { inputs: {} }) {
     return this.client.POST('/workflows/{id}/run', {
       params: { path: { id } },
       body,
@@ -127,7 +127,7 @@ export class ShipSecApiClient {
   async listFiles(limit: number = 100) {
     return this.client.GET('/files', {
       params: {
-        query: { limit: limit.toString() },
+        query: { limit },
       },
     });
   }

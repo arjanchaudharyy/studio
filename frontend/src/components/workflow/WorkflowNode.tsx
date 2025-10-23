@@ -69,7 +69,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>
 
   // Get styling based on visual state (prioritize timeline over node data)
-  const effectiveStatus = mode === 'review' && selectedRunId
+  const effectiveStatus = mode === 'execution' && selectedRunId
     ? visualState.status
     : (nodeData.status || 'idle')
   const nodeStyle = getNodeStyle(effectiveStatus)
@@ -79,7 +79,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   const StatusIcon = STATUS_ICONS[effectiveStatus as keyof typeof STATUS_ICONS]
 
   // Enhanced styling for timeline visualization
-  const isTimelineActive = mode === 'review' && selectedRunId && visualState.status !== 'idle'
+  const isTimelineActive = mode === 'execution' && selectedRunId && visualState.status !== 'idle'
   const shouldShowProgress = isTimelineActive && visualState.status === 'running' && visualState.progress > 0
   const hasEvents = visualState.eventCount > 0
 
