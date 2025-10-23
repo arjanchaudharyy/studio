@@ -7,10 +7,6 @@ import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
 
 type ModelProvider = 'openai' | 'gemini';
 
-const HARDCODED_OPENAI_KEY = 'sk-REPLACE_WITH_REAL_KEY';
-const HARDCODED_GEMINI_KEY = 'gm-REPLACE_WITH_REAL_KEY';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? HARDCODED_OPENAI_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? HARDCODED_GEMINI_KEY;
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL ?? '';
 const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL ?? '';
 
@@ -72,6 +68,7 @@ const chatModelSchema = z.object({
   provider: z.enum(['openai', 'gemini']).default('openai'),
   modelId: z.string().optional(),
   apiKey: z.string().optional(),
+  apiKeySecretId: z.string().optional(),
   baseUrl: z.string().optional(),
 });
 
@@ -211,11 +208,9 @@ function resolveApiKey(provider: ModelProvider, overrideKey?: string | null): st
     return trimmed;
   }
 
-  if (provider === 'gemini') {
-    return GEMINI_API_KEY;
-  }
-
-  return OPENAI_API_KEY;
+  throw new Error(
+    `Model provider API key is not configured for "${provider}". Provide chatModel.apiKeySecretId via a secret-enabled component.`,
+  );
 }
 
 function ensureSystemMessage(history: AgentMessage[], systemPrompt: string): AgentMessage[] {
@@ -422,19 +417,31 @@ Loop the Conversation State output back into the next agent invocation to keep m
 
     const effectiveProvider = (chatModel?.provider ?? 'openai') as ModelProvider;
     const effectiveModel = ensureModelName(effectiveProvider, chatModel?.modelId ?? null);
-    const effectiveApiKey = resolveApiKey(effectiveProvider, chatModel?.apiKey ?? null);
+
+    let overrideApiKey = chatModel?.apiKey ?? null;
+    if ((!overrideApiKey || overrideApiKey.trim().length === 0) && chatModel?.apiKeySecretId) {
+      if (!context.secrets) {
+        throw new Error(
+          'AI Agent requires the secrets service to resolve chatModel.apiKeySecretId. Ensure the worker injects ISecretsService.',
+        );
+      }
+      context.emitProgress('Resolving model API key from secret storage...');
+      const secret = await context.secrets.get(chatModel.apiKeySecretId);
+      if (!secret || !secret.value) {
+        throw new Error(
+          `Chat model API key secret "${chatModel.apiKeySecretId}" was not found or has no value.`,
+        );
+      }
+      overrideApiKey = secret.value.trim();
+    }
+
+    const effectiveApiKey = resolveApiKey(effectiveProvider, overrideApiKey);
     debugLog('Resolved model configuration', {
       effectiveProvider,
       effectiveModel,
-      hasExplicitApiKey: Boolean(chatModel?.apiKey),
+      hasExplicitApiKey: Boolean(chatModel?.apiKey) || Boolean(chatModel?.apiKeySecretId),
       apiKeyProvided: Boolean(effectiveApiKey),
     });
-
-    if (!effectiveApiKey || effectiveApiKey === HARDCODED_OPENAI_KEY || effectiveApiKey === HARDCODED_GEMINI_KEY) {
-      throw new Error(
-        'Model provider API key is not configured. Provide chatModel.apiKey or configure OPENAI_API_KEY / GEMINI_API_KEY.',
-      );
-    }
 
     const explicitBaseUrl = chatModel?.baseUrl?.trim();
     const baseUrl =

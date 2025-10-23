@@ -3,9 +3,6 @@ import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
 
-const HARDCODED_API_KEY = 'sk-REPLACE_WITH_REAL_KEY';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? HARDCODED_API_KEY;
-
 const DEFAULT_MODEL = 'gpt-4o-mini';
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 512;
@@ -44,7 +41,7 @@ const inputSchema = z.object({
   apiKey: z
     .string()
     .optional()
-    .describe('Explicit API key override for the OpenAI-compatible provider. Leave blank to use environment configuration.'),
+    .describe('Secret ID containing an OpenAI-compatible API key. A secret must be supplied at runtime.'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -53,6 +50,7 @@ type OpenAIChatModelConfig = {
   provider: 'openai';
   modelId: string;
   apiKey?: string;
+  apiKeySecretId?: string;
   baseUrl?: string;
 };
 
@@ -73,6 +71,7 @@ const outputSchema = z.object({
     provider: z.literal('openai'),
     modelId: z.string(),
     apiKey: z.string().optional(),
+    apiKeySecretId: z.string().optional(),
     baseUrl: z.string().optional(),
   }),
 });
@@ -156,12 +155,12 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'apiKey',
         label: 'API Key Override',
-        type: 'text',
-        required: false,
+        type: 'secret',
+        required: true,
         default: '',
-        placeholder: 'sk-...',
-        description: 'Optional API key to use for this invocation.',
-        helpText: 'Leave blank to use the worker-level OPENAI_API_KEY environment variable.',
+        placeholder: 'Select stored secret…',
+        description: 'Secret containing an OpenAI-compatible API key for this invocation.',
+        helpText: 'Store your OpenAI-compatible API key via the secrets adapter and select it here.',
       },
       {
         id: 'temperature',
@@ -197,14 +196,35 @@ const definition: ComponentDefinition<Input, Output> = {
   async execute(params, context) {
     const { systemPrompt, userPrompt, model, temperature, maxTokens, apiBaseUrl, apiKey } = params;
 
-    const overrideApiKey = apiKey?.trim() ?? '';
-    const effectiveApiKey = overrideApiKey.length > 0 ? overrideApiKey : OPENAI_API_KEY;
+    const apiKeySecretId = apiKey?.trim() ?? '';
+    let resolvedApiKey = '';
 
-    if (!effectiveApiKey || effectiveApiKey === HARDCODED_API_KEY) {
+    if (apiKeySecretId.length === 0) {
+      throw new Error('OpenAI API key secret is required but was not provided.');
+    }
+
+    if (!context.secrets) {
       throw new Error(
-        'OpenAI API key is not configured. Supply one via the API Key Override parameter or set OPENAI_API_KEY.',
+        'OpenAI Chat component requires the secrets service when an API key secret is provided.',
       );
     }
+
+    context.emitProgress('Resolving OpenAI API key from secret storage...');
+    const secret = await context.secrets.get(apiKeySecretId);
+
+    if (!secret || !secret.value) {
+      throw new Error(
+        `OpenAI API key secret "${apiKeySecretId}" was not found or does not contain a value.`,
+      );
+    }
+
+    resolvedApiKey = secret.value.trim();
+
+    if (resolvedApiKey.length === 0) {
+      throw new Error(`OpenAI API key secret "${apiKeySecretId}" is empty.`);
+    }
+
+    const effectiveApiKey = resolvedApiKey;
 
     const baseURL = apiBaseUrl?.trim() ? apiBaseUrl.trim() : process.env.OPENAI_BASE_URL;
     const client = createOpenAI({
@@ -231,7 +251,7 @@ const definition: ComponentDefinition<Input, Output> = {
       const chatModelConfig: OpenAIChatModelConfig = {
         provider: 'openai',
         modelId: model,
-        ...(overrideApiKey.length > 0 ? { apiKey: overrideApiKey } : {}),
+        ...(apiKeySecretId.length > 0 ? { apiKeySecretId } : {}),
         ...(baseURL ? { baseUrl: baseURL } : {}),
       };
 

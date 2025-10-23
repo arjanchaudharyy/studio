@@ -14,6 +14,24 @@ const googleFactoryMock = vi.fn((options: any) => (modelId: string) => ({
   modelId,
 }));
 
+const OPENAI_SECRET_ID = 'secret-openai';
+const GEMINI_SECRET_ID = 'secret-gemini';
+
+const secretsService = {
+  async get(id: string) {
+    if (id === OPENAI_SECRET_ID) {
+      return { value: 'sk-openai-from-secret', version: 1 };
+    }
+    if (id === GEMINI_SECRET_ID) {
+      return { value: 'gm-gemini-from-secret', version: 1 };
+    }
+    return null;
+  },
+  async list() {
+    return [OPENAI_SECRET_ID, GEMINI_SECRET_ID];
+  },
+};
+
 vi.mock('ai', () => ({
   generateText: generateTextMock,
   tool: toolMock,
@@ -29,35 +47,12 @@ vi.mock('@ai-sdk/google', () => ({
 
 let componentRegistry: any;
 let aiAgent: any;
-let originalOpenAiKey: string | undefined;
-let originalGeminiKey: string | undefined;
-
 beforeAll(async () => {
-  originalOpenAiKey = process.env.OPENAI_API_KEY;
-  originalGeminiKey = process.env.GEMINI_API_KEY;
-
-  process.env.OPENAI_API_KEY = 'sk-test-key';
-  process.env.GEMINI_API_KEY = 'gm-test-key';
-
   ({ componentRegistry } = await import('../index'));
   aiAgent = componentRegistry.get('core.ai.agent');
 
   if (!aiAgent) {
     throw new Error('AI agent component failed to register');
-  }
-});
-
-afterAll(() => {
-  if (originalOpenAiKey === undefined) {
-    delete process.env.OPENAI_API_KEY;
-  } else {
-    process.env.OPENAI_API_KEY = originalOpenAiKey;
-  }
-
-  if (originalGeminiKey === undefined) {
-    delete process.env.GEMINI_API_KEY;
-  } else {
-    process.env.GEMINI_API_KEY = originalGeminiKey;
   }
 });
 
@@ -80,12 +75,18 @@ describe('core.ai.agent component', () => {
     const runContext = createExecutionContext({
       runId: 'test-run-ai-agent',
       componentRef: 'ai-agent-component',
+      secrets: secretsService,
     });
 
     const params = aiAgent.inputSchema.parse({
       userInput: 'Summarise the latest findings.',
       systemPrompt: 'You are a concise security analyst.',
       memorySize: 5,
+      chatModel: {
+        provider: 'openai',
+        modelId: 'gpt-4o-mini',
+        apiKeySecretId: OPENAI_SECRET_ID,
+      },
       conversationState: {
         sessionId: 'session-123',
         messages: [
@@ -146,6 +147,9 @@ describe('core.ai.agent component', () => {
       completionTokens: 32,
       totalTokens: 96,
     });
+    expect(openAiFactoryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: 'sk-openai-from-secret' }),
+    );
   });
 
   it('wires the MCP tool endpoint when provided', async () => {
@@ -162,6 +166,7 @@ describe('core.ai.agent component', () => {
       const runContext = createExecutionContext({
         runId: 'test-run-mcp',
         componentRef: 'ai-agent-component',
+        secrets: secretsService,
       });
 
       generateTextMock.mockImplementation(async (options: any) => {
@@ -208,6 +213,11 @@ describe('core.ai.agent component', () => {
       const params = aiAgent.inputSchema.parse({
         userInput: 'Check DNS for example.com',
         mcp: { endpoint: 'https://mcp.local/session' },
+        chatModel: {
+          provider: 'openai',
+          modelId: 'gpt-4o-mini',
+          apiKeySecretId: OPENAI_SECRET_ID,
+        },
       });
 
       const result = await aiAgent.execute(params, runContext);
@@ -222,6 +232,9 @@ describe('core.ai.agent component', () => {
             'Content-Type': 'application/json',
           }),
         }),
+      );
+      expect(openAiFactoryMock).toHaveBeenCalledWith(
+        expect.objectContaining({ apiKey: 'sk-openai-from-secret' }),
       );
 
       expect(result.toolInvocations).toHaveLength(1);

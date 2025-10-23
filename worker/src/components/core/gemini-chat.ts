@@ -1,9 +1,7 @@
 import { z } from 'zod';
-import { GoogleGenAI } from '@google/genai';
+import { generateText } from 'ai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
-
-const HARDCODED_API_KEY = 'gm-REPLACE_WITH_REAL_KEY';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? HARDCODED_API_KEY;
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 1024;
@@ -42,7 +40,7 @@ const inputSchema = z.object({
   apiKey: z
     .string()
     .optional()
-    .describe('Explicit API key override for the Gemini provider. Leave blank to use environment configuration.'),
+    .describe('Secret ID containing a Gemini API key. A secret must be supplied at runtime.'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -51,6 +49,7 @@ type GeminiChatModelConfig = {
   provider: 'gemini';
   modelId: string;
   apiKey?: string;
+  apiKeySecretId?: string;
   baseUrl?: string;
 };
 
@@ -66,6 +65,7 @@ const chatModelOutputSchema = z.object({
   provider: z.literal('gemini'),
   modelId: z.string(),
   apiKey: z.string().optional(),
+  apiKeySecretId: z.string().optional(),
   baseUrl: z.string().optional(),
 });
 
@@ -156,12 +156,12 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'apiKey',
         label: 'API Key Override',
-        type: 'text',
-        required: false,
+        type: 'secret',
+        required: true,
         default: '',
-        placeholder: 'gm-...',
-        description: 'Optional API key to use for this invocation.',
-        helpText: 'Leave blank to use the worker-level GEMINI_API_KEY environment variable.',
+        placeholder: 'Select stored secret…',
+        description: 'Secret containing a Gemini API key for this invocation.',
+        helpText: 'Store your Gemini API key via the secrets adapter and select it here.',
       },
       {
         id: 'temperature',
@@ -196,19 +196,41 @@ const definition: ComponentDefinition<Input, Output> = {
   async execute(params, context) {
     const { systemPrompt, userPrompt, model, temperature, maxTokens, apiBaseUrl, apiKey } = params;
 
-    const overrideApiKey = apiKey?.trim() ?? '';
-    const effectiveApiKey = overrideApiKey.length > 0 ? overrideApiKey : GEMINI_API_KEY;
+    const apiKeySecretId = apiKey?.trim() ?? '';
 
-    if (!effectiveApiKey || effectiveApiKey === HARDCODED_API_KEY) {
+    if (apiKeySecretId.length === 0) {
+      throw new Error('Gemini API key secret is required but was not provided.');
+    }
+
+    if (!context.secrets) {
       throw new Error(
-        'Gemini API key is not configured. Supply one via the API Key Override parameter or set GEMINI_API_KEY.',
+        'Gemini Chat component requires the secrets service when an API key secret is provided.',
       );
     }
 
+    context.emitProgress('Resolving Gemini API key from secret storage...');
+    const secret = await context.secrets.get(apiKeySecretId);
+
+    if (!secret || !secret.value) {
+      throw new Error(
+        `Gemini API key secret "${apiKeySecretId}" was not found or does not contain a value.`,
+      );
+    }
+
+    const resolvedApiKey = secret.value.trim();
+
+    if (resolvedApiKey.length === 0) {
+      throw new Error(`Gemini API key secret "${apiKeySecretId}" is empty.`);
+    }
+
     const baseUrl = apiBaseUrl?.trim() ? apiBaseUrl.trim() : process.env.GEMINI_BASE_URL;
-    const client = new GoogleGenAI({
-      apiKey: effectiveApiKey,
-      ...(baseUrl ? { baseUrl } : {}),
+    const resolvedModel = model.trim();
+    const modelIdentifier = resolvedModel.startsWith('models/')
+      ? resolvedModel
+      : `models/${resolvedModel}`;
+    const client = createGoogleGenerativeAI({
+      apiKey: resolvedApiKey,
+      ...(baseUrl ? { baseURL: baseUrl } : {}),
     });
 
     context.logger.info(`[GeminiChat] Calling model ${model}`);
@@ -217,38 +239,30 @@ const definition: ComponentDefinition<Input, Output> = {
     const trimmedSystemPrompt = systemPrompt?.trim();
 
     try {
-      const prompt = trimmedSystemPrompt
-        ? `System Instructions:\n${trimmedSystemPrompt}\n\nUser Prompt:\n${userPrompt}`
-        : userPrompt;
-
-      const response = await client.models.generateContent({
-        model,
-        contents: prompt,
-        generationConfig: {
-          temperature,
-          maxOutputTokens: maxTokens,
-        },
+      const response = await generateText({
+        model: client(modelIdentifier),
+        prompt: userPrompt,
+        system: trimmedSystemPrompt ? trimmedSystemPrompt : undefined,
+        temperature,
+        maxTokens,
       });
       const responseText = response.text ?? '';
-      const finishReason =
-        response.candidates && response.candidates.length > 0
-          ? response.candidates[0]?.finishReason ?? null
-          : null;
+      const finishReason = response.finishReason ?? null;
 
       context.emitProgress('Received response from Gemini provider');
 
       const chatModelConfig: GeminiChatModelConfig = {
         provider: 'gemini',
         modelId: model,
-        ...(overrideApiKey.length > 0 ? { apiKey: overrideApiKey } : {}),
+        ...(apiKeySecretId.length > 0 ? { apiKeySecretId } : {}),
         ...(baseUrl ? { baseUrl } : {}),
       };
 
       return {
         responseText,
         finishReason,
-        rawResponse: response,
-        usage: response.usageMetadata,
+        rawResponse: response.response,
+        usage: response.usage,
         chatModel: chatModelConfig,
       };
     } catch (error) {

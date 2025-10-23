@@ -23,6 +23,9 @@ const defaultGenerationResult = {
   ],
 };
 
+const OPENAI_SECRET_ID = 'secret-openai';
+const GEMINI_SECRET_ID = 'secret-gemini';
+
 const workflowContext: ExecutionContext = {
   runId: 'test-run',
   componentRef: 'core.ai.agent',
@@ -31,6 +34,24 @@ const workflowContext: ExecutionContext = {
     error: () => {},
   },
   emitProgress: () => {},
+  metadata: {
+    runId: 'test-run',
+    componentRef: 'core.ai.agent',
+  },
+  secrets: {
+    async get(id) {
+      if (id === OPENAI_SECRET_ID) {
+        return { value: 'sk-openai-from-secret', version: 1 };
+      }
+      if (id === GEMINI_SECRET_ID) {
+        return { value: 'gm-gemini-from-secret', version: 1 };
+      }
+      return null;
+    },
+    async list() {
+      return [OPENAI_SECRET_ID, GEMINI_SECRET_ID];
+    },
+  },
 };
 
 const generateTextMock = vi.fn(async () => defaultGenerationResult);
@@ -62,9 +83,6 @@ beforeAll(async () => {
     }),
   }));
 
-  process.env.OPENAI_API_KEY = 'sk-test-openai';
-  process.env.GEMINI_API_KEY = 'gm-test-gemini';
-
   await import('../../index');
 });
 
@@ -89,6 +107,7 @@ describe('core.ai.agent component', () => {
       chatModel: {
         provider: 'openai',
         modelId: 'gpt-4o-mini',
+        apiKeySecretId: OPENAI_SECRET_ID,
       },
       mcp: {
         endpoint: '',
@@ -118,6 +137,7 @@ describe('core.ai.agent component', () => {
       provider: 'openai',
       model: 'gpt-4o-mini',
     });
+    expect(call?.model?.options?.apiKey).toBe('sk-openai-from-secret');
     expect(call?.messages?.[call.messages.length - 1]).toEqual({
       role: 'user',
       content: 'Summarise the status update.',
@@ -192,6 +212,7 @@ describe('core.ai.agent component', () => {
         provider: 'gemini',
         modelId: 'gemini-2.5-flash',
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        apiKeySecretId: GEMINI_SECRET_ID,
       },
       mcp: {
         endpoint: 'https://mcp.test/api',
@@ -225,6 +246,12 @@ describe('core.ai.agent component', () => {
       toolName: 'call_mcp_tool',
       result: { answer: 'Evidence' },
     });
+    const geminiCall = generateTextMock.mock.calls[0]?.[0];
+    expect(geminiCall?.model).toMatchObject({
+      provider: 'gemini',
+      model: 'gemini-2.5-flash',
+    });
+    expect(geminiCall?.model?.options?.apiKey).toBe('gm-gemini-from-secret');
     expect(result.responseText).toBe('Final resolved answer');
   });
 });
