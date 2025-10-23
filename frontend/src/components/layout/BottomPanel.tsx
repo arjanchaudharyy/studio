@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ChevronUp, ChevronDown, Terminal, X, ArrowDown, Pause, Play, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { MessageModal } from '@/components/ui/MessageModal'
 import { useExecutionStore } from '@/store/executionStore'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
 import { RunSelector } from '@/components/timeline/RunSelector'
@@ -12,6 +13,11 @@ export function BottomPanel() {
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<'logs' | 'results' | 'history' | 'timeline'>('logs')
   const [autoScroll, setAutoScroll] = useState(true)
+  const [fullMessageModal, setFullMessageModal] = useState<{ open: boolean; message: string; title: string }>({
+    open: false,
+    message: '',
+    title: ''
+  })
   const {
     logs: liveLogs,
     status,
@@ -100,6 +106,14 @@ export function BottomPanel() {
   const scrollToBottom = () => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     setAutoScroll(true)
+  }
+
+  const openFullMessageModal = (message: string, log: any) => {
+    setFullMessageModal({
+      open: true,
+      message,
+      title: `Full Log Message - ${log.level.toUpperCase()} - ${log.nodeId || 'System'}`
+    })
   }
 
   const getStreamingModeBadge = () => {
@@ -271,8 +285,18 @@ export function BottomPanel() {
                             [{log.nodeId}]
                           </span>
                         )}
-                        <span className={getLevelColor(log.level)}>
-                          {log.message ?? log.error?.message ?? log.type}
+                        <span className={getLevelColor(log.level)} style={{ maxWidth: '300px' }}>
+                          <span className="truncate inline-block" title={log.message ?? log.error?.message ?? log.type}>
+                            {log.message ?? log.error?.message ?? log.type}
+                          </span>
+                          {(log.message ?? log.error?.message) && (log.message ?? log.error?.message)!.length > 50 && (
+                            <button
+                              className="ml-1 text-[10px] text-blue-500 hover:text-blue-700 underline"
+                              onClick={() => openFullMessageModal((log.message ?? log.error?.message ?? log.type)!, log)}
+                            >
+                              view full
+                            </button>
+                          )}
                         </span>
                       </div>
                     ))}
@@ -310,6 +334,13 @@ export function BottomPanel() {
           )}
         </div>
       )}
+
+      <MessageModal
+        open={fullMessageModal.open}
+        onOpenChange={(open) => setFullMessageModal(prev => ({ ...prev, open }))}
+        title={fullMessageModal.title}
+        message={fullMessageModal.message}
+      />
     </div>
   )
 }

@@ -14,7 +14,7 @@ const formatTime = (timestamp: string) => {
   return date.toLocaleTimeString()
 }
 
-export function ReviewInspector() {
+export function ExecutionInspector() {
   const {
     selectedRunId,
     availableRuns,
@@ -48,26 +48,9 @@ export function ReviewInspector() {
     )
   }, [nodeStates])
 
-  const retrySummary = useMemo(() => {
-    const states = Object.values(nodeStates)
-    if (states.length === 0) {
-      return { totalRetries: 0, nodesWithRetries: 0 }
-    }
-    return states.reduce(
-      (acc, state) => {
-        if (state.retryCount > 0) {
-          acc.totalRetries += state.retryCount
-          acc.nodesWithRetries += 1
-        }
-        return acc
-      },
-      { totalRetries: 0, nodesWithRetries: 0 }
-    )
-  }, [nodeStates])
-
   const statusBadge = selectedRun ? (
     <Badge
-      variant={selectedRun.status === 'running' ? 'default' : selectedRun.status === 'failed' ? 'destructive' : 'secondary'}
+      variant={selectedRun.status === 'RUNNING' ? 'default' : selectedRun.status === 'FAILED' ? 'destructive' : 'secondary'}
       className="text-xs"
     >
       {selectedRun.status.toUpperCase()}
@@ -156,7 +139,7 @@ export function ReviewInspector() {
                 )}
               </div>
               <span className={cn('font-medium', playbackMode === 'live' ? 'text-green-600' : 'text-blue-600')}>
-                {playbackMode === 'live' ? (isPlaying ? 'Live (following)' : 'Live paused') : 'Review playback'}
+                {playbackMode === 'live' ? (isPlaying ? 'Live (following)' : 'Live paused') : 'Execution playback'}
               </span>
             </div>
             <div className="flex-1 overflow-y-auto px-3 py-2 pb-20 space-y-2 text-xs font-mono bg-background/40">

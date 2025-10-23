@@ -5,6 +5,7 @@ module.exports = {
       cwd: __dirname + '/backend',
       script: 'bun',
       args: 'run dev',
+      interpreter: 'none',
       env_file: __dirname + '/backend/.env',
     },
     {

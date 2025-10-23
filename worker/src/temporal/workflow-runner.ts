@@ -21,6 +21,8 @@ import {
 } from './workflow-scheduler';
 import { buildActionParams } from './input-resolver';
 
+type RegisteredComponent = NonNullable<ReturnType<typeof componentRegistry.get>>;
+
 export interface ExecuteWorkflowOptions {
   runId?: string;
   storage?: IFileStorageService;
@@ -102,7 +104,29 @@ export async function executeWorkflow(
         },
       });
 
-      const { params, warnings } = buildActionParams(action, results);
+      const { params, warnings, manualOverrides } = buildActionParams(action, results, {
+        componentMetadata: component.metadata,
+      });
+
+      for (const override of manualOverrides) {
+        options.trace?.record({
+          type: 'NODE_PROGRESS',
+          runId,
+          nodeRef: action.ref,
+          timestamp: new Date().toISOString(),
+          level: 'debug',
+          message: `Input '${override.target}' using manual value`,
+          data: { sourceRef: 'manual' },
+          context: {
+            runId,
+            componentRef: action.ref,
+            streamId,
+            joinStrategy,
+            triggeredBy,
+            failure,
+          },
+        });
+      }
 
       for (const warning of warnings) {
         options.trace?.record({
@@ -170,7 +194,7 @@ export async function executeWorkflow(
           runId,
           nodeRef: action.ref,
           timestamp: new Date().toISOString(),
-          outputSummary: output,
+          outputSummary: maskSecretOutputs(component, output),
           level: 'info',
           context: {
             runId,
@@ -220,4 +244,27 @@ export async function executeWorkflow(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function maskSecretOutputs(component: RegisteredComponent, output: unknown): unknown {
+  const secretPorts = component.metadata?.outputs?.filter((port) => port.type === 'secret') ?? [];
+  if (secretPorts.length === 0) {
+    return output;
+  }
+
+  if (secretPorts.some((port) => port.id === '__self__')) {
+    return '***';
+  }
+
+  if (output && typeof output === 'object' && !Array.isArray(output)) {
+    const clone = { ...(output as Record<string, unknown>) };
+    for (const port of secretPorts) {
+      if (Object.prototype.hasOwnProperty.call(clone, port.id)) {
+        clone[port.id] = '***';
+      }
+    }
+    return clone;
+  }
+
+  return '***';
 }

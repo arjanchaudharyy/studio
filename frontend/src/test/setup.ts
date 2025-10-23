@@ -40,6 +40,5 @@ if (typeof globalThis.EventSource === 'undefined') {
     this.readyState = 2
   }
 
-  // @ts-expect-error mock assignment for tests
   globalThis.EventSource = MockEventSource as any
 }

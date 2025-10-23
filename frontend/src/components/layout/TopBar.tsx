@@ -2,7 +2,17 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ArrowLeft, Save, Play, StopCircle, PencilLine, MonitorPlay, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import {
+  ArrowLeft,
+  Save,
+  Play,
+  StopCircle,
+  PencilLine,
+  MonitorPlay,
+  PanelLeftClose,
+  PanelLeftOpen,
+  KeyRound,
+} from 'lucide-react'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
@@ -65,6 +75,14 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
 
       <div className="flex items-center gap-3 ml-auto">
         <Button
+          variant="outline"
+          onClick={() => navigate('/secrets')}
+          className="gap-2"
+        >
+          <KeyRound className="h-4 w-4" />
+          Secrets
+        </Button>
+        <Button
           variant="ghost"
           size="icon"
           className="inline-flex"
@@ -100,19 +118,19 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
             </span>
           </Button>
           <Button
-            variant={mode === 'review' ? 'default' : 'ghost'}
+            variant={mode === 'execution' ? 'default' : 'ghost'}
             size="sm"
             className="h-9 px-3 gap-2 rounded-none border-l border-border/50"
-            onClick={() => setMode('review')}
-            aria-pressed={mode === 'review'}
+            onClick={() => setMode('execution')}
+            aria-pressed={mode === 'execution'}
           >
             <MonitorPlay className="h-4 w-4" />
             <span className="flex flex-col leading-tight text-left">
-              <span className="text-xs font-semibold">Review</span>
+              <span className="text-xs font-semibold">Execution</span>
               <span
                 className={cn(
                   'text-[10px]',
-                  mode === 'review' ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                  mode === 'execution' ? 'text-primary-foreground/80' : 'text-muted-foreground'
                 )}
               >
                 Inspect executions

@@ -575,3 +575,5 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
 };
 
 componentRegistry.register(definition);
+
+export type { Input as AmassInput, Output as AmassOutput };

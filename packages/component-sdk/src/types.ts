@@ -61,7 +61,15 @@ export interface LogEventInput {
   metadata?: ExecutionContextMetadata;
 }
 
-export type ComponentPortType = 'string' | 'array' | 'object' | 'file' | 'any';
+export type ComponentPortType =
+  | 'string'
+  | 'array'
+  | 'object'
+  | 'file'
+  | 'any'
+  | 'secret'
+  | 'number'
+  | 'boolean';
 
 export interface ComponentPortMetadata {
   id: string;
@@ -69,6 +77,7 @@ export interface ComponentPortMetadata {
   type: ComponentPortType;
   required?: boolean;
   description?: string;
+  valuePriority?: 'manual-first' | 'connection-first';
 }
 
 export type ComponentParameterType =
@@ -78,7 +87,8 @@ export type ComponentParameterType =
   | 'boolean'
   | 'select'
   | 'multi-select'
-  | 'json';
+  | 'json'
+  | 'secret';
 
 export interface ComponentParameterOption {
   label: string;

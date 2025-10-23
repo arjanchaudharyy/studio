@@ -1,8 +1,27 @@
 import { z } from 'zod';
 import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
 
+// Support both direct text and file objects from manual trigger
+const manualTriggerFileSchema = z.object({
+  id: z.string(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  size: z.number(),
+  storageKey: z.string(),
+  uploadedAt: z.string(),
+});
+
+// Support file objects from file-loader component
+const fileLoaderFileSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  mimeType: z.string(),
+  size: z.number(),
+  content: z.string(), // base64 encoded
+});
+
 const inputSchema = z.object({
-  text: z.string().describe('Text content to split'),
+  text: z.union([z.string(), manualTriggerFileSchema, fileLoaderFileSchema]).describe('Text content to split (string or file object)'),
   separator: z.string().default('\n').describe('Separator to split by'),
 });
 
@@ -45,7 +64,7 @@ const definition: ComponentDefinition<Input, Output> = {
         label: 'Text Input',
         type: 'string',
         required: true,
-        description: 'Text content to be split into lines or items.',
+        description: 'Text content to be split into lines or items. Accepts either plain text string or file object with content property.',
       },
     ],
     outputs: [
@@ -88,8 +107,26 @@ const definition: ComponentDefinition<Input, Output> = {
       .replace(/\\t/g, '\t')
       .replace(/\\r/g, '\r');
 
+    // Extract text content from input (handle three different input types)
+    let textContent: string;
+    if (typeof params.text === 'string') {
+      // Case 1: Direct text input
+      textContent = params.text;
+      context.logger.info(`[TextSplitter] Processing direct text input (${textContent.length} characters)`);
+    } else if ('content' in params.text) {
+      // Case 2: File object from file-loader (has base64 content)
+      const base64Content = params.text.content;
+      textContent = Buffer.from(base64Content, 'base64').toString('utf-8');
+      context.logger.info(`[TextSplitter] Processing file-loader input: ${params.text.name} (${textContent.length} characters)`);
+    } else {
+      // Case 3: File object from manual trigger (only metadata, no content)
+      throw new Error(`File object from manual trigger has no content. File ID: ${params.text.id}, Name: ${params.text.fileName}.
+Please use a File Loader component to extract file content before passing to Text Splitter.
+Expected workflow: Manual Trigger → File Loader → Text Splitter`);
+    }
+
     // Split the text
-    const items = params.text
+    const items = textContent
       .split(separator)
       .map((item) => item.trim())
       .filter((item) => item.length > 0); // Remove empty strings

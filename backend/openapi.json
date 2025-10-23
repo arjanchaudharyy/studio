@@ -1076,11 +1076,31 @@
                         "type": "string",
                         "example": "Load files from filesystem"
                       },
+                      "documentation": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "documentationUrl": {
+                        "type": "string",
+                        "nullable": true
+                      },
                       "icon": {
                         "type": "string",
                         "example": "FileUp"
                       },
                       "logo": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "isLatest": {
+                        "type": "boolean",
+                        "nullable": true
+                      },
+                      "deprecated": {
+                        "type": "boolean",
+                        "nullable": true
+                      },
+                      "example": {
                         "type": "string",
                         "nullable": true
                       },
@@ -1147,7 +1167,8 @@
                                 "array",
                                 "object",
                                 "file",
-                                "any"
+                                "any",
+                                "secret"
                               ]
                             },
                             "required": {
@@ -1178,7 +1199,8 @@
                                 "array",
                                 "object",
                                 "file",
-                                "any"
+                                "any",
+                                "secret"
                               ]
                             },
                             "description": {
@@ -1208,7 +1230,8 @@
                                 "boolean",
                                 "select",
                                 "multi-select",
-                                "json"
+                                "json",
+                                "secret"
                               ]
                             },
                             "required": {
@@ -1255,6 +1278,12 @@
                               "nullable": true
                             }
                           }
+                        }
+                      },
+                      "examples": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
                         }
                       }
                     }
@@ -1479,6 +1508,227 @@
         },
         "tags": [
           "files"
+        ]
+      }
+    },
+    "/secrets": {
+      "get": {
+        "operationId": "SecretsController_listSecrets",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SecretSummaryResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      },
+      "post": {
+        "operationId": "SecretsController_createSecret",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSecretDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSummaryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      }
+    },
+    "/secrets/{id}": {
+      "get": {
+        "operationId": "SecretsController_getSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSummaryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      },
+      "patch": {
+        "operationId": "SecretsController_updateSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSecretDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSummaryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      },
+      "delete": {
+        "operationId": "SecretsController_deleteSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      }
+    },
+    "/secrets/{id}/value": {
+      "get": {
+        "operationId": "SecretsController_getSecretValue",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "Optional secret version to retrieve (defaults to active version)",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretValueResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      }
+    },
+    "/secrets/{id}/rotate": {
+      "put": {
+        "operationId": "SecretsController_rotateSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateSecretDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSummaryResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "secrets"
         ]
       }
     },
@@ -1842,6 +2092,151 @@
               "type": "string"
             },
             "additionalProperties": {}
+          }
+        }
+      },
+      "SecretVersionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "createdAt"
+        ]
+      },
+      "SecretSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "activeVersion": {
+            "description": "Metadata about the active version (value is never returned)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SecretVersionResponse"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "SecretValueResponse": {
+        "type": "object",
+        "properties": {
+          "secretId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          },
+          "value": {
+            "type": "string",
+            "description": "Decrypted secret value"
+          }
+        },
+        "required": [
+          "secretId",
+          "version",
+          "value"
+        ]
+      },
+      "CreateSecretDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Human-readable unique secret name"
+          },
+          "value": {
+            "type": "string",
+            "description": "Secret plaintext value"
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description for operators"
+          },
+          "tags": {
+            "description": "Optional tags to help organize secrets",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ]
+      },
+      "RotateSecretDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "description": "New plaintext secret value"
+          }
+        },
+        "required": [
+          "value"
+        ]
+      },
+      "UpdateSecretDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Updated secret name (must remain unique)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Updated description for the secret"
+          },
+          "tags": {
+            "description": "Updated tags for the secret",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

@@ -9,7 +9,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import '../src/components';
 import { executeWorkflow } from '../src/temporal/workflow-runner';
 import type { WorkflowDefinition } from '../src/temporal/types';
-import { FileStorageAdapter, TraceAdapter } from '../src/adapters';
+import { FileStorageAdapter, TraceAdapter, SecretsAdapter } from '../src/adapters';
 import * as schema from '../src/adapters/schema';
 
 async function loadDefinition(pool: Pool, workflowId: string): Promise<WorkflowDefinition> {
@@ -54,6 +54,7 @@ async function main() {
 
   const storage = new FileStorageAdapter(minioClient, db, minioBucket);
   const trace = new TraceAdapter(db);
+  const secrets = new SecretsAdapter(db);
 
   const definition = await loadDefinition(pool, workflowId);
 
@@ -62,7 +63,7 @@ async function main() {
   const result = await executeWorkflow(
     definition,
     { inputs: { input1: fileId } },
-    { runId, storage, trace },
+    { runId, storage, trace, secrets },
   );
 
   console.log(JSON.stringify({ runId, result }, null, 2));

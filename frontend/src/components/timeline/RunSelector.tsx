@@ -63,8 +63,8 @@ export function RunSelector() {
 
   const {
     runId: currentLiveRunId,
-    status: currentLiveStatus,
-    workflowId: currentWorkflowId,
+    status: _currentLiveStatus,
+    workflowId: _currentWorkflowId,
   } = useExecutionStore()
 
   // Load runs on mount

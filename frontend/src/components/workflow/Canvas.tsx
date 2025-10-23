@@ -65,7 +65,7 @@ export function Canvas({
   const applyEdgesChange = onEdgesChange
 
   useEffect(() => {
-    if (mode === 'review') {
+    if (mode === 'execution') {
       setSelectedNode(null)
     }
     if (mode === 'design') {
@@ -90,9 +90,10 @@ export function Canvas({
       setNodes((nds) =>
         nds.map((node) => {
           const edgeToRemove = removedEdges.find(edge => edge && edge.target === node.id)
-          if (edgeToRemove && edgeToRemove.targetHandle && node.data.inputs?.[edgeToRemove.targetHandle]) {
+          if (edgeToRemove && edgeToRemove.targetHandle && (node.data.inputs as Record<string, unknown>)?.[edgeToRemove.targetHandle]) {
             const targetHandle = edgeToRemove.targetHandle
-            const { [targetHandle]: removed, ...remainingInputs } = node.data.inputs
+            const inputs = node.data.inputs || {}
+            const { [targetHandle]: removed, ...remainingInputs } = inputs as Record<string, unknown>
             return {
               ...node,
               data: {
@@ -169,12 +170,12 @@ export function Canvas({
                   data: {
                     ...node.data,
                     inputs: {
-                      ...node.data.inputs,
+                      ...(node.data.inputs as Record<string, unknown>),
                       [targetHandle]: {
                         source: params.source,
                         output: params.sourceHandle,
                       },
-                    },
+                    } as Record<string, unknown>,
                   },
                 }
               : node
@@ -279,22 +280,12 @@ export function Canvas({
 
   // Handle node click for config panel
   const onNodeClick: NodeMouseHandler = useCallback((event, node) => {
-    if (mode === 'review') {
+    if (mode === 'execution') {
       event.preventDefault()
       event.stopPropagation()
 
       selectNode(node.id)
-
-      const { events, seek } = useExecutionTimelineStore.getState()
-      const nodeEvents = events.filter((timelineEvent) => timelineEvent.nodeId === node.id)
-
-      if (nodeEvents.length > 0) {
-        const latestEvent = nodeEvents[nodeEvents.length - 1]
-        selectEvent(latestEvent.id)
-        seek(latestEvent.offsetMs)
-      } else {
-        selectEvent(null)
-      }
+      selectEvent(null) // Just select the node, don't seek to events
 
       return
     }

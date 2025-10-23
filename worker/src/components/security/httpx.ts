@@ -567,4 +567,6 @@ function normaliseString(value: unknown): string | null {
 
 componentRegistry.register(definition);
 
+export type { Input as HttpxInput, Output as HttpxOutput };
+
 export { parseHttpxOutput };

@@ -122,3 +122,5 @@ const definition: ComponentDefinition<Input, Output> = {
 };
 
 componentRegistry.register(definition);
+
+export type { Input as FileLoaderInput, Output as FileLoaderOutput };

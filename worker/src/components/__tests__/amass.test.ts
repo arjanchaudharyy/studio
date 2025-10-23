@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'bun:test';
 import * as sdk from '@shipsec/component-sdk';
 import { componentRegistry } from '../index';
+import type { AmassInput, AmassOutput } from '../security/amass';
 
 describe('amass component', () => {
   beforeAll(async () => {
@@ -12,33 +13,19 @@ describe('amass component', () => {
   });
 
   it('should be registered with correct metadata', () => {
-    const component = componentRegistry.get('shipsec.amass.enum');
+    const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
     expect(component).toBeDefined();
-    expect(component?.label).toBe('Amass Enumeration');
-    expect(component?.category).toBe('discovery');
+    expect(component!.label).toBe('Amass Enumeration');
+    expect(component!.category).toBe('discovery');
   });
 
   it('should provide default options when omitted', () => {
-    const component = componentRegistry.get('shipsec.amass.enum');
+    const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
     if (!component) throw new Error('Component not registered');
 
     const params = component.inputSchema.parse({
       domains: ['example.com'],
-    }) as {
-      domains: string[];
-      active: boolean;
-      bruteForce: boolean;
-      includeIps: boolean;
-      enableAlterations: boolean;
-      recursive: boolean;
-      verbose: boolean;
-      demoMode: boolean;
-      timeoutMinutes?: number;
-      minForRecursive?: number;
-      maxDepth?: number;
-      dnsQueryRate?: number;
-      customFlags?: string;
-    };
+    });
 
     expect(params.active).toBe(false);
     expect(params.bruteForce).toBe(false);
@@ -55,7 +42,7 @@ describe('amass component', () => {
   });
 
   it('should parse raw JSON response returned as string', async () => {
-    const component = componentRegistry.get('shipsec.amass.enum');
+    const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
     if (!component) throw new Error('Component not registered');
 
     const context = sdk.createExecutionContext({
@@ -93,11 +80,11 @@ describe('amass component', () => {
 
     const result = await component.execute(params, context);
 
-    expect(result).toEqual(JSON.parse(payload));
+    expect(result).toEqual(component.outputSchema.parse(JSON.parse(payload)));
   });
 
   it('should propagate structured output when docker returns JSON', async () => {
-    const component = componentRegistry.get('shipsec.amass.enum');
+    const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
     if (!component) throw new Error('Component not registered');
 
     const context = sdk.createExecutionContext({
@@ -112,7 +99,7 @@ describe('amass component', () => {
       timeoutMinutes: 2,
     });
 
-    const payload = {
+    const payload = component.outputSchema.parse({
       subdomains: ['login.example.com', 'dev.example.org'],
       rawOutput: 'login.example.com\nlogin.example.com 93.184.216.34\ndev.example.org',
       domainCount: 2,
@@ -131,7 +118,7 @@ describe('amass component', () => {
         dnsQueryRate: null,
         customFlags: null,
       },
-    };
+    });
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(payload);
 
@@ -140,7 +127,7 @@ describe('amass component', () => {
   });
 
   it('should configure docker runner for owaspamass/amass image', () => {
-    const component = componentRegistry.get('shipsec.amass.enum');
+    const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
     if (!component) throw new Error('Component not registered');
 
     expect(component.runner.kind).toBe('docker');

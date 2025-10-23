@@ -3,12 +3,29 @@
  * Requires Docker daemon to be running
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { componentRegistry } from '@shipsec/component-sdk';
+import { componentRegistry, createExecutionContext } from '@shipsec/component-sdk';
 import type { ExecutionContext } from '@shipsec/component-sdk';
+import type { SubfinderInput, SubfinderOutput } from '../subfinder';
 import '../subfinder'; // Register the component
 
 const enableDockerIntegration = process.env.ENABLE_DOCKER_TESTS === 'true';
-const dockerDescribe = enableDockerIntegration ? describe : describe.skip;
+const dockerAvailable = (() => {
+  try {
+    const result = Bun.spawnSync(['docker', 'version']);
+    return result.exitCode === 0;
+  } catch {
+    return false;
+  }
+})();
+
+const shouldRunDockerTests = enableDockerIntegration && dockerAvailable;
+if (!shouldRunDockerTests) {
+  console.warn(
+    'Skipping subfinder integration tests. Ensure ENABLE_DOCKER_TESTS=true and Docker is available to enable.',
+  );
+}
+
+const dockerDescribe = shouldRunDockerTests ? describe : describe.skip;
 
 dockerDescribe('Subfinder Integration (Docker)', () => {
   let context: ExecutionContext;
@@ -16,41 +33,23 @@ dockerDescribe('Subfinder Integration (Docker)', () => {
 
   beforeEach(() => {
     logs.length = 0;
-    context = {
+    context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'shipsec.subfinder.run',
-      metadata: {
-        runId: 'test-run',
-        componentRef: 'shipsec.subfinder.run',
+      logCollector: (entry) => {
+        logs.push(`${entry.stream.toUpperCase()}: ${entry.message}`);
       },
-      logger: {
-        info: (...args: unknown[]) => {
-          const msg = args.join(' ');
-          logs.push(`INFO: ${msg}`);
-          console.log(msg);
-        },
-        error: (...args: unknown[]) => {
-          const msg = args.join(' ');
-          logs.push(`ERROR: ${msg}`);
-          console.error(msg);
-        },
-      },
-      emitProgress: (progress) => {
-        const message = typeof progress === 'string' ? progress : progress.message;
-        logs.push(`PROGRESS: ${message}`);
-        console.log(`Progress: ${message}`);
-      },
-    };
+    });
   });
 
   test('should discover subdomains for a known domain using real subfinder', async () => {
-    const component = componentRegistry.get('shipsec.subfinder.run');
+    const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
     expect(component).toBeDefined();
 
-    const params = { domains: ['example.com'] };
-    
-    // Use the component's execute method which will handle raw output parsing
-    const result = await component!.execute(params, context) as any;
+    const typedComponent = component!;
+    const params = typedComponent.inputSchema.parse({ domains: ['example.com'] });
+
+    const result = typedComponent.outputSchema.parse(await typedComponent.execute(params, context));
 
     console.log('Subfinder result:', result);
 
@@ -73,11 +72,13 @@ dockerDescribe('Subfinder Integration (Docker)', () => {
   }, 120000); // 2 minute timeout for Docker pull + execution
 
   test('should handle invalid domain gracefully', async () => {
-    const component = componentRegistry.get('shipsec.subfinder.run');
-    const params = { domains: ['this-domain-definitely-does-not-exist-12345.invalid'] };
-    
-    // Use the component's execute method which will handle raw output parsing
-    const result = await component!.execute(params, context) as any;
+    const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
+    const typedComponent = component!;
+    const params = typedComponent.inputSchema.parse({
+      domains: ['this-domain-definitely-does-not-exist-12345.invalid'],
+    });
+
+    const result = typedComponent.outputSchema.parse(await typedComponent.execute(params, context));
 
     expect(result).toHaveProperty('subdomains');
     expect(Array.isArray(result.subdomains)).toBe(true);

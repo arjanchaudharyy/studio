@@ -112,7 +112,7 @@ import { z } from 'zod'
 export const InputPortSchema = z.object({
   id: z.string(),                          // "domain"
   label: z.string(),                       // "Target Domain"
-  type: z.enum(['string', 'array', 'object', 'file', 'any']),
+  type: z.enum(['string', 'array', 'object', 'file', 'any', 'secret']),
   required: z.boolean().default(false),
   description: z.string().optional(),
   
@@ -127,7 +127,7 @@ export const InputPortSchema = z.object({
 export const OutputPortSchema = z.object({
   id: z.string(),                          // "subdomains"
   label: z.string(),                       // "Discovered Subdomains"
-  type: z.enum(['string', 'array', 'object', 'file', 'any']),
+  type: z.enum(['string', 'array', 'object', 'file', 'any', 'secret']),
   description: z.string().optional(),
   format: z.string().optional(),           // "application/json"
 })

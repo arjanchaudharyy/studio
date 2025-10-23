@@ -80,7 +80,7 @@ export class ShipSecApiClient {
     });
   }
 
-  async runWorkflow(id: string, body?: paths['/workflows/{id}/run']['post']['requestBody']['content']['application/json']) {
+  async runWorkflow(id: string, body: paths['/workflows/{id}/run']['post']['requestBody']['content']['application/json'] = { inputs: {} }) {
     return this.client.POST('/workflows/{id}/run', {
       params: { path: { id } },
       body,
@@ -127,7 +127,7 @@ export class ShipSecApiClient {
   async listFiles(limit: number = 100) {
     return this.client.GET('/files', {
       params: {
-        query: { limit: limit.toString() },
+        query: { limit },
       },
     });
   }
@@ -178,6 +178,61 @@ export class ShipSecApiClient {
 
   async getComponent(id: string) {
     return this.client.GET('/components/{id}', {
+      params: { path: { id } },
+    });
+  }
+
+  // ===== Secrets =====
+
+  async listSecrets() {
+    return this.client.GET('/secrets');
+  }
+
+  async getSecret(id: string) {
+    return this.client.GET('/secrets/{id}', {
+      params: { path: { id } },
+    });
+  }
+
+  async getSecretValue(id: string, version?: number) {
+    return this.client.GET('/secrets/{id}/value', {
+      params: {
+        path: { id },
+        query: version !== undefined ? { version } : undefined,
+      },
+    });
+  }
+
+  async createSecret(
+    secret: paths['/secrets']['post']['requestBody']['content']['application/json'],
+  ) {
+    return this.client.POST('/secrets', {
+      body: secret,
+    });
+  }
+
+  async rotateSecret(
+    id: string,
+    payload: paths['/secrets/{id}/rotate']['put']['requestBody']['content']['application/json'],
+  ) {
+    return this.client.PUT('/secrets/{id}/rotate', {
+      params: { path: { id } },
+      body: payload,
+    });
+  }
+
+  async updateSecret(
+    id: string,
+    payload: paths['/secrets/{id}']['patch']['requestBody']['content']['application/json'],
+  ) {
+    return this.client.PATCH('/secrets/{id}', {
+      params: { path: { id } },
+      body: payload,
+    });
+  }
+
+  async deleteSecret(id: string) {
+    return this.client.DELETE('/secrets/{id}', {
       params: { path: { id } },
     });
   }

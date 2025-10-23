@@ -9,30 +9,13 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { componentRegistry, runComponentWithRunner } from '@shipsec/component-sdk';
 import type { ComponentDefinition, ExecutionContext } from '@shipsec/component-sdk';
+import type { WebhookInput, WebhookOutput } from '../webhook';
 import '../../index'; // Register all components
 
 const enableWebhookIntegration = process.env.ENABLE_WEBHOOK_TESTS === 'true';
 const webhookDescribe = enableWebhookIntegration ? describe : describe.skip;
 
 type WebhookTestTarget = { baseUrl: string };
-
-type WebhookComponentInput = {
-  url: string;
-  payload: Record<string, unknown>;
-  headers?: Record<string, string>;
-  method?: 'POST' | 'PUT' | 'PATCH';
-  timeoutMs?: number;
-  retries?: number;
-};
-
-type WebhookComponentOutput = {
-  status: 'sent' | 'failed';
-  statusCode?: number;
-  statusText?: string;
-  responseBody?: string;
-  error?: string;
-  attempts: number;
-};
 
 interface WebhookRecord {
   id: string;
@@ -55,20 +38,17 @@ interface ResolvedTarget {
 webhookDescribe('Webhook Integration (Real HTTP)', () => {
   let target: WebhookTestTarget;
   let cleanup: (() => Promise<void>) | undefined;
-  let component!: ComponentDefinition<WebhookComponentInput, WebhookComponentOutput>;
+  let component!: ComponentDefinition<WebhookInput, WebhookOutput>;
 
   beforeAll(async () => {
     const resolved = await resolveTestTarget();
     target = resolved.target;
     cleanup = resolved.cleanup;
-    const registryComponent = componentRegistry.get('core.webhook.post');
+    const registryComponent = componentRegistry.get<WebhookInput, WebhookOutput>('core.webhook.post');
     if (!registryComponent) {
       throw new Error('core.webhook.post component is not registered');
     }
-    component = registryComponent as ComponentDefinition<
-      WebhookComponentInput,
-      WebhookComponentOutput
-    >;
+    component = registryComponent;
     await clearLocalRecords(target);
   });
 
@@ -106,13 +86,15 @@ webhookDescribe('Webhook Integration (Real HTTP)', () => {
       data: { value: 42 },
     };
 
+    const input = component.inputSchema.parse({
+      url: target.baseUrl,
+      payload,
+    });
+
     const result = await runComponentWithRunner(
       component.runner,
       component.execute,
-      {
-        url: target.baseUrl,
-        payload,
-      },
+      input,
       context,
     );
 
@@ -129,14 +111,16 @@ webhookDescribe('Webhook Integration (Real HTTP)', () => {
   }, 30000);
 
   test('should handle 404 errors correctly', async () => {
+    const input = component.inputSchema.parse({
+      url: `${target.baseUrl}?status=404`,
+      payload: { test: true },
+      retries: 2,
+    });
+
     const result = await runComponentWithRunner(
       component.runner,
       component.execute,
-      {
-        url: `${target.baseUrl}?status=404`,
-        payload: { test: true },
-        retries: 2,
-      },
+      input,
       context,
     );
 
@@ -151,14 +135,16 @@ webhookDescribe('Webhook Integration (Real HTTP)', () => {
       Authorization: 'Bearer test-token',
     };
 
+    const input = component.inputSchema.parse({
+      url: target.baseUrl,
+      payload: { test: true },
+      headers,
+    });
+
     const result = await runComponentWithRunner(
       component.runner,
       component.execute,
-      {
-        url: target.baseUrl,
-        payload: { test: true },
-        headers,
-      },
+      input,
       context,
     );
 
@@ -171,14 +157,16 @@ webhookDescribe('Webhook Integration (Real HTTP)', () => {
   }, 30000);
 
   test('should support PUT method', async () => {
+    const input = component.inputSchema.parse({
+      url: `${target.baseUrl}?status=200`,
+      method: 'PUT',
+      payload: { updated: true },
+    });
+
     const result = await runComponentWithRunner(
       component.runner,
       component.execute,
-      {
-        url: `${target.baseUrl}?status=200`,
-        method: 'PUT',
-        payload: { updated: true },
-      },
+      input,
       context,
     );
 
@@ -188,15 +176,17 @@ webhookDescribe('Webhook Integration (Real HTTP)', () => {
   }, 30000);
 
   test('should handle retryable errors gracefully', async () => {
+    const input = component.inputSchema.parse({
+      url: `${target.baseUrl}?status=500`,
+      payload: { test: true },
+      retries: 1,
+      timeoutMs: 2000,
+    });
+
     const result = await runComponentWithRunner(
       component.runner,
       component.execute,
-      {
-        url: `${target.baseUrl}?status=500`,
-        payload: { test: true },
-        retries: 1,
-        timeoutMs: 2000,
-      },
+      input,
       context,
     );
 
@@ -210,7 +200,14 @@ async function resolveTestTarget(): Promise<ResolvedTarget> {
   try {
     const response = await fetch(DEFAULT_TEST_WEBHOOK_URL, { method: 'GET' });
     if (response.ok) {
-      return { target: { baseUrl: DEFAULT_TEST_WEBHOOK_URL } };
+      const probe = await fetch(`${DEFAULT_TEST_WEBHOOK_URL}?status=204`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ probe: true }),
+      });
+      if (probe.ok || probe.status === 204) {
+        return { target: { baseUrl: DEFAULT_TEST_WEBHOOK_URL } };
+      }
     }
   } catch {
     // Continue to inline server fallback

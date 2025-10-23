@@ -44,7 +44,7 @@ describe('ExecutionContext', () => {
 
   it('should inject secrets service', () => {
     const mockSecrets: ISecretsService = {
-      get: async (key: string) => `secret-${key}`,
+      get: async (key: string) => ({ value: `secret-${key}`, version: 1 }),
       list: async () => ['key1', 'key2'],
     };
 

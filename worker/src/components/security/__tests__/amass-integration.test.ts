@@ -4,7 +4,8 @@
  * Enable by setting RUN_SECURITY_DOCKER_TESTS=1 or RUN_AMASS_TESTS=1.
  */
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { componentRegistry, type ExecutionContext } from '@shipsec/component-sdk';
+import { componentRegistry, createExecutionContext, type ExecutionContext } from '@shipsec/component-sdk';
+import type { AmassInput, AmassOutput } from '../amass';
 import '../amass';
 
 const shouldRunIntegration =
@@ -16,37 +17,28 @@ const shouldRunIntegration =
 
   beforeEach(() => {
     logs.length = 0;
-    context = {
+    context = createExecutionContext({
       runId: 'test-run',
       componentRef: 'shipsec.amass.enum',
-      logger: {
-        info: (...args: unknown[]) => {
-          const msg = args.join(' ');
-          logs.push(`INFO: ${msg}`);
-          console.log(msg);
-        },
-        error: (...args: unknown[]) => {
-          const msg = args.join(' ');
-          logs.push(`ERROR: ${msg}`);
-          console.error(msg);
-        },
+      logCollector: (entry) => {
+        logs.push(`${entry.stream.toUpperCase()}: ${entry.message}`);
       },
-      emitProgress: (progress) => {
-        const message = typeof progress === 'string' ? progress : progress.message;
-        logs.push(`PROGRESS: ${message}`);
-        console.log(`Progress: ${message}`);
-      },
-    };
+    });
   });
 
   test(
     'enumerates subdomains for a known domain',
     async () => {
-      const component = componentRegistry.get('shipsec.amass.enum');
+      const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
       expect(component).toBeDefined();
 
-      const params = { domains: ['owasp.org'], active: false, bruteForce: false, timeoutMinutes: 1 };
-      const result = (await component!.execute(params, context)) as any;
+      const params = component!.inputSchema.parse({
+        domains: ['owasp.org'],
+        active: false,
+        bruteForce: false,
+        timeoutMinutes: 1,
+      });
+      const result = await component!.execute(params, context);
 
       expect(result).toHaveProperty('subdomains');
       expect(Array.isArray(result.subdomains)).toBe(true);

@@ -36,10 +36,14 @@ export interface IFileStorageService {
 export interface ISecretsService {
   /**
    * Retrieve a secret value by key
-   * @param key Secret identifier
+   * @param key Secret identifier (typically the secret ID)
+   * @param options Optional retrieval options such as a version override
    * @returns Secret value or null if not found
    */
-  get(key: string): Promise<string | null>;
+  get(
+    key: string,
+    options?: { version?: number },
+  ): Promise<{ value: string; version: number } | null>;
 
   /**
    * List all available secret keys

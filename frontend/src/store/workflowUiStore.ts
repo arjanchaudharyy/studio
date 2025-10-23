@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type WorkflowMode = 'design' | 'review'
+export type WorkflowMode = 'design' | 'execution'
 
 interface WorkflowUiState {
   mode: WorkflowMode
@@ -27,7 +27,7 @@ export const useWorkflowUiStore = create<WorkflowUiState & WorkflowUiActions>()(
       inspectorWidth: 360,
       setMode: (mode) => set((state) => ({
         mode,
-        inspectorTab: mode === 'review' ? state.inspectorTab ?? 'events' : 'events',
+        inspectorTab: mode === 'execution' ? state.inspectorTab ?? 'events' : 'events',
         libraryOpen: mode === 'design'
       })),
       setInspectorTab: (tab) => set({ inspectorTab: tab }),

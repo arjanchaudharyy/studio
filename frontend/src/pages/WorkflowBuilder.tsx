@@ -8,8 +8,8 @@ import {
 import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Canvas } from '@/components/workflow/Canvas'
-import { ReviewInspector } from '@/components/timeline/ReviewInspector'
-import { ReviewRunBanner } from '@/components/timeline/ReviewRunBanner'
+import { ExecutionInspector } from '@/components/timeline/ExecutionInspector'
+import { ExecutionRunBanner } from '@/components/timeline/ExecutionRunBanner'
 import { RunWorkflowDialog } from '@/components/workflow/RunWorkflowDialog'
 import { useToast } from '@/components/ui/use-toast'
 import { useExecutionStore } from '@/store/executionStore'
@@ -184,7 +184,7 @@ function WorkflowBuilderContent() {
       )
 
       if (runId) {
-        setMode('review')
+        setMode('execution')
         await loadRuns().catch(() => undefined)
         let selected = true
         try {
@@ -300,7 +300,7 @@ function WorkflowBuilderContent() {
   }
 
   const handleInspectorResizeStart = useCallback((event: React.MouseEvent) => {
-    if (mode !== 'review') {
+    if (mode !== 'execution') {
       return
     }
     inspectorResizingRef.current = true
@@ -310,7 +310,7 @@ function WorkflowBuilderContent() {
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
-      if (!inspectorResizingRef.current || mode !== 'review') {
+      if (!inspectorResizingRef.current || mode !== 'execution') {
         return
       }
       const container = layoutRef.current
@@ -337,7 +337,7 @@ function WorkflowBuilderContent() {
   }, [mode, setInspectorWidth])
 
   const isLibraryVisible = libraryOpen && mode === 'design'
-  const isInspectorVisible = mode === 'review'
+  const isInspectorVisible = mode === 'execution'
 
   if (isLoading) {
     return (
@@ -377,7 +377,7 @@ function WorkflowBuilderContent() {
         </aside>
 
         <main className="flex-1 relative flex">
-          <ReviewRunBanner />
+          <ExecutionRunBanner />
           <Canvas
             className="flex-1 h-full relative"
             nodes={nodes}
@@ -397,7 +397,7 @@ function WorkflowBuilderContent() {
                 onMouseDown={handleInspectorResizeStart}
               />
               <div className="flex h-full min-h-0 pl-2 overflow-hidden">
-                <ReviewInspector />
+                <ExecutionInspector />
               </div>
             </aside>
           )}

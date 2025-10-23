@@ -26,7 +26,7 @@ interface ExecutionStoreState {
   cursor: string | null
   pollingInterval: NodeJS.Timeout | null
   eventSource: EventSource | null
-  streamingMode: 'realtime' | 'polling' | 'none'
+  streamingMode: 'realtime' | 'polling' | 'none' | 'connecting'
 }
 
 interface ExecutionStoreActions {

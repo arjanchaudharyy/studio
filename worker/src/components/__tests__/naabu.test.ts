@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'bun:test';
 import * as sdk from '@shipsec/component-sdk';
 import { componentRegistry } from '../index';
+import type { NaabuInput, NaabuOutput } from '../security/naabu';
 
 describe('naabu component', () => {
   beforeAll(async () => {
@@ -12,30 +13,26 @@ describe('naabu component', () => {
   });
 
   it('should be registered with correct metadata', () => {
-    const component = componentRegistry.get('shipsec.naabu.scan');
+    const component = componentRegistry.get<NaabuInput, NaabuOutput>('shipsec.naabu.scan');
     expect(component).toBeDefined();
-    expect(component?.label).toBe('Naabu Port Scan');
-    expect(component?.category).toBe('discovery');
+    expect(component!.label).toBe('Naabu Port Scan');
+    expect(component!.category).toBe('discovery');
   });
 
   it('should provide sensible defaults', () => {
-    const component = componentRegistry.get('shipsec.naabu.scan');
+    const component = componentRegistry.get<NaabuInput, NaabuOutput>('shipsec.naabu.scan');
     if (!component) throw new Error('Component not registered');
 
     const params = component.inputSchema.parse({
       targets: ['scanme.sh'],
-    }) as {
-      targets: string[];
-      retries: number;
-      enablePing: boolean;
-    };
+    });
 
     expect(params.retries).toBe(1);
     expect(params.enablePing).toBe(false);
   });
 
   it('should parse JSONL output into findings', async () => {
-    const component = componentRegistry.get('shipsec.naabu.scan');
+    const component = componentRegistry.get<NaabuInput, NaabuOutput>('shipsec.naabu.scan');
     if (!component) throw new Error('Component not registered');
 
     const context = sdk.createExecutionContext({
@@ -56,7 +53,7 @@ describe('naabu component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(rawOutput);
 
-    const result = await component.execute(params, context) as any;
+    const result = await component.execute(params, context);
 
     expect(result.findings).toEqual([
       { host: 'scanme.sh', ip: '45.33.32.156', port: 80, protocol: 'tcp' },
@@ -69,7 +66,7 @@ describe('naabu component', () => {
   });
 
   it('should handle plain host:port output', async () => {
-    const component = componentRegistry.get('shipsec.naabu.scan');
+    const component = componentRegistry.get<NaabuInput, NaabuOutput>('shipsec.naabu.scan');
     if (!component) throw new Error('Component not registered');
 
     const context = sdk.createExecutionContext({
@@ -83,7 +80,7 @@ describe('naabu component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue('scanme.sh:22\n');
 
-    const result = await component.execute(params, context) as any;
+    const result = await component.execute(params, context);
 
     expect(result.findings).toEqual([
       { host: 'scanme.sh', ip: null, port: 22, protocol: 'tcp' },
@@ -92,7 +89,7 @@ describe('naabu component', () => {
   });
 
   it('should configure docker runner for naabu image', () => {
-    const component = componentRegistry.get('shipsec.naabu.scan');
+    const component = componentRegistry.get<NaabuInput, NaabuOutput>('shipsec.naabu.scan');
     if (!component) throw new Error('Component not registered');
 
     expect(component.runner.kind).toBe('docker');
