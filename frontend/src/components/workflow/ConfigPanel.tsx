@@ -7,6 +7,7 @@ import { useComponentStore } from '@/store/componentStore'
 import { ParameterFieldWrapper } from './ParameterField'
 import type { Node } from 'reactflow'
 import type { NodeData } from '@/schemas/node'
+import { inputSupportsType, normalizePortTypes } from '@/utils/portUtils'
 
 interface ConfigPanelProps {
   selectedNode: Node<NodeData> | null
@@ -148,7 +149,7 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                 {componentInputs.map((input) => {
                   const connection = nodeData.inputs?.[input.id]
                   const manualValue = manualParameters[input.id]
-                  const supportsManualString = input.type === 'string'
+                  const supportsManualString = inputSupportsType(input, 'string')
                   const supportsManualOverride = supportsManualString || input.valuePriority === 'manual-first'
                   const manualValueProvided =
                     supportsManualOverride &&
@@ -157,6 +158,7 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                     (typeof manualValue === 'string'
                       ? manualValue.trim().length > 0
                       : true)
+                  const typeLabel = normalizePortTypes(input.type).join(' | ')
 
                   return (
                     <div
@@ -170,7 +172,7 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground mb-2">
-                        Type: <span className="font-mono">{input.type}</span>
+                        Type: <span className="font-mono">{typeLabel}</span>
                       </div>
                       {input.description && (
                         <p className="text-xs text-muted-foreground">

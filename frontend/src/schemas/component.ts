@@ -9,12 +9,16 @@ export const ComponentRunnerSchema = z
 /**
  * Defines input ports for a component
  */
-const portTypes = ['string', 'array', 'object', 'file', 'any', 'secret', 'number'] as const
+const portTypes = ['string', 'array', 'object', 'file', 'secret', 'number'] as const
+const PortTypeEnum = z.enum(portTypes)
+const PortTypeArray = z.array(PortTypeEnum).min(1)
+
+export type PortType = typeof portTypes[number]
 
 export const InputPortSchema = z.object({
   id: z.string(),
   label: z.string(),
-  type: z.enum(portTypes),
+  type: z.union([PortTypeEnum, PortTypeArray]),
   required: z.boolean().optional(),
   description: z.string().optional(),
   valuePriority: z.enum(['manual-first', 'connection-first']).optional(),
@@ -28,7 +32,7 @@ export type InputPort = z.infer<typeof InputPortSchema>
 export const OutputPortSchema = z.object({
   id: z.string(),
   label: z.string(),
-  type: z.enum(portTypes),
+  type: PortTypeEnum,
   description: z.string().optional(),
 })
 

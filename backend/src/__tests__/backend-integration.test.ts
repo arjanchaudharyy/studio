@@ -55,6 +55,8 @@ const buildWorkflowGraph = (overrides: WorkflowGraphOverrides = {}): WorkflowGra
 const readJson = async <T>(response: Response): Promise<T> =>
   (await response.json()) as T;
 
+type ComponentPortType = 'string' | 'array' | 'object' | 'file' | 'secret' | 'number';
+
 interface Component {
   id: string;
   slug: string;
@@ -83,14 +85,14 @@ interface Component {
   inputs: Array<{
     id: string;
     label: string;
-    type: 'string' | 'array' | 'object' | 'file' | 'any' | 'secret';
+    type: ComponentPortType | ComponentPortType[];
     required: boolean;
     description: string | null;
   }>;
   outputs: Array<{
     id: string;
     label: string;
-    type: 'string' | 'array' | 'object' | 'file' | 'any' | 'secret';
+    type: ComponentPortType;
     description: string | null;
   }>;
   parameters: Array<{

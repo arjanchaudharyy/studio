@@ -1225,8 +1225,7 @@ export interface operations {
                         inputs?: {
                             id?: string;
                             label?: string;
-                            /** @enum {string} */
-                            type?: "string" | "array" | "object" | "file" | "any" | "secret";
+                            type?: ("string" | "array" | "object" | "file" | "secret" | "number") | ("string" | "array" | "object" | "file" | "secret" | "number")[];
                             required?: boolean;
                             description?: string | null;
                         }[];
@@ -1234,7 +1233,7 @@ export interface operations {
                             id?: string;
                             label?: string;
                             /** @enum {string} */
-                            type?: "string" | "array" | "object" | "file" | "any" | "secret";
+                            type?: "string" | "array" | "object" | "file" | "secret" | "number";
                             description?: string | null;
                         }[];
                         parameters?: {

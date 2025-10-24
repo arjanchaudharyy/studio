@@ -1,17 +1,50 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { RunSelector } from '@/components/timeline/RunSelector'
 import { ExecutionTimeline } from '@/components/timeline/ExecutionTimeline'
 import { EventInspector } from '@/components/timeline/EventInspector'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { MessageModal } from '@/components/ui/MessageModal'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { cn } from '@/lib/utils'
+import type { ExecutionLog } from '@/schemas/execution'
+import { createPreview } from '@/utils/textPreview'
 
 const formatTime = (timestamp: string) => {
   const date = new Date(timestamp)
   return date.toLocaleTimeString()
+}
+
+const formatStructured = (value: Record<string, unknown>) => {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch (error) {
+    console.error('Failed to stringify structured log data', error)
+    return String(value)
+  }
+}
+
+const buildLogMessage = (log: ExecutionLog): string => {
+  const sections: string[] = []
+
+  const primaryMessage = (log.message ?? log.error?.message)?.trim()
+  sections.push(primaryMessage && primaryMessage.length > 0 ? primaryMessage : log.type)
+
+  if (log.outputSummary && Object.keys(log.outputSummary).length > 0) {
+    sections.push(`Output summary:\n${formatStructured(log.outputSummary)}`)
+  }
+
+  if (log.data && Object.keys(log.data).length > 0) {
+    sections.push(`Data:\n${formatStructured(log.data)}`)
+  }
+
+  if (log.error?.stack?.trim()) {
+    sections.push(`Stack trace:\n${log.error.stack.trim()}`)
+  }
+
+  return sections.join('\n\n').trim()
 }
 
 export function ExecutionInspector() {
@@ -25,6 +58,11 @@ export function ExecutionInspector() {
   } = useExecutionTimelineStore()
   const { logs } = useExecutionStore()
   const { inspectorTab, setInspectorTab } = useWorkflowUiStore()
+  const [logModal, setLogModal] = useState<{ open: boolean; message: string; title: string }>({
+    open: false,
+    message: '',
+    title: '',
+  })
 
   const selectedRun = useMemo(() => (
     availableRuns.find(run => run.id === selectedRunId)
@@ -48,6 +86,20 @@ export function ExecutionInspector() {
     )
   }, [nodeStates])
 
+  const openLogModal = (fullMessage: string, log: ExecutionLog) => {
+    const titleParts = [
+      'Log message',
+      log.nodeId ? `Node ${log.nodeId}` : null,
+      formatTime(log.timestamp),
+    ].filter(Boolean)
+
+    setLogModal({
+      open: true,
+      message: fullMessage,
+      title: titleParts.join(' • '),
+    })
+  }
+
   const statusBadge = selectedRun ? (
     <Badge
       variant={selectedRun.status === 'RUNNING' ? 'default' : selectedRun.status === 'FAILED' ? 'destructive' : 'secondary'}
@@ -58,150 +110,150 @@ export function ExecutionInspector() {
   ) : null
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-[320px] flex-col overflow-hidden border-l bg-muted/30 backdrop-blur">
-      <div className="border-b p-3 space-y-3 bg-background/70">
-        <div className="flex items-center justify-between">
-          <RunSelector />
+    <>
+      <aside className="flex h-full min-h-0 w-full min-w-[320px] flex-col overflow-hidden border-l bg-muted/30 backdrop-blur">
+        <div className="border-b p-3 space-y-3 bg-background/70">
+          <div className="flex items-center justify-between">
+            <RunSelector />
+          </div>
+          {selectedRun && (
+            <div className="rounded-md border bg-background px-3 py-2 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sm truncate">{selectedRun.workflowName}</span>
+                {statusBadge}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+                <span>Run #{selectedRun.id.slice(-6)}</span>
+                {selectedRun.duration && <span>{Math.round(selectedRun.duration / 1000)}s</span>}
+                <span>{selectedRun.eventCount} events</span>
+                {selectedRun.nodeCount > 0 && <span>{selectedRun.nodeCount} nodes</span>}
+              </div>
+            </div>
+          )}
+          {!selectedRun && (
+            <div className="rounded-md border border-dashed bg-background px-3 py-2 text-xs text-muted-foreground">
+              Select a run to explore its timeline.
+            </div>
+          )}
         </div>
-        {selectedRun && (
-          <div className="rounded-md border bg-background px-3 py-2 text-xs space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-sm truncate">{selectedRun.workflowName}</span>
-              {statusBadge}
-            </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
-              <span>Run #{selectedRun.id.slice(-6)}</span>
-              {selectedRun.duration && <span>{Math.round(selectedRun.duration / 1000)}s</span>}
-              <span>{selectedRun.eventCount} events</span>
-              {selectedRun.nodeCount > 0 && <span>{selectedRun.nodeCount} nodes</span>}
-            </div>
-          </div>
-        )}
-        {!selectedRun && (
-          <div className="rounded-md border border-dashed bg-background px-3 py-2 text-xs text-muted-foreground">
-            Select a run to explore its timeline.
-          </div>
-        )}
-      </div>
 
-      <div className="border-b bg-background/60 px-3 py-2">
-        <div className="inline-flex rounded-md border bg-muted/60 p-1 text-xs font-medium">
-          <Button
-            variant={inspectorTab === 'events' ? 'default' : 'ghost'}
-            size="sm"
-            className="h-7 px-3"
-            onClick={() => setInspectorTab('events')}
-          >
-            Events
-          </Button>
-          <Button
-            variant={inspectorTab === 'logs' ? 'default' : 'ghost'}
-            size="sm"
-            className="h-7 px-3"
-            onClick={() => setInspectorTab('logs')}
-          >
-            Logs
-          </Button>
-          <Button
-            variant={inspectorTab === 'data' ? 'default' : 'ghost'}
-            size="sm"
-            className="h-7 px-3"
-            onClick={() => setInspectorTab('data')}
-            disabled
-            title="Data flows coming soon"
-          >
-            Data
-          </Button>
+        <div className="border-b bg-background/60 px-3 py-2">
+          <div className="inline-flex rounded-md border bg-muted/60 p-1 text-xs font-medium">
+            <Button
+              variant={inspectorTab === 'events' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 px-3"
+              onClick={() => setInspectorTab('events')}
+            >
+              Events
+            </Button>
+            <Button
+              variant={inspectorTab === 'logs' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 px-3"
+              onClick={() => setInspectorTab('logs')}
+            >
+              Logs
+            </Button>
+            <Button
+              variant={inspectorTab === 'data' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 px-3"
+              onClick={() => setInspectorTab('data')}
+              disabled
+              title="Data flows coming soon"
+            >
+              Data
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <div className="flex-1 min-h-0">
-        {inspectorTab === 'events' && (
-          <div className="flex flex-col h-full min-h-0">
-            <div className="flex-shrink-0 border-b bg-background/60">
-              <ExecutionTimeline />
+        <div className="flex-1 min-h-0">
+          {inspectorTab === 'events' && (
+            <div className="flex flex-col h-full min-h-0">
+              <div className="flex-shrink-0 border-b bg-background/60">
+                <ExecutionTimeline />
+              </div>
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <EventInspector className="h-full" />
+              </div>
             </div>
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <EventInspector className="h-full" />
-            </div>
-          </div>
-        )}
+          )}
 
-        {inspectorTab === 'logs' && (
-          <div className="flex flex-col h-full min-h-0">
-            <div className="flex items-center justify-between px-3 py-2 border-b bg-background/70 text-xs text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <span>{displayLogs.length} log entries</span>
-                {retrySummary.totalRetries > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-medium text-yellow-700">
-                    {retrySummary.totalRetries} retries across {retrySummary.nodesWithRetries} node{retrySummary.nodesWithRetries === 1 ? '' : 's'}
-                  </span>
+          {inspectorTab === 'logs' && (
+            <div className="flex flex-col h-full min-h-0">
+              <div className="flex items-center justify-between px-3 py-2 border-b bg-background/70 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span>{displayLogs.length} log entries</span>
+                  {retrySummary.totalRetries > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-medium text-yellow-700">
+                      {retrySummary.totalRetries} retries across {retrySummary.nodesWithRetries} node{retrySummary.nodesWithRetries === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+                <span className={cn('font-medium', playbackMode === 'live' ? 'text-green-600' : 'text-blue-600')}>
+                  {playbackMode === 'live' ? (isPlaying ? 'Live (following)' : 'Live paused') : 'Execution playback'}
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto px-3 py-2 pb-20 space-y-2 text-xs font-mono bg-background/40">
+                {displayLogs.length === 0 ? (
+                  <div className="text-muted-foreground text-center py-8">
+                    No logs to display for this run.
+                  </div>
+                ) : (
+                  displayLogs.map((log) => {
+                    const executionLog = log as ExecutionLog
+                    const fullMessage = buildLogMessage(executionLog)
+                    const preview = createPreview(fullMessage, { charLimit: 220, lineLimit: 4 })
+                    const previewText = preview.truncated
+                      ? `${preview.text.trimEnd()}\n…`
+                      : preview.text
+
+                    return (
+                      <div key={log.id} className="border rounded-md bg-background px-3 py-2 space-y-1 min-w-0">
+                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span>{formatTime(log.timestamp)}</span>
+                          <Badge variant={log.level === 'error' ? 'destructive' : log.level === 'warn' ? 'warning' : 'secondary'} className="text-[10px] uppercase">
+                            {log.level.toUpperCase()}
+                          </Badge>
+                        </div>
+                        {log.nodeId && (
+                          <div className="text-[11px] text-muted-foreground">Node: {log.nodeId}</div>
+                        )}
+                        <div className="text-[11px] max-w-full">
+                          <pre className="whitespace-pre-wrap break-words font-mono text-[11px]">
+                            {previewText}
+                          </pre>
+                          {preview.truncated && (
+                            <button
+                              className="text-[10px] text-blue-500 hover:text-blue-700 mt-1"
+                              onClick={() => openLogModal(fullMessage, executionLog)}
+                            >
+                              View full message
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
                 )}
               </div>
-              <span className={cn('font-medium', playbackMode === 'live' ? 'text-green-600' : 'text-blue-600')}>
-                {playbackMode === 'live' ? (isPlaying ? 'Live (following)' : 'Live paused') : 'Execution playback'}
-              </span>
             </div>
-            <div className="flex-1 overflow-y-auto px-3 py-2 pb-20 space-y-2 text-xs font-mono bg-background/40">
-              {displayLogs.length === 0 ? (
-                <div className="text-muted-foreground text-center py-8">
-                  No logs to display for this run.
-                </div>
-              ) : (
-                displayLogs.map((log) => (
-                  <div key={log.id} className="border rounded-md bg-background px-3 py-2 space-y-1 min-w-0">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span>{formatTime(log.timestamp)}</span>
-                      <Badge variant={log.level === 'error' ? 'destructive' : log.level === 'warn' ? 'warning' : 'secondary'} className="text-[10px] uppercase">
-                        {log.level.toUpperCase()}
-                      </Badge>
-                    </div>
-                    {log.nodeId && (
-                      <div className="text-[11px] text-muted-foreground">Node: {log.nodeId}</div>
-                    )}
-                    <div className="text-[11px] overflow-hidden max-w-full">
-                      <div className="truncate">
-                        {log.message ?? log.error?.message ?? log.type}
-                      </div>
-                      {(log.message ?? log.error?.message ?? log.type)?.length > 100 && (
-                        <button 
-                          className="text-[10px] text-blue-500 hover:text-blue-700 mt-1"
-                          onClick={() => {
-                            // Create a modal to show the full text
-                            const modal = document.createElement('div');
-                            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-                            modal.innerHTML = `
-                              <div class="bg-white rounded-lg p-6 max-w-4xl max-h-[80vh] overflow-auto">
-                                <div class="flex justify-between items-center mb-4">
-                                  <h3 class="text-lg font-semibold">Full Log Message</h3>
-                                  <button class="text-gray-500 hover:text-gray-700" onclick="this.closest('.fixed').remove()">×</button>
-                                </div>
-                                <pre class="text-xs font-mono whitespace-pre-wrap break-words">${log.message ?? log.error?.message ?? log.type}</pre>
-                              </div>
-                            `;
-                            document.body.appendChild(modal);
-                            modal.addEventListener('click', (e) => {
-                              if (e.target === modal) modal.remove();
-                            });
-                          }}
-                        >
-                          View full message
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+          )}
 
-        {inspectorTab === 'data' && (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground px-6 text-center">
-            Data flow visualization is on the roadmap—stay tuned.
-          </div>
-        )}
-      </div>
-    </aside>
+          {inspectorTab === 'data' && (
+            <div className="flex h-full items-center justify-center text-xs text-muted-foreground px-6 text-center">
+              Data flow visualization is on the roadmap—stay tuned.
+            </div>
+          )}
+        </div>
+      </aside>
+      <MessageModal
+        open={logModal.open}
+        onOpenChange={(open) => setLogModal((prev) => ({ ...prev, open }))}
+        title={logModal.title || 'Log message'}
+        message={logModal.message}
+      />
+    </>
   )
 }

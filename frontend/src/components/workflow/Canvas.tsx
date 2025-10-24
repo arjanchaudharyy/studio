@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useState, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import {
   ReactFlow,
   Background,
@@ -35,6 +35,13 @@ const edgeTypes = {
   default: DataFlowEdge, // Default to our enhanced edge
 }
 
+const MAX_DELETE_HISTORY = 10
+
+interface DeleteHistoryEntry {
+  nodes: Node<NodeData>[]
+  edges: Edge[]
+}
+
 interface CanvasProps {
   className?: string
   nodes: Node<NodeData>[]
@@ -63,6 +70,7 @@ export function Canvas({
   const { mode } = useWorkflowUiStore()
   const { toast } = useToast()
   const applyEdgesChange = onEdgesChange
+  const deleteHistoryRef = useRef<DeleteHistoryEntry[]>([])
 
   useEffect(() => {
     if (mode === 'execution') {
@@ -371,23 +379,96 @@ export function Canvas({
         return
       }
 
+      const isUndoShortcut =
+        (event.key === 'z' || event.key === 'Z') &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey
+
+      if (isUndoShortcut) {
+        event.preventDefault()
+        const lastDeletion = deleteHistoryRef.current.pop()
+        if (!lastDeletion) {
+          return
+        }
+
+        if (lastDeletion.nodes.length > 0) {
+          setNodes((nds) => {
+            const existingIds = new Set(nds.map((node) => node.id))
+            const nodesToRestore = lastDeletion.nodes
+              .filter((node) => !existingIds.has(node.id))
+              .map((node) => ({ ...node, selected: false }))
+
+            if (nodesToRestore.length === 0) {
+              return nds
+            }
+
+            return nds.concat(nodesToRestore)
+          })
+        }
+
+        if (lastDeletion.edges.length > 0) {
+          setEdges((eds) => {
+            const existingIds = new Set(eds.map((edge) => edge.id))
+            const edgesToRestore = lastDeletion.edges
+              .filter((edge) => !existingIds.has(edge.id))
+              .map((edge) => ({ ...edge, selected: false }))
+
+            if (edgesToRestore.length === 0) {
+              return eds
+            }
+
+            return eds.concat(edgesToRestore)
+          })
+        }
+
+        setSelectedNode(null)
+        markDirty()
+        return
+      }
+
       if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault()
         const selectedNodes = nodes.filter((node) => node.selected)
         const selectedEdges = edges.filter((edge) => edge.selected)
+        const nodeIds = new Set(selectedNodes.map((node) => node.id))
+        const edgesFromNodes = edges.filter(
+          (edge) => nodeIds.has(edge.source) || nodeIds.has(edge.target)
+        )
+        const selectedEdgeIds = new Set(selectedEdges.map((edge) => edge.id))
+        const dedupedEdges = new Map<string, Edge>()
+
+        edgesFromNodes.forEach((edge) => {
+          dedupedEdges.set(edge.id, { ...edge, selected: false })
+        })
+        selectedEdges.forEach((edge) => {
+          dedupedEdges.set(edge.id, { ...edge, selected: false })
+        })
+
+        const historyEntryNodes = selectedNodes.map((node) => ({ ...node, selected: false }))
+        const historyEntryEdges = Array.from(dedupedEdges.values())
+
+        if (historyEntryNodes.length > 0 || historyEntryEdges.length > 0) {
+          const history = deleteHistoryRef.current.slice(-(MAX_DELETE_HISTORY - 1))
+          history.push({
+            nodes: historyEntryNodes,
+            edges: historyEntryEdges,
+          })
+          deleteHistoryRef.current = history
+        }
 
         if (selectedNodes.length > 0) {
-          const nodeIds = selectedNodes.map((node) => node.id)
-          setNodes((nds) => nds.filter((node) => !nodeIds.includes(node.id)))
+          setNodes((nds) => nds.filter((node) => !nodeIds.has(node.id)))
           setEdges((eds) => eds.filter((edge) =>
-            !nodeIds.includes(edge.source) && !nodeIds.includes(edge.target)
+            !nodeIds.has(edge.source) && !nodeIds.has(edge.target)
           ))
           setSelectedNode(null)
-          markDirty()
         }
 
         if (selectedEdges.length > 0) {
-          const edgeIds = selectedEdges.map((edge) => edge.id)
-          setEdges((eds) => eds.filter((edge) => !edgeIds.includes(edge.id)))
+          setEdges((eds) => eds.filter((edge) => !selectedEdgeIds.has(edge.id)))
+        }
+
+        if (selectedNodes.length > 0 || selectedEdges.length > 0) {
           markDirty()
         }
       }

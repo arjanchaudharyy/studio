@@ -1,49 +1,25 @@
 import type { Node, Edge, Connection } from 'reactflow'
 import type { FrontendNodeData } from '@/schemas/node'
-import type { ComponentMetadata } from '@/schemas/component'
+import type { ComponentMetadata, PortType } from '@/schemas/component'
+import { inputSupportsType, normalizePortTypes } from '@/utils/portUtils'
 
 export interface ValidationResult {
   isValid: boolean
   error?: string
 }
 
-/**
- * Type hierarchy for enhanced compatibility checking
- */
-const TYPE_HIERARCHY: Record<string, string[]> = {
-  'any': ['string', 'array', 'object', 'file'],
-  'array': ['any'],
-  'string': ['any'],
-  'object': ['any'],
-  'file': ['string', 'any'],
+const SOURCE_COMPATIBILITY: Record<PortType, PortType[]> = {
+  string: ['string'],
+  array: ['array'],
+  object: ['object'],
+  file: ['file'],
+  secret: ['secret'],
+  number: ['number'],
 }
 
-/**
- * Check if two port types are compatible
- */
-function areTypesCompatible(sourceType: string, targetType: string): boolean {
-  // 'any' type accepts/provides anything
-  if (sourceType === 'any' || targetType === 'any') return true
-
-  // Exact match
-  if (sourceType === targetType) return true
-
-  // Check if source type can connect to target type via hierarchy
-  if (TYPE_HIERARCHY[sourceType]?.includes(targetType)) return true
-
-  // Check if target type can accept from source type via hierarchy
-  if (TYPE_HIERARCHY[targetType]?.includes(sourceType)) return true
-
-  // Special compatibility rules for common data flow patterns
-  const compatibilityMatrix: Record<string, string[]> = {
-    'file': ['string', 'array', 'object', 'any'], // File can provide text, parsed data, etc.
-    'array': ['string', 'any'], // Array can be serialized to string
-    'object': ['string', 'any'], // Object can be serialized to string
-  }
-
-  if (compatibilityMatrix[sourceType]?.includes(targetType)) return true
-
-  return false
+function areTypesCompatible(sourceType: PortType, targetTypes: PortType[]): boolean {
+  const allowedTargets = SOURCE_COMPATIBILITY[sourceType] ?? [sourceType]
+  return targetTypes.some((targetType) => allowedTargets.includes(targetType))
 }
 
 /**
@@ -141,10 +117,13 @@ export function validateConnection(
   }
 
   // Check type compatibility
-  if (!areTypesCompatible(sourcePort.type, targetPort.type)) {
+  const targetPortTypes = normalizePortTypes(targetPort.type)
+
+  if (!areTypesCompatible(sourcePort.type as PortType, targetPortTypes)) {
+    const targetTypeLabel = targetPortTypes.join(' | ')
     return {
       isValid: false,
-      error: `Type mismatch: ${sourcePort.type} cannot connect to ${targetPort.type}`,
+      error: `Type mismatch: ${sourcePort.type} cannot connect to ${targetTypeLabel}`,
     }
   }
 
@@ -209,7 +188,7 @@ export function getNodeValidationWarnings(
         (edge) => edge.target === node.id && edge.targetHandle === input.id
       )
 
-      const supportsManualOverride = input.type === 'string' || input.valuePriority === 'manual-first'
+      const supportsManualOverride = inputSupportsType(input, 'string') || input.valuePriority === 'manual-first'
       const manualCandidate = manualParameters[input.id]
       const manualValueProvided = supportsManualOverride && manualCandidate !== undefined && manualCandidate !== null && (
         typeof manualCandidate === 'string' ? manualCandidate.trim().length > 0 : true

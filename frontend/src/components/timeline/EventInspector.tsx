@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { ChevronDown, FileText, AlertCircle, CheckCircle, Activity } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { MessageModal } from '@/components/ui/MessageModal'
+import { createPreview } from '@/utils/textPreview'
 import { useExecutionTimelineStore, type TimelineEvent } from '@/store/executionTimelineStore'
 import { cn } from '@/lib/utils'
 
@@ -261,6 +262,10 @@ export function EventInspector({ className }: EventInspectorProps) {
                 const isRecentLiveEvent = playbackMode === 'live' && isLatestEvent
                 const isCurrentReplayEvent = playbackMode === 'replay' && isCurrent
                 const nodeState = event.nodeId ? nodeStates[event.nodeId] : undefined
+                const messagePreview = event.message ? createPreview(event.message, { charLimit: 220, lineLimit: 6 }) : null
+                const messagePreviewText = messagePreview
+                  ? (messagePreview.truncated ? `${messagePreview.text.trimEnd()}\n…` : messagePreview.text)
+                  : ''
 
                 return (
                   <li key={event.id}
@@ -371,10 +376,10 @@ export function EventInspector({ className }: EventInspectorProps) {
                           <div>
                             <span className="font-medium">Message</span>
                             <div className="mt-1 rounded-md border bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
-                              <div className="truncate">
-                                {event.message}
-                              </div>
-                              {event.message.length > 100 && (
+                              <pre className="whitespace-pre-wrap break-words font-mono text-[11px]">
+                                {messagePreviewText}
+                              </pre>
+                              {messagePreview?.truncated && (
                                 <button
                                   className="text-[10px] text-blue-500 hover:text-blue-700 mt-1"
                                   onClick={() => openFullMessageModal(event.message!, event)}

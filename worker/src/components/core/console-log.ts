@@ -43,7 +43,7 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'data',
         label: 'Data',
-        type: 'any',
+        type: ['string', 'number', 'object', 'array', 'file', 'secret'],
         required: true,
         description: 'Any data to log (objects will be JSON stringified).',
       },

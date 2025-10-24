@@ -112,7 +112,10 @@ import { z } from 'zod'
 export const InputPortSchema = z.object({
   id: z.string(),                          // "domain"
   label: z.string(),                       // "Target Domain"
-  type: z.enum(['string', 'array', 'object', 'file', 'any', 'secret']),
+  type: z.union([
+    z.enum(['string', 'array', 'object', 'file', 'secret', 'number']),
+    z.array(z.enum(['string', 'array', 'object', 'file', 'secret', 'number'])).min(1),
+  ]),
   required: z.boolean().default(false),
   description: z.string().optional(),
   
@@ -127,7 +130,7 @@ export const InputPortSchema = z.object({
 export const OutputPortSchema = z.object({
   id: z.string(),                          // "subdomains"
   label: z.string(),                       // "Discovered Subdomains"
-  type: z.enum(['string', 'array', 'object', 'file', 'any', 'secret']),
+  type: z.enum(['string', 'array', 'object', 'file', 'secret', 'number']),
   description: z.string().optional(),
   format: z.string().optional(),           // "application/json"
 })
@@ -322,7 +325,7 @@ Create `src/components/workflow/nodes/input-output/FileLoader/FileLoader.spec.js
     {
       "id": "data",
       "label": "File Contents",
-      "type": "any",
+      "type": "object",
       "description": "Parsed file contents",
       "format": "application/json"
     }

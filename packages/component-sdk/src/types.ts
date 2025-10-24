@@ -66,7 +66,6 @@ export type ComponentPortType =
   | 'array'
   | 'object'
   | 'file'
-  | 'any'
   | 'secret'
   | 'number'
   | 'boolean';
@@ -74,7 +73,7 @@ export type ComponentPortType =
 export interface ComponentPortMetadata {
   id: string;
   label: string;
-  type: ComponentPortType;
+  type: ComponentPortType | ComponentPortType[];
   required?: boolean;
   description?: string;
   valuePriority?: 'manual-first' | 'connection-first';

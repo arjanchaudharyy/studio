@@ -259,12 +259,17 @@ const onEdgesChange = useCallback((changes) => {
 
 **Type Compatibility Matrix** (`src/utils/connectionValidation.ts`):
 ```typescript
-const TYPE_HIERARCHY: Record<string, string[]> = {
-  'any': ['string', 'array', 'object', 'file'],
-  'file': ['string', 'array', 'object', 'any'],
-  'array': ['string', 'any'],
-  'object': ['string', 'any'],
+const SOURCE_COMPATIBILITY: Record<PortType, PortType[]> = {
+  string: ['string'],
+  array: ['array'],
+  object: ['object'],
+  file: ['file'],
+  secret: ['secret'],
+  number: ['number'],
 }
+
+const normalizePortTypes = (type: PortType | PortType[]) =>
+  Array.isArray(type) ? type : [type]
 ```
 
 **Smart Required Detection** (`src/components/workflow/WorkflowNode.tsx`):

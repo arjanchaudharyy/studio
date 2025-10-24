@@ -440,7 +440,16 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
     },
 
     selectRun: async (runId: string) => {
-      set({ selectedRunId: runId })
+      // Clear previous events before loading new timeline
+      set({ 
+        selectedRunId: runId,
+        events: [],
+        dataFlows: [],
+        totalDuration: 0,
+        currentTime: 0,
+        timelineStartTime: null,
+        nodeStates: {}
+      })
       await get().loadTimeline(runId)
     },
 

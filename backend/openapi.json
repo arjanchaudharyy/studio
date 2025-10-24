@@ -1192,14 +1192,33 @@
                               "type": "string"
                             },
                             "type": {
-                              "type": "string",
-                              "enum": [
-                                "string",
-                                "array",
-                                "object",
-                                "file",
-                                "any",
-                                "secret"
+                              "oneOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "string",
+                                    "array",
+                                    "object",
+                                    "file",
+                                    "secret",
+                                    "number"
+                                  ]
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "string",
+                                      "array",
+                                      "object",
+                                      "file",
+                                      "secret",
+                                      "number"
+                                    ]
+                                  },
+                                  "minItems": 1
+                                }
                               ]
                             },
                             "required": {
@@ -1230,8 +1249,8 @@
                                 "array",
                                 "object",
                                 "file",
-                                "any",
-                                "secret"
+                                "secret",
+                                "number"
                               ]
                             },
                             "description": {

@@ -9,6 +9,7 @@ import { getNodeStyle, getTypeBorderColor } from './nodeStyles'
 import type { NodeData } from '@/schemas/node'
 import type { InputPort } from '@/schemas/component'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
+import { inputSupportsType } from '@/utils/portUtils'
 
 const STATUS_ICONS = {
   running: Loader2,
@@ -122,7 +123,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   }
   
   const supportsManualOverride = (input: InputPort) =>
-    input.type === 'string' || input.valuePriority === 'manual-first'
+    inputSupportsType(input, 'string') || input.valuePriority === 'manual-first'
 
   const manualValueProvidedForInput = (input: InputPort) => {
     if (!supportsManualOverride(input)) return false
@@ -318,7 +319,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
 
               const manualDisplay =
                 manualValueProvided &&
-                input.type === 'string' &&
+                inputSupportsType(input, 'string') &&
                 typeof manualCandidate === 'string'
                   ? manualCandidate.trim()
                   : ''

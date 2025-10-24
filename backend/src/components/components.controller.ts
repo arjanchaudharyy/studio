@@ -98,7 +98,16 @@ export class ComponentsController {
               properties: {
                 id: { type: 'string' },
                 label: { type: 'string' },
-                type: { type: 'string', enum: ['string', 'array', 'object', 'file', 'any', 'secret'] },
+                type: {
+                  oneOf: [
+                    { type: 'string', enum: ['string', 'array', 'object', 'file', 'secret', 'number'] },
+                    {
+                      type: 'array',
+                      items: { type: 'string', enum: ['string', 'array', 'object', 'file', 'secret', 'number'] },
+                      minItems: 1,
+                    },
+                  ],
+                },
                 required: { type: 'boolean' },
                 description: { type: 'string', nullable: true },
               },
@@ -111,7 +120,7 @@ export class ComponentsController {
               properties: {
                 id: { type: 'string' },
                 label: { type: 'string' },
-                type: { type: 'string', enum: ['string', 'array', 'object', 'file', 'any', 'secret'] },
+                type: { type: 'string', enum: ['string', 'array', 'object', 'file', 'secret', 'number'] },
                 description: { type: 'string', nullable: true },
               },
             },
