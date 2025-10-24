@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DRIZZLE_TOKEN } from '../../database/database.module';
@@ -77,6 +77,7 @@ export class WorkflowRunRepository {
     organizationId?: string | null;
   } = {}): Promise<WorkflowRunRecord[]> {
     const conditions: any[] = [];
+
     if (options.workflowId) {
       conditions.push(eq(workflowRunsTable.workflowId, options.workflowId));
     }
@@ -85,15 +86,14 @@ export class WorkflowRunRepository {
     }
 
     const baseQuery = this.db.select().from(workflowRunsTable);
-    const query = conditions.length > 0
-      ? baseQuery.where(
-          conditions.length === 1 ? conditions[0] : and(...(conditions as [any, any, ...any[]])),
-        )
-      : baseQuery;
+    const query =
+      conditions.length > 0
+        ? baseQuery.where(
+            conditions.length === 1 ? conditions[0] : and(...(conditions as [any, any, ...any[]])),
+          )
+        : baseQuery;
 
-    return await query
-      .orderBy(workflowRunsTable.createdAt)
-      .limit(options.limit ?? 50);
+    return await query.orderBy(desc(workflowRunsTable.createdAt)).limit(options.limit ?? 50);
   }
 
   private buildRunFilter(runId: string, organizationId?: string | null) {

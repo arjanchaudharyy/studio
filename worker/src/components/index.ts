@@ -31,6 +31,9 @@ import './security/prowler-scan';
 import './security/shuffledns-massdns';
 import './security/atlassian-offboarding';
 
+// GitHub components
+import './github/remove-org-membership';
+
 // IT Automation components
 import './it-automation/google-workspace-license-unassign';
 import './it-automation/okta-user-offboard';
