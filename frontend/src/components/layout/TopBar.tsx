@@ -9,9 +9,6 @@ import {
   StopCircle,
   PencilLine,
   MonitorPlay,
-  PanelLeftClose,
-  PanelLeftOpen,
-  KeyRound,
 } from 'lucide-react'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
@@ -23,18 +20,16 @@ interface TopBarProps {
   isNew?: boolean
   onRun?: () => void
   onSave: () => Promise<void> | void
-  sidebarOpen?: boolean
-  onSidebarToggle?: () => void
 }
 
-export function TopBar({ onRun, onSave, sidebarOpen, onSidebarToggle }: TopBarProps) {
+export function TopBar({ onRun, onSave }: TopBarProps) {
   const navigate = useNavigate()
   const [isSaving, setIsSaving] = useState(false)
 
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
   const { status, runStatus, reset } = useExecutionStore()
   const isRunning = status === 'running' || status === 'queued'
-  const { mode, setMode, libraryOpen, toggleLibrary } = useWorkflowUiStore()
+  const { mode, setMode } = useWorkflowUiStore()
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -57,23 +52,6 @@ export function TopBar({ onRun, onSave, sidebarOpen, onSidebarToggle }: TopBarPr
 
   return (
     <div className="h-[60px] border-b bg-background flex items-center px-4 gap-4">
-      {/* Sidebar toggle */}
-      {onSidebarToggle && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onSidebarToggle}
-          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-          className="hidden md:flex"
-        >
-          {sidebarOpen ? (
-            <PanelLeftClose className="h-5 w-5" />
-          ) : (
-            <PanelLeftOpen className="h-5 w-5" />
-          )}
-        </Button>
-      )}
-
       <Button
         variant="ghost"
         size="icon"
@@ -93,28 +71,6 @@ export function TopBar({ onRun, onSave, sidebarOpen, onSidebarToggle }: TopBarPr
       </div>
 
       <div className="flex items-center gap-3 ml-auto">
-        <Button
-          variant="outline"
-          onClick={() => navigate('/secrets')}
-          className="gap-2"
-        >
-          <KeyRound className="h-4 w-4" />
-          Secrets
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="inline-flex"
-          onClick={toggleLibrary}
-          aria-label={libraryOpen ? 'Hide component library' : 'Show component library'}
-        >
-          {libraryOpen ? (
-            <PanelLeftClose className="h-5 w-5" />
-          ) : (
-            <PanelLeftOpen className="h-5 w-5" />
-          )}
-        </Button>
-
         <div className="flex rounded-lg border bg-muted/40 overflow-hidden text-xs font-medium shadow-sm">
           <Button
             variant={mode === 'design' ? 'default' : 'ghost'}

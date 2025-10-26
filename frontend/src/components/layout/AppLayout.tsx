@@ -2,11 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarItem } from '@/components/ui/sidebar'
 import { AppTopBar } from '@/components/layout/AppTopBar'
 import { Button } from '@/components/ui/button'
-import {
-  Workflow,
-  KeyRound,
-  Plus
-} from 'lucide-react'
+import { Workflow, KeyRound, Plus } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
 
 interface AppLayoutProps {
@@ -71,15 +67,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         <Button onClick={() => navigate('/workflows/new')} className="gap-2">
           <Plus className="h-4 w-4" />
           New Workflow
-        </Button>
-      )
-    }
-
-    if (location.pathname === '/secrets') {
-      return (
-        <Button onClick={() => navigate('/')} variant="outline" className="gap-2">
-          <Workflow className="h-4 w-4" />
-          Workflows
         </Button>
       )
     }
