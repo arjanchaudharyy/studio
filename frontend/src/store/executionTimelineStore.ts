@@ -64,6 +64,8 @@ export interface ExecutionRun {
   eventCount: number
   createdAt: string
   isLive: boolean
+  workflowVersionId: string | null
+  workflowVersion: number | null
 }
 
 export interface TimelineState {
@@ -152,18 +154,35 @@ const prepareTimelineEvents = (
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   )
 
+  if (sortedEvents.length === 0) {
+    return {
+      events: [],
+      totalDuration: 0,
+      timelineStartTime: 0,
+    }
+  }
+
   const startTime = new Date(sortedEvents[0].timestamp).getTime()
   const endTime = new Date(sortedEvents[sortedEvents.length - 1].timestamp).getTime()
-  const totalDuration = Math.max(endTime - startTime, 0)
+  const totalDuration = Math.max(endTime - startTime, 1000) // Ensure minimum 1 second duration
 
-  const events: TimelineEvent[] = sortedEvents.map(event => {
+  const events: TimelineEvent[] = sortedEvents.map((event, index) => {
     const eventTime = new Date(event.timestamp).getTime()
     const offsetMs = eventTime - startTime
+    
+    // Calculate duration based on next event or a default duration
+    let duration = 0
+    if (index < sortedEvents.length - 1) {
+      const nextEventTime = new Date(sortedEvents[index + 1].timestamp).getTime()
+      duration = Math.max(nextEventTime - eventTime, 100) // Minimum 100ms duration
+    } else {
+      duration = Math.max(totalDuration - offsetMs, 100) // For last event, use remaining time
+    }
 
     return {
       ...event,
       visualTime: totalDuration > 0 ? offsetMs / totalDuration : 0,
-      duration: 0,
+      duration,
       offsetMs,
     }
   })
@@ -430,7 +449,9 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
           nodeCount: typeof run.nodeCount === 'number' ? run.nodeCount : 0,
           eventCount: run.eventCount,
           createdAt: run.startTime,
-          isLive: !run.endTime && run.status === 'RUNNING'
+          isLive: !run.endTime && run.status === 'RUNNING',
+          workflowVersionId: typeof run.workflowVersionId === 'string' ? run.workflowVersionId : null,
+          workflowVersion: typeof run.workflowVersion === 'number' ? run.workflowVersion : null,
         }))
 
         set({ availableRuns: runs })

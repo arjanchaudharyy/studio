@@ -1,2 +1,5 @@
 [workspace]
 members = ["frontend", "backend", "worker", "packages/**"]
+
+[test]
+preload = ["./test/setup.ts"]

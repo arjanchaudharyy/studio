@@ -61,19 +61,52 @@ export interface LogEventInput {
   metadata?: ExecutionContextMetadata;
 }
 
-export type ComponentPortType =
-  | 'string'
-  | 'array'
-  | 'object'
-  | 'file'
+export type PrimitivePortTypeName =
+  | 'text'
   | 'secret'
   | 'number'
-  | 'boolean';
+  | 'boolean'
+  | 'file'
+  | 'json';
+
+export type PrimitiveCoercionSource = Exclude<
+  PrimitivePortTypeName,
+  'secret' | 'file'
+>;
+
+export interface PrimitivePortType {
+  kind: 'primitive';
+  name: PrimitivePortTypeName;
+  coercion?: {
+    from?: PrimitiveCoercionSource[];
+  };
+}
+
+export interface ListPortType {
+  kind: 'list';
+  element: PrimitivePortType | ContractPortType;
+}
+
+export interface MapPortType {
+  kind: 'map';
+  value: PrimitivePortType;
+}
+
+export interface ContractPortType {
+  kind: 'contract';
+  name: string;
+}
+
+export type PortDataType =
+  | PrimitivePortType
+  | ListPortType
+  | MapPortType
+  | ContractPortType;
 
 export interface ComponentPortMetadata {
   id: string;
   label: string;
-  type: ComponentPortType | ComponentPortType[];
+  dataType: PortDataType;
   required?: boolean;
   description?: string;
   valuePriority?: 'manual-first' | 'connection-first';
@@ -117,11 +150,14 @@ export interface ComponentAuthorMetadata {
   url?: string;
 }
 
-export type ComponentUiCategory =
-  | 'security-tool'
-  | 'building-block'
-  | 'input-output'
-  | 'trigger';
+// Categories supported by the new functional grouping plus legacy values for backwards compatibility
+export type ComponentCategory =
+  | 'input'
+  | 'transform'
+  | 'ai'
+  | 'security'
+  | 'it_ops'
+  | 'output';
 
 export type ComponentUiType =
   | 'trigger'
@@ -134,7 +170,7 @@ export interface ComponentUiMetadata {
   slug: string;
   version: string;
   type: ComponentUiType;
-  category: ComponentUiCategory;
+  category: ComponentCategory;
   description?: string;
   documentation?: string;
   documentationUrl?: string;
@@ -168,11 +204,17 @@ export interface ExecutionContext {
 export interface ComponentDefinition<I = unknown, O = unknown> {
   id: string;
   label: string;
-  category: 'trigger' | 'input' | 'discovery' | 'transform' | 'output';
+  category: ComponentCategory;
   runner: RunnerConfig;
   inputSchema: z.ZodType<I>;
   outputSchema: z.ZodType<O>;
   docs?: string;
   metadata?: ComponentUiMetadata;
   execute: (params: I, context: ExecutionContext) => Promise<O>;
+  resolvePorts?: (
+    params: Record<string, unknown>,
+  ) => {
+    inputs?: ComponentPortMetadata[];
+    outputs?: ComponentPortMetadata[];
+  };
 }

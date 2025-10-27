@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -87,7 +86,6 @@ function formatDate(iso: string) {
 }
 
 export function SecretsManager() {
-  const navigate = useNavigate()
 
   const secrets = useSecretStore((state) => state.secrets)
   const loading = useSecretStore((state) => state.loading)
@@ -298,18 +296,13 @@ export function SecretsManager() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold mb-1">Secret Manager</h1>
-            <p className="text-muted-foreground">
-              Store API keys, credentials, and tokens for use in workflows and security components.
-            </p>
-          </div>
-          <Button variant="outline" onClick={() => navigate('/')}>
-            Back to workflows
-          </Button>
+    <div className="flex-1 bg-background">
+      <div className="container mx-auto py-8 px-4">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold mb-2">Secret Manager</h2>
+          <p className="text-muted-foreground">
+            Store API keys, credentials, and tokens for use in workflows and security components.
+          </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[2fr,3fr]">

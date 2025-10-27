@@ -5,6 +5,7 @@ import type {
   TemporalService,
   WorkflowRunStatus,
 } from '../../temporal/temporal.service';
+import { WorkflowDefinition } from '../../dsl/types';
 import { TraceService } from '../../trace/trace.service';
 import {
   WorkflowGraphDto,
@@ -24,7 +25,11 @@ const baseGraph: WorkflowGraphDto = WorkflowGraphSchema.parse({
       position: { x: 0, y: 0 },
       data: {
         label: 'Trigger',
-        config: {},
+        config: {
+          runtimeInputs: [
+            { id: 'fileId', label: 'File ID', type: 'text', required: true },
+          ],
+        },
       },
     },
     {
@@ -33,11 +38,13 @@ const baseGraph: WorkflowGraphDto = WorkflowGraphSchema.parse({
       position: { x: 0, y: 100 },
       data: {
         label: 'Loader',
-        config: { fileName: 'controller.txt' },
+        config: {
+          fileId: '00000000-0000-4000-8000-000000000001',
+        },
       },
     },
   ],
-  edges: [{ id: 'edge', source: 'trigger', target: 'loader' }],
+  edges: [{ id: 'edge', source: 'trigger', target: 'loader', sourceHandle: 'fileId', targetHandle: 'fileId' }],
   viewport: { x: 0, y: 0, zoom: 1 },
 });
 
@@ -46,6 +53,65 @@ describe('WorkflowsController', () => {
   let repositoryStore: Map<string, WorkflowRecord>;
   let runStore: Map<string, any>;
   let lastCancelledRun: { workflowId: string; runId?: string } | null = null;
+  type MockWorkflowVersion = {
+    id: string;
+    workflowId: string;
+    version: number;
+    graph: WorkflowGraphDto;
+    compiledDefinition: WorkflowDefinition | null;
+    createdAt: Date;
+  };
+
+  let versionSeq = 0;
+  let versionStore: Map<string, MockWorkflowVersion>;
+  const versionsByWorkflow = new Map<string, MockWorkflowVersion[]>();
+
+  const resetVersions = () => {
+    versionSeq = 0;
+    versionStore = new Map();
+    versionsByWorkflow.clear();
+  };
+
+  const createVersionRecord = (workflowId: string, graph: WorkflowGraphDto): MockWorkflowVersion => {
+    versionSeq += 1;
+    const record: MockWorkflowVersion = {
+      id: `wf-version-${versionSeq}`,
+      workflowId,
+      version: versionSeq,
+      graph,
+      compiledDefinition: null,
+      createdAt: new Date(),
+    };
+    versionStore.set(record.id, record);
+    const list = versionsByWorkflow.get(workflowId) ?? [];
+    versionsByWorkflow.set(workflowId, [...list, record]);
+    return record;
+  };
+
+  const versionRepositoryStub = {
+    async create(input: { workflowId: string; graph: WorkflowGraphDto }) {
+      return createVersionRecord(input.workflowId, input.graph);
+    },
+    async findLatestByWorkflowId(workflowId: string) {
+      const list = versionsByWorkflow.get(workflowId);
+      return list ? list[list.length - 1] : undefined;
+    },
+    async findById(id: string) {
+      return versionStore.get(id);
+    },
+    async findByWorkflowAndVersion(input: { workflowId: string; version: number }) {
+      const list = versionsByWorkflow.get(input.workflowId);
+      return list?.find((record) => record.version === input.version);
+    },
+    async setCompiledDefinition(id: string, definition: WorkflowDefinition) {
+      const record = versionStore.get(id);
+      if (!record) {
+        return undefined;
+      }
+      record.compiledDefinition = definition;
+      return record;
+    },
+  };
   const now = new Date().toISOString();
 
   const repositoryStub: Partial<WorkflowRepository> = {
@@ -122,12 +188,22 @@ describe('WorkflowsController', () => {
     repositoryStore = new Map();
     runStore = new Map();
     lastCancelledRun = null;
+    resetVersions();
 
     const runRepositoryStub = {
-      async upsert(data: { runId: string; workflowId: string; temporalRunId: string; totalActions: number }) {
+      async upsert(data: {
+        runId: string;
+        workflowId: string;
+        workflowVersionId: string;
+        workflowVersion: number;
+        temporalRunId: string;
+        totalActions: number;
+      }) {
         const record = {
           runId: data.runId,
           workflowId: data.workflowId,
+          workflowVersionId: data.workflowVersionId,
+          workflowVersion: data.workflowVersion,
           temporalRunId: data.temporalRunId,
           totalActions: data.totalActions,
           createdAt: new Date(now),
@@ -184,6 +260,7 @@ describe('WorkflowsController', () => {
 
     const workflowsService = new WorkflowsService(
       repositoryStub as WorkflowRepository,
+      versionRepositoryStub as any,
       runRepositoryStub as any,
       traceRepositoryStub as any,
       temporalStub as TemporalService,
@@ -205,18 +282,23 @@ describe('WorkflowsController', () => {
     const created = await controller.create(baseGraph);
     expect(created.id).toBeDefined();
     expect(created.name).toBe('Controller workflow');
+     expect(created.currentVersion).toBe(1);
+     expect(created.currentVersionId).toBeDefined();
 
     const list = await controller.findAll();
     expect(list).toHaveLength(1);
+    expect(list[0].currentVersion).toBe(1);
 
     const updated = await controller.update(created.id, {
       ...baseGraph,
       name: 'Updated workflow',
     });
     expect(updated.name).toBe('Updated workflow');
+    expect(updated.currentVersion).toBeGreaterThanOrEqual(2);
 
     const fetched = await controller.findOne(created.id);
     expect(fetched.id).toBe(created.id);
+    expect(fetched.currentVersion).toBe(updated.currentVersion);
 
     const response = await controller.remove(created.id);
     expect(response).toEqual({ status: 'deleted', id: created.id });
@@ -235,6 +317,8 @@ describe('WorkflowsController', () => {
     expect(run.temporalRunId).toBe('temporal-run-controller');
     expect(run.status).toBe('RUNNING');
     expect(run.taskQueue).toBe('shipsec-default');
+    expect(run.workflowVersion).toBeDefined();
+    expect(run.workflowVersionId).toBeDefined();
 
     const status = await controller.status(run.runId, { temporalRunId: run.temporalRunId });
     expect(status.runId).toBe(run.runId);

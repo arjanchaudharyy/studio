@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Workflow, Loader2, AlertCircle } from 'lucide-react'
+import { Workflow, Loader2, AlertCircle } from 'lucide-react'
 import { api } from '@/services/api'
 import type { WorkflowMetadata } from '@/schemas/workflow'
 
@@ -41,33 +41,13 @@ export function WorkflowList() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto py-8">
+    <div className="flex-1 bg-background">
+      <div className="container mx-auto py-8 px-4">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Security Workflow Builder</h1>
+          <h2 className="text-2xl font-bold mb-2">Your Workflows</h2>
           <p className="text-muted-foreground">
-            Create and manage security automation workflows
+            Create and manage security automation workflows with powerful visual tools
           </p>
-        </div>
-
-        <div className="mb-6 flex flex-wrap gap-3">
-          <Button
-            onClick={() => navigate('/workflows/new')}
-            size="lg"
-            className="gap-2"
-            disabled={isLoading}
-          >
-            <Plus className="h-5 w-5" />
-            New Workflow
-          </Button>
-          <Button
-            onClick={() => navigate('/secrets')}
-            size="lg"
-            variant="outline"
-            disabled={isLoading}
-          >
-            Manage Secrets
-          </Button>
         </div>
 
         {isLoading ? (

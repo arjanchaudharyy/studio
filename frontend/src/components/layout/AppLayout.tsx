@@ -1,0 +1,182 @@
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarItem } from '@/components/ui/sidebar'
+import { AppTopBar } from '@/components/layout/AppTopBar'
+import { Button } from '@/components/ui/button'
+import { Workflow, KeyRound, Plus } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+
+interface AppLayoutProps {
+  children: React.ReactNode
+}
+
+interface SidebarContextValue {
+  isOpen: boolean
+  toggle: () => void
+}
+
+export const SidebarContext = React.createContext<SidebarContextValue | undefined>(undefined)
+
+export function useSidebar() {
+  const context = React.useContext(SidebarContext)
+  if (context === undefined) {
+    throw new Error('useSidebar must be used within an AppLayout')
+  }
+  return context
+}
+
+export function AppLayout({ children }: AppLayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Auto-collapse sidebar when opening workflow builder, expand for other routes
+  useEffect(() => {
+    const isWorkflowRoute = location.pathname.startsWith('/workflows') && location.pathname !== '/'
+    setSidebarOpen(!isWorkflowRoute)
+  }, [location.pathname])
+
+  const sidebarContextValue: SidebarContextValue = {
+    isOpen: sidebarOpen,
+    toggle: () => setSidebarOpen(!sidebarOpen)
+  }
+
+  const navigationItems = [
+    {
+      name: 'Workflow Builder',
+      href: '/',
+      icon: Workflow,
+    },
+    {
+      name: 'Secrets',
+      href: '/secrets',
+      icon: KeyRound,
+    }
+  ]
+
+  const isActive = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/' || location.pathname.startsWith('/workflows')
+    }
+    return location.pathname === path
+  }
+
+  // Get page-specific actions
+  const getPageActions = () => {
+    if (location.pathname === '/') {
+      return (
+        <Button onClick={() => navigate('/workflows/new')} className="gap-2">
+          <Plus className="h-4 w-4" />
+          New Workflow
+        </Button>
+      )
+    }
+
+    return null
+  }
+
+  return (
+    <SidebarContext.Provider value={sidebarContextValue}>
+      <div className="flex h-screen bg-background">
+        {/* Sidebar */}
+        <Sidebar
+          className={`fixed md:relative z-40 h-full transition-all duration-300 ${
+            sidebarOpen ? 'w-64' : 'w-0 md:w-16'
+          }`}
+        >
+        <SidebarHeader className="flex items-center gap-3 p-4 border-b">
+          <div className="flex items-center gap-2">
+            <div className="flex-shrink-0">
+              <img
+                src="/favicon.ico"
+                alt="ShipSec Studio"
+                className="w-6 h-6"
+                onError={(e) => {
+                  // Fallback to text if image fails to load
+                  e.currentTarget.style.display = 'none'
+                  e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                }}
+              />
+              <span className="hidden text-sm font-bold">SS</span>
+            </div>
+            <span
+              className={`font-bold text-xl transition-all duration-300 whitespace-nowrap overflow-hidden ${
+                sidebarOpen
+                  ? 'opacity-100 max-w-48'
+                  : 'opacity-0 max-w-0'
+              }`}
+              style={{
+                transitionDelay: sidebarOpen ? '150ms' : '0ms',
+                transitionProperty: 'opacity, max-width'
+              }}
+            >
+              ShipSec Studio
+            </span>
+          </div>
+        </SidebarHeader>
+
+        <SidebarContent>
+          <div className="space-y-1 px-2 mt-4">
+            {navigationItems.map((item) => {
+              const Icon = item.icon
+              const active = isActive(item.href)
+              return (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  onClick={() => {
+                    // Keep sidebar open when navigating to non-workflow routes
+                    if (!item.href.startsWith('/workflows')) {
+                      setSidebarOpen(true)
+                    }
+                  }}
+                >
+                  <SidebarItem
+                    isActive={active}
+                    className="flex items-center gap-3 justify-center md:justify-start"
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    <span
+                      className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${
+                        sidebarOpen
+                          ? 'opacity-100 max-w-32'
+                          : 'opacity-0 max-w-0'
+                      }`}
+                      style={{
+                        transitionDelay: sidebarOpen ? '200ms' : '0ms',
+                        transitionProperty: 'opacity, max-width'
+                      }}
+                    >
+                      {item.name}
+                    </span>
+                  </SidebarItem>
+                </Link>
+              )
+            })}
+          </div>
+        </SidebarContent>
+
+        <SidebarFooter className={`transition-all duration-300 ${sidebarOpen ? 'block' : 'hidden md:block'}`}>
+          <div className="text-xs text-muted-foreground px-4 py-2">
+            {sidebarOpen ? 'ShipSec Studio v1.0' : 'v1.0'}
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+
+      {/* Main content area */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Only show AppTopBar for non-workflow-builder pages */}
+        {!location.pathname.startsWith('/workflows') && (
+          <AppTopBar
+            sidebarOpen={sidebarOpen}
+            onSidebarToggle={() => setSidebarOpen(!sidebarOpen)}
+            actions={getPageActions()}
+          />
+        )}
+        <div className="flex-1 overflow-auto">
+          {children}
+        </div>
+      </main>
+    </div>
+    </SidebarContext.Provider>
+  )
+}

@@ -37,7 +37,7 @@ const createGenerateTextResult = (): GenerateTextResult<ToolSet, never> => ({
   response: {
     id: 'resp',
     timestamp: new Date('2024-01-01T00:00:00Z'),
-    modelId: 'gpt-4o-mini',
+    modelId: 'gpt-5-mini',
     messages: [],
   },
   output: undefined as never,
@@ -80,7 +80,7 @@ describe('core.openai.chat component', () => {
       {
         systemPrompt: 'system prompt',
         userPrompt: 'Hello?',
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         temperature: 0.5,
         maxTokens: 256,
         apiBaseUrl: '',
@@ -109,7 +109,7 @@ describe('core.openai.chat component', () => {
     expect(result.chatModel).toEqual(
       expect.objectContaining({
         provider: 'openai',
-        modelId: 'gpt-4o-mini',
+        modelId: 'gpt-5-mini',
         apiKeySecretId: 'a2e6b4ad-1234-4e4c-b64f-0123456789ab',
       }),
     );
@@ -138,7 +138,7 @@ describe('core.openai.chat component', () => {
         {
           systemPrompt: '',
           userPrompt: 'Hello',
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-mini',
           temperature: 0.7,
           maxTokens: 512,
           apiBaseUrl: '',

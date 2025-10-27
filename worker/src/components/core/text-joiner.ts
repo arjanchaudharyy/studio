@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
+import { componentRegistry, ComponentDefinition, port } from '@shipsec/component-sdk';
 
 // Support both direct text and file objects from previous components
 const manualTriggerFileSchema = z.object({
@@ -54,7 +54,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'text-joiner',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'transform',
     description: 'Join array of strings into formatted text for AI prompts.',
     icon: 'Merge',
     author: {
@@ -67,7 +67,7 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'items',
         label: 'Items',
-        type: 'array',
+        dataType: port.list(port.text()),
         required: true,
         description: 'Array of strings to join. Accepts array output from text-splitter or direct text input.',
       },
@@ -76,13 +76,13 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'text',
         label: 'Joined Text',
-        type: 'string',
+        dataType: port.text(),
         description: 'Single string with all items joined by separator.',
       },
       {
         id: 'count',
         label: 'Count',
-        type: 'string',
+        dataType: port.number({ coerceFrom: [] }),
         description: 'Number of items that were joined.',
       },
     ],

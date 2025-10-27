@@ -16,7 +16,7 @@ describe('amass component', () => {
     const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
     expect(component).toBeDefined();
     expect(component!.label).toBe('Amass Enumeration');
-    expect(component!.category).toBe('discovery');
+    expect(component!.category).toBe('security');
   });
 
   it('should provide default options when omitted', () => {

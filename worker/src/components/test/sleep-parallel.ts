@@ -28,7 +28,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'test-sleep-parallel',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'transform',
     description: 'Utility component that sleeps for a fixed delay and records timestamps.',
     author: {
       name: 'ShipSecAI',

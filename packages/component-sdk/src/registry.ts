@@ -2,7 +2,7 @@ import type { ComponentDefinition } from './types';
 
 type AnyComponentDefinition = ComponentDefinition<any, any>;
 
-class ComponentRegistry {
+export class ComponentRegistry {
   private components = new Map<string, AnyComponentDefinition>();
 
   register<I, O>(definition: ComponentDefinition<I, O>): void {
@@ -31,4 +31,3 @@ class ComponentRegistry {
 }
 
 export const componentRegistry = new ComponentRegistry();
-

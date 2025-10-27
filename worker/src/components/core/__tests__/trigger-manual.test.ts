@@ -12,7 +12,7 @@ describe('trigger-manual component', () => {
     const component = componentRegistry.get<ManualTriggerInput, ManualTriggerOutput>('core.trigger.manual');
     expect(component).toBeDefined();
     expect(component!.label).toBe('Manual Trigger');
-    expect(component!.category).toBe('trigger');
+    expect(component!.category).toBe('input');
   });
 
   it('should map runtime inputs to outputs', async () => {

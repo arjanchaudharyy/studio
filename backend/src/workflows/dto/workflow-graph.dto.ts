@@ -48,9 +48,16 @@ export class WorkflowGraphDto extends createZodDto(WorkflowGraphSchema) {}
 export class CreateWorkflowRequestDto extends WorkflowGraphDto {}
 export class UpdateWorkflowRequestDto extends WorkflowGraphDto {}
 
-export const RunWorkflowRequestSchema = z.object({
-  inputs: z.record(z.string(), z.unknown()).optional(),
-});
+export const RunWorkflowRequestSchema = z
+  .object({
+    inputs: z.record(z.string(), z.unknown()).optional(),
+    versionId: z.string().uuid().optional(),
+    version: z.coerce.number().int().min(1).optional(),
+  })
+  .refine(
+    (value) => !(value.version && value.versionId),
+    'Provide either version or versionId, not both',
+  );
 
 export class RunWorkflowRequestDto extends createZodDto(RunWorkflowRequestSchema) {}
 export type RunWorkflowRequest = z.infer<typeof RunWorkflowRequestSchema>;
@@ -129,6 +136,8 @@ export interface ServiceWorkflowResponse {
   runCount: number;
   createdAt: Date;
   updatedAt: Date;
+  currentVersionId: string | null;
+  currentVersion: number | null;
 }
 
 // Zod schema for API response validation (with string dates for JSON serialization)
@@ -145,6 +154,8 @@ export const WorkflowResponseSchema = z.object({
   runCount: z.number().int().nonnegative(),
   createdAt: z.string(), // Date string from JSON serialization
   updatedAt: z.string(), // Date string from JSON serialization
+  currentVersionId: z.string().uuid().nullable(),
+  currentVersion: z.number().int().positive().nullable(),
 });
 
 export type WorkflowResponse = z.infer<typeof WorkflowResponseSchema>;

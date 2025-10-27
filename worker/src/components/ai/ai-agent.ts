@@ -8,7 +8,11 @@ import {
 } from 'ai';
 import { createOpenAI as createOpenAIImpl } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI as createGoogleGenerativeAIImpl } from '@ai-sdk/google';
-import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  port,
+} from '@shipsec/component-sdk';
 
 // Define types for dependencies to enable dependency injection for testing
 export type ToolLoopAgentClass = typeof ToolLoopAgentImpl;
@@ -17,13 +21,16 @@ export type ToolFn = typeof toolImpl;
 export type CreateOpenAIFn = typeof createOpenAIImpl;
 export type CreateGoogleGenerativeAIFn = typeof createGoogleGenerativeAIImpl;
 
-type ModelProvider = 'openai' | 'gemini';
+type ModelProvider = 'openai' | 'gemini' | 'openrouter';
 
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL ?? '';
 const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL ?? '';
+const OPENROUTER_BASE_URL =
+  process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
 
 const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_OPENROUTER_MODEL = 'openrouter/auto';
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 1024;
 const DEFAULT_MEMORY_SIZE = 8;
@@ -77,11 +84,12 @@ const reasoningStepSchema = z.object({
 });
 
 const chatModelSchema = z.object({
-  provider: z.enum(['openai', 'gemini']).default('openai'),
+  provider: z.enum(['openai', 'gemini', 'openrouter']).default('openai'),
   modelId: z.string().optional(),
   apiKey: z.string().optional(),
   apiKeySecretId: z.string().optional(),
   baseUrl: z.string().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 });
 
 const mcpConfigSchema = z.object({
@@ -216,7 +224,15 @@ function ensureModelName(provider: ModelProvider, modelId?: string | null): stri
     return trimmed;
   }
 
-  return provider === 'gemini' ? DEFAULT_GEMINI_MODEL : DEFAULT_OPENAI_MODEL;
+  if (provider === 'gemini') {
+    return DEFAULT_GEMINI_MODEL;
+  }
+
+  if (provider === 'openrouter') {
+    return DEFAULT_OPENROUTER_MODEL;
+  }
+
+  return DEFAULT_OPENAI_MODEL;
 }
 
 function resolveApiKey(provider: ModelProvider, overrideKey?: string | null): string {
@@ -269,7 +285,7 @@ function trimConversation(history: AgentMessage[], memorySize: number): AgentMes
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.ai.agent',
   label: 'AI SDK Agent',
-  category: 'transform',
+  category: 'ai',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -290,7 +306,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
     slug: 'ai-agent',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'ai',
     description: 'AI SDK agent with conversation memory, MCP tool calling, and reasoning trace output.',
     icon: 'Bot',
     author: {
@@ -301,21 +317,21 @@ Loop the Conversation State output back into the next agent invocation to keep m
       {
         id: 'userInput',
         label: 'User Input',
-        type: 'string',
+        dataType: port.text(),
         required: true,
         description: 'Incoming user text for this agent turn.',
       },
       {
         id: 'chatModel',
         label: 'Chat Model',
-        type: 'object',
+        dataType: port.json(),
         required: false,
         description: 'Provider configuration. Example: {"provider":"gemini","modelId":"gemini-2.5-flash","apiKey":"gm-..."}',
       },
       {
         id: 'mcp',
         label: 'MCP',
-        type: 'object',
+        dataType: port.json(),
         required: false,
         description: 'MCP connection settings. Example: {"endpoint":"https://mcp.example.com/session"}',
       },
@@ -324,25 +340,25 @@ Loop the Conversation State output back into the next agent invocation to keep m
       {
         id: 'responseText',
         label: 'Agent Response',
-        type: 'string',
+        dataType: port.text(),
         description: 'Final assistant message produced by the agent.',
       },
       {
         id: 'conversationState',
         label: 'Conversation State',
-        type: 'object',
+        dataType: port.json(),
         description: 'Updated conversation memory for subsequent agent turns.',
       },
       {
         id: 'toolInvocations',
         label: 'Tool Invocations',
-        type: 'object',
+        dataType: port.json(),
         description: 'Array of MCP tool calls executed during this run.',
       },
       {
         id: 'reasoningTrace',
         label: 'Reasoning Trace',
-        type: 'object',
+        dataType: port.json(),
         description: 'Sequence of Think → Act → Observe steps executed by the agent.',
       },
     ],
@@ -477,9 +493,27 @@ Loop the Conversation State output back into the next agent invocation to keep m
         ? explicitBaseUrl
         : effectiveProvider === 'gemini'
           ? GEMINI_BASE_URL
-          : OPENAI_BASE_URL;
+          : effectiveProvider === 'openrouter'
+            ? OPENROUTER_BASE_URL
+            : OPENAI_BASE_URL;
 
     debugLog('Resolved base URL', { explicitBaseUrl, baseUrl });
+
+    const sanitizedHeaders =
+      chatModel?.headers && Object.keys(chatModel.headers).length > 0
+        ? Object.entries(chatModel.headers as Record<string, string>).reduce<Record<string, string>>(
+            (acc, [key, value]) => {
+              const trimmedKey = key.trim();
+              const trimmedValue = value.trim();
+              if (trimmedKey.length > 0 && trimmedValue.length > 0) {
+                acc[trimmedKey] = trimmedValue;
+              }
+              return acc;
+            },
+            {},
+          )
+        : undefined;
+    debugLog('Sanitized headers', sanitizedHeaders);
 
     const incomingState = conversationState;
     debugLog('Incoming conversation state', incomingState);
@@ -550,22 +584,28 @@ Loop the Conversation State output back into the next agent invocation to keep m
       }));
     debugLog('Messages for model', messagesForModel);
 
-    const createGoogleGenerativeAI = dependencies?.createGoogleGenerativeAI ?? createGoogleGenerativeAIImpl;
+    const createGoogleGenerativeAI =
+      dependencies?.createGoogleGenerativeAI ?? createGoogleGenerativeAIImpl;
     const createOpenAI = dependencies?.createOpenAI ?? createOpenAIImpl;
+    const openAIOptions = {
+      apiKey: effectiveApiKey,
+      ...(baseUrl ? { baseURL: baseUrl } : {}),
+      ...(sanitizedHeaders && Object.keys(sanitizedHeaders).length > 0
+        ? { headers: sanitizedHeaders }
+        : {}),
+    };
     const model =
       effectiveProvider === 'gemini'
         ? createGoogleGenerativeAI({
             apiKey: effectiveApiKey,
             ...(baseUrl ? { baseURL: baseUrl } : {}),
           })(effectiveModel)
-        : createOpenAI({
-            apiKey: effectiveApiKey,
-            ...(baseUrl ? { baseURL: baseUrl } : {}),
-          })(effectiveModel);
+        : createOpenAI(openAIOptions)(effectiveModel);
     debugLog('Model factory created', {
       provider: effectiveProvider,
       modelId: effectiveModel,
       baseUrl,
+      headers: sanitizedHeaders,
       temperature,
       maxTokens,
       stepLimit,

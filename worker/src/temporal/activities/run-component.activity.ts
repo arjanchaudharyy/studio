@@ -1,5 +1,6 @@
 import '../../components';
 import { Context } from '@temporalio/activity';
+import { ApplicationFailure } from '@temporalio/common';
 import {
   componentRegistry,
   createExecutionContext,
@@ -170,13 +171,13 @@ export async function runComponentActivity(
         componentRef: action.ref,
         activityId: activityInfo.activityId,
         attempt: activityInfo.attempt,
-      correlationId,
-      streamId,
-      joinStrategy,
-      triggeredBy,
-      failure,
-    },
-  });
+        correlationId,
+        streamId,
+        joinStrategy,
+        triggeredBy,
+        failure,
+      },
+    });
 
     return { output };
   } catch (error) {
@@ -193,14 +194,42 @@ export async function runComponentActivity(
         componentRef: action.ref,
         activityId: activityInfo.activityId,
         attempt: activityInfo.attempt,
-      correlationId,
+        correlationId,
+        streamId,
+        joinStrategy,
+        triggeredBy,
+        failure,
+      },
+    });
+
+    const errorType =
+      error instanceof Error && error.name ? error.name : 'ComponentError';
+
+    const details = {
+      componentId: action.componentId,
+      nodeRef: action.ref,
+      attempt: activityInfo.attempt,
+      activityId: activityInfo.activityId,
       streamId,
       joinStrategy,
       triggeredBy,
       failure,
-    },
-  });
-    throw error;
+      stack: error instanceof Error ? error.stack : undefined,
+    };
+
+    const isRetryable =
+      typeof error === 'object' &&
+      error !== null &&
+      'retryable' in error &&
+      typeof (error as any).retryable === 'boolean'
+        ? Boolean((error as any).retryable)
+        : false;
+
+    if (isRetryable) {
+      throw ApplicationFailure.retryable(errorMsg, errorType, [details]);
+    }
+
+    throw ApplicationFailure.nonRetryable(errorMsg, errorType, [details]);
   } finally {
     // Do not finalize run here; lifecycle is managed by workflow orchestration.
   }

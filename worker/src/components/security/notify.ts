@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, runComponentWithRunner } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  port,
+  runComponentWithRunner,
+} from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
   messages: z
@@ -94,7 +99,7 @@ const dockerTimeoutSeconds = (() => {
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.notify.dispatch',
   label: 'ProjectDiscovery Notify',
-  category: 'output',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'projectdiscovery/notify:latest',
@@ -184,7 +189,7 @@ cat "$MESSAGE_FILE" | "$@"
     slug: 'notify',
     version: '1.0.0',
     type: 'output',
-    category: 'security-tool',
+    category: 'security',
     description: 'Deliver security findings to Slack, Teams, and other channels using ProjectDiscovery notify.',
     documentation: 'Configure provider credentials via YAML then stream workflow output to notify for alerting.',
     documentationUrl: 'https://github.com/projectdiscovery/notify',
@@ -200,14 +205,14 @@ cat "$MESSAGE_FILE" | "$@"
       {
         id: 'messages',
         label: 'Messages',
-        type: 'array',
+        dataType: port.list(port.text()),
         required: true,
         description: 'Array of messages that notify should deliver.',
       },
       {
         id: 'providerConfig',
         label: 'Provider Configuration',
-        type: 'string',
+        dataType: port.text({ coerceFrom: [] }),
         required: true,
         description: 'YAML defining provider credentials and channels (plain text YAML content).',
       },
@@ -216,7 +221,7 @@ cat "$MESSAGE_FILE" | "$@"
       {
         id: 'rawOutput',
         label: 'Raw Output',
-        type: 'string',
+        dataType: port.text(),
         description: 'Raw CLI output returned by notify.',
       },
     ],

@@ -16,7 +16,7 @@ describe('naabu component', () => {
     const component = componentRegistry.get<NaabuInput, NaabuOutput>('shipsec.naabu.scan');
     expect(component).toBeDefined();
     expect(component!.label).toBe('Naabu Port Scan');
-    expect(component!.category).toBe('discovery');
+    expect(component!.category).toBe('security');
   });
 
   it('should provide sensible defaults', () => {

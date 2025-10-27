@@ -16,7 +16,7 @@ describe('subfinder component', () => {
     const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
     expect(component).toBeDefined();
     expect(component!.label).toBe('Subfinder');
-    expect(component!.category).toBe('discovery');
+    expect(component!.category).toBe('security');
   });
 
   it('should normalise raw output returned as plain text', async () => {

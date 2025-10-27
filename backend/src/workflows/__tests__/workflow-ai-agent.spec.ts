@@ -41,6 +41,7 @@ const workflowGraph = WorkflowGraphSchema.parse({
           model: 'gemini-2.5-flash',
           temperature: 0.7,
           maxTokens: 1024,
+          apiKey: 'secret:gemini-demo',
         },
       },
     },
@@ -56,6 +57,12 @@ const workflowGraph = WorkflowGraphSchema.parse({
           maxTokens: 1024,
           memorySize: 8,
           stepLimit: 4,
+          userInput: '{{gemini-chat.responseText}}',
+          chatModel: {
+            provider: 'gemini',
+            modelId: 'gemini-2.5-flash',
+            apiKeySecretId: 'secret:gemini-demo',
+          },
         },
       },
     },
@@ -67,6 +74,7 @@ const workflowGraph = WorkflowGraphSchema.parse({
         label: 'Console Log',
         config: {
           label: 'Agent Output',
+          data: '{{agent-node.responseText}}',
         },
       },
     },
@@ -218,8 +226,42 @@ describe('Workflow d177b3c0-644e-40f0-8aa2-7b4f2c13a3af', () => {
       },
     };
 
+    const versionRecord = {
+      id: 'version-1',
+      workflowId,
+      version: 1,
+      graph: workflowGraph,
+      compiledDefinition: null as WorkflowDefinition | null,
+      createdAt: now,
+    };
+
+    const versionRepositoryMock = {
+      async create() {
+        return versionRecord;
+      },
+      async findLatestByWorkflowId(id: string) {
+        return id === workflowId ? versionRecord : undefined;
+      },
+      async findById(id: string) {
+        return id === versionRecord.id ? versionRecord : undefined;
+      },
+      async findByWorkflowAndVersion(input: { workflowId: string; version: number }) {
+        return input.workflowId === workflowId && input.version === versionRecord.version
+          ? versionRecord
+          : undefined;
+      },
+      async setCompiledDefinition(id: string, definition: WorkflowDefinition) {
+        if (id === versionRecord.id) {
+          versionRecord.compiledDefinition = definition;
+          return versionRecord;
+        }
+        return undefined;
+      },
+    };
+
     const service = new WorkflowsService(
       repositoryMock as WorkflowRepository,
+      versionRepositoryMock as any,
       runRepositoryMock as any,
       traceRepositoryMock as any,
       {} as any,

@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { z } from 'zod';
-import { componentRegistry } from '../registry';
+import { ComponentRegistry } from '../registry';
 import type { ComponentDefinition } from '../types';
 
 describe('ComponentRegistry', () => {
-  // Clear registry before each test
+  let registry: ComponentRegistry;
+
   beforeEach(() => {
-    componentRegistry.clear();
+    registry = new ComponentRegistry();
   });
 
   it('should register a component', () => {
@@ -20,9 +21,9 @@ describe('ComponentRegistry', () => {
       execute: async (params: any) => ({ output: params.input }),
     };
 
-    componentRegistry.register(component);
+    registry.register(component);
 
-    const retrieved = componentRegistry.get('test.component');
+    const retrieved = registry.get('test.component');
     expect(retrieved).toBeDefined();
     expect(retrieved?.id).toBe('test.component');
     expect(retrieved?.label).toBe('Test Component');
@@ -39,15 +40,15 @@ describe('ComponentRegistry', () => {
       execute: async () => ({}),
     };
 
-    componentRegistry.register(component);
+    registry.register(component);
 
-    expect(() => componentRegistry.register(component)).toThrow(
+    expect(() => registry.register(component)).toThrow(
       'Component duplicate.component is already registered',
     );
   });
 
   it('should return undefined for non-existent component', () => {
-    const component = componentRegistry.get('non.existent');
+    const component = registry.get('non.existent');
     expect(component).toBeUndefined();
   });
 
@@ -72,10 +73,10 @@ describe('ComponentRegistry', () => {
       execute: async () => ({}),
     };
 
-    componentRegistry.register(component1);
-    componentRegistry.register(component2);
+    registry.register(component1);
+    registry.register(component2);
 
-    const all = componentRegistry.list();
+    const all = registry.list();
     expect(all).toHaveLength(2);
     expect(all.map((c) => c.id)).toContain('component.one');
     expect(all.map((c) => c.id)).toContain('component.two');
@@ -92,11 +93,11 @@ describe('ComponentRegistry', () => {
       execute: async () => ({}),
     };
 
-    expect(componentRegistry.has('exists.component')).toBe(false);
+    expect(registry.has('exists.component')).toBe(false);
 
-    componentRegistry.register(component);
+    registry.register(component);
 
-    expect(componentRegistry.has('exists.component')).toBe(true);
+    expect(registry.has('exists.component')).toBe(true);
   });
 
   it('should clear all components', () => {
@@ -110,11 +111,10 @@ describe('ComponentRegistry', () => {
       execute: async () => ({}),
     };
 
-    componentRegistry.register(component);
-    expect(componentRegistry.list()).toHaveLength(1);
+    registry.register(component);
+    expect(registry.list()).toHaveLength(1);
 
-    componentRegistry.clear();
-    expect(componentRegistry.list()).toHaveLength(0);
+    registry.clear();
+    expect(registry.list()).toHaveLength(0);
   });
 });
-

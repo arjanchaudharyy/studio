@@ -1,4 +1,4 @@
-import { proxyActivities } from '@temporalio/workflow';
+import { ApplicationFailure, proxyActivities } from '@temporalio/workflow';
 import { runWorkflowWithScheduler } from '../workflow-scheduler';
 import { buildActionParams } from '../input-resolver';
 import type {
@@ -85,11 +85,15 @@ export async function shipsecWorkflowRun(
       success: true,
     };
   } catch (error) {
-    return {
-      outputs: Object.fromEntries(results),
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    const outputs = Object.fromEntries(results);
+    const normalizedError =
+      error instanceof Error ? error : new Error(typeof error === 'string' ? error : JSON.stringify(error));
+
+    throw ApplicationFailure.nonRetryable(
+      normalizedError.message,
+      normalizedError.name ?? 'WorkflowFailure',
+      [{ outputs, error: normalizedError.message }],
+    );
   } finally {
     await finalizeRunActivity({ runId: input.runId }).catch((err) => {
       console.error(`[Workflow] Failed to finalize run ${input.runId}`, err);

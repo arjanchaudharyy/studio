@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { generateText as generateTextImpl } from 'ai';
 import { createGoogleGenerativeAI as createGoogleGenerativeAIImpl } from '@ai-sdk/google';
-import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  port,
+} from '@shipsec/component-sdk';
 
 // Define types for dependencies to enable dependency injection for testing
 export type GenerateTextFn = typeof generateTextImpl;
@@ -84,7 +88,7 @@ const outputSchema = z.object({
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.gemini.chat',
   label: 'Gemini Chat Completion',
-  category: 'transform',
+  category: 'ai',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -93,7 +97,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'gemini-chat-completion',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'ai',
     description: 'Send a system + user prompt to a Gemini chat completion API and return the response.',
     icon: 'MessageCircle',
     author: {
@@ -104,14 +108,14 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'systemPrompt',
         label: 'System Prompt',
-        type: 'string',
+        dataType: port.text(),
         required: false,
         description: 'Optional system instructions that prime the Gemini model.',
       },
       {
         id: 'userPrompt',
         label: 'User Prompt',
-        type: 'string',
+        dataType: port.text(),
         required: true,
         description: 'User input that will be sent to Gemini.',
       },
@@ -120,25 +124,25 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'responseText',
         label: 'Response Text',
-        type: 'string',
+        dataType: port.text(),
         description: 'The assistant response from Gemini.',
       },
       {
         id: 'rawResponse',
         label: 'Raw Response',
-        type: 'object',
+        dataType: port.json(),
         description: 'Raw response metadata returned by the Gemini provider for debugging.',
       },
       {
         id: 'usage',
         label: 'Token Usage',
-        type: 'object',
+        dataType: port.json(),
         description: 'Token usage metadata returned by the provider, if available.',
       },
       {
         id: 'chatModel',
         label: 'Chat Model Config',
-        type: 'object',
+        dataType: port.json(),
         description: 'Configuration object (provider, model, overrides) for wiring into the LangChain Agent node.',
       },
     ],

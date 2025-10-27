@@ -16,7 +16,7 @@ describe('dnsx component', () => {
     const component = componentRegistry.get<DnsxInput, DnsxOutput>('shipsec.dnsx.run');
     expect(component).toBeDefined();
     expect(component!.label).toBe('DNSX Resolver');
-    expect(component!.category).toBe('discovery');
+    expect(component!.category).toBe('security');
     expect(component!.metadata?.slug).toBe('dnsx');
   });
 

@@ -6,19 +6,51 @@ export const ComponentRunnerSchema = z
   })
   .passthrough()
 
+const PrimitivePortTypes = ['text', 'secret', 'number', 'boolean', 'file', 'json'] as const
+
+export const PrimitivePortTypeEnum = z.enum(PrimitivePortTypes)
+
+const PrimitivePortSchema = z.object({
+  kind: z.literal('primitive'),
+  name: PrimitivePortTypeEnum,
+  coercion: z
+    .object({
+      from: z.array(PrimitivePortTypeEnum).optional(),
+    })
+    .optional(),
+})
+
+const ContractPortSchema = z.object({
+  kind: z.literal('contract'),
+  name: z.string().min(1),
+})
+
+const ListPortSchema = z.object({
+  kind: z.literal('list'),
+  element: z.union([PrimitivePortSchema, ContractPortSchema]),
+})
+
+const MapPortSchema = z.object({
+  kind: z.literal('map'),
+  value: PrimitivePortSchema,
+})
+
+export const PortDataTypeSchema = z.union([
+  PrimitivePortSchema,
+  ContractPortSchema,
+  MapPortSchema,
+  ListPortSchema,
+])
+
+export type PortDataType = z.infer<typeof PortDataTypeSchema>
+
 /**
  * Defines input ports for a component
  */
-const portTypes = ['string', 'array', 'object', 'file', 'secret', 'number'] as const
-const PortTypeEnum = z.enum(portTypes)
-const PortTypeArray = z.array(PortTypeEnum).min(1)
-
-export type PortType = typeof portTypes[number]
-
 export const InputPortSchema = z.object({
   id: z.string(),
   label: z.string(),
-  type: z.union([PortTypeEnum, PortTypeArray]),
+  dataType: PortDataTypeSchema,
   required: z.boolean().optional(),
   description: z.string().optional(),
   valuePriority: z.enum(['manual-first', 'connection-first']).optional(),
@@ -32,7 +64,7 @@ export type InputPort = z.infer<typeof InputPortSchema>
 export const OutputPortSchema = z.object({
   id: z.string(),
   label: z.string(),
-  type: PortTypeEnum,
+  dataType: PortDataTypeSchema,
   description: z.string().optional(),
 })
 
@@ -77,6 +109,18 @@ export const ComponentAuthorSchema = z.object({
 export type ComponentAuthor = z.infer<typeof ComponentAuthorSchema>
 
 /**
+ * Component category configuration
+ */
+export const ComponentCategoryConfigSchema = z.object({
+  label: z.string(),
+  color: z.string(),
+  description: z.string(),
+  emoji: z.string(),
+})
+
+export type ComponentCategoryConfig = z.infer<typeof ComponentCategoryConfigSchema>
+
+/**
  * Complete component metadata definition
  */
 export const ComponentMetadataSchema = z.object({
@@ -85,7 +129,8 @@ export const ComponentMetadataSchema = z.object({
   name: z.string().min(1),
   version: z.string().default('1.0.0'),
   type: z.enum(['trigger', 'input', 'scan', 'process', 'output']),
-  category: z.enum(['security-tool', 'building-block', 'input-output', 'trigger']),
+  category: z.enum(['input', 'transform', 'ai', 'security', 'it_ops', 'output']),
+  categoryConfig: ComponentCategoryConfigSchema,
   description: z.string().optional().default(''),
   documentation: z.string().optional().nullable(),
   documentationUrl: z.string().url().optional().nullable(),

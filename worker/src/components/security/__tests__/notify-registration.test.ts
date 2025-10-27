@@ -10,7 +10,7 @@ describeNotify('Notify component registration', () => {
   test('registers ProjectDiscovery notify component with expected defaults', () => {
     const component = componentRegistry.get<NotifyInput, NotifyOutput>('shipsec.notify.dispatch');
     expect(component).toBeDefined();
-    expect(component!.category).toBe('output');
+    expect(component!.category).toBe('security');
     expect(component!.metadata?.slug).toBe('notify');
 
     if (component!.runner.kind === 'docker') {

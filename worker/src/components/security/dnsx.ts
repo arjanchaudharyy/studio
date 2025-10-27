@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
+  port,
   runComponentWithRunner,
 } from '@shipsec/component-sdk';
 
@@ -91,7 +92,7 @@ const outputSchema: z.ZodType<Output> = z.object({
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.dnsx.run',
   label: 'DNSX Resolver',
-  category: 'discovery',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'projectdiscovery/dnsx:latest',
@@ -216,7 +217,7 @@ fi
     slug: 'dnsx',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
     description:
       'Resolve DNS records using ProjectDiscovery dnsx with support for multiple record types, custom resolvers, and rate limiting.',
     documentation: 'https://github.com/projectdiscovery/dnsx',
@@ -231,20 +232,20 @@ fi
       {
         id: 'domains',
         label: 'Target Domains',
-        type: 'array',
+        dataType: port.list(port.text()),
         required: true,
         description: 'Array of domains or hostnames to resolve.',
       },
       {
         id: 'recordTypes',
         label: 'Record Types',
-        type: 'array',
+        dataType: port.list(port.text()),
         description: 'DNS record types to query (e.g. A, AAAA, CNAME).',
       },
       {
         id: 'resolvers',
         label: 'Resolvers',
-        type: 'array',
+        dataType: port.list(port.text()),
         description: 'Optional resolver IPs/hosts (e.g. 1.1.1.1:53).',
       },
     ],
@@ -252,13 +253,13 @@ fi
       {
         id: 'results',
         label: 'DNS Responses',
-        type: 'array',
+        dataType: port.list(port.json()),
         description: 'Structured dnsx JSONL output grouped by record type.',
       },
       {
         id: 'rawOutput',
         label: 'Raw Output',
-        type: 'string',
+        dataType: port.text(),
         description: 'Raw dnsx JSONL output prior to normalisation.',
       },
     ],

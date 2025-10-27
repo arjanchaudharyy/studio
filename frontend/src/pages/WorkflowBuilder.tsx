@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import {
   ReactFlowProvider,
   useNodesState,
@@ -12,6 +13,7 @@ import { ExecutionInspector } from '@/components/timeline/ExecutionInspector'
 import { ExecutionRunBanner } from '@/components/timeline/ExecutionRunBanner'
 import { RunWorkflowDialog } from '@/components/workflow/RunWorkflowDialog'
 import { useToast } from '@/components/ui/use-toast'
+import { Button } from '@/components/ui/button'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useComponentStore } from '@/store/componentStore'
@@ -40,6 +42,7 @@ function WorkflowBuilderContent() {
   const [runtimeInputs, setRuntimeInputs] = useState<any[]>([])
   const mode = useWorkflowUiStore((state) => state.mode)
   const libraryOpen = useWorkflowUiStore((state) => state.libraryOpen)
+  const toggleLibrary = useWorkflowUiStore((state) => state.toggleLibrary)
   const inspectorWidth = useWorkflowUiStore((state) => state.inspectorWidth)
   const setInspectorWidth = useWorkflowUiStore((state) => state.setInspectorWidth)
   const setMode = useWorkflowUiStore((state) => state.setMode)
@@ -49,7 +52,8 @@ function WorkflowBuilderContent() {
   const { toast } = useToast()
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const inspectorResizingRef = useRef(false)
-
+  const isLibraryVisible = libraryOpen && mode === 'design'
+  const [showLibraryContent, setShowLibraryContent] = useState(isLibraryVisible)
   // Load workflow on mount (if not new)
   useEffect(() => {
     const loadWorkflow = async () => {
@@ -71,7 +75,9 @@ function WorkflowBuilderContent() {
         setMetadata({
           id: workflow.id,
           name: workflow.name,
-          description: workflow.description,
+          description: workflow.description ?? '',
+          currentVersionId: workflow.currentVersionId ?? null,
+          currentVersion: workflow.currentVersion ?? null,
         })
 
         // Deserialize and set nodes/edges
@@ -251,6 +257,13 @@ function WorkflowBuilderContent() {
 
         // Update store with new workflow ID
         setWorkflowId(savedWorkflow.id)
+        setMetadata({
+          id: savedWorkflow.id,
+          name: savedWorkflow.name,
+          description: savedWorkflow.description ?? '',
+          currentVersionId: savedWorkflow.currentVersionId ?? null,
+          currentVersion: savedWorkflow.currentVersion ?? null,
+        })
         markClean()
 
         // Navigate to the new workflow URL
@@ -271,7 +284,14 @@ function WorkflowBuilderContent() {
           edges
         )
 
-        await api.workflows.update(workflowId, payload)
+        const updatedWorkflow = await api.workflows.update(workflowId, payload)
+        setMetadata({
+          id: updatedWorkflow.id,
+          name: updatedWorkflow.name,
+          description: updatedWorkflow.description ?? '',
+          currentVersionId: updatedWorkflow.currentVersionId ?? null,
+          currentVersion: updatedWorkflow.currentVersion ?? null,
+        })
         markClean()
 
         toast({
@@ -340,8 +360,22 @@ function WorkflowBuilderContent() {
     }
   }, [mode, setInspectorWidth])
 
-  const isLibraryVisible = libraryOpen && mode === 'design'
   const isInspectorVisible = mode === 'execution'
+  // Delay rendering sidebar contents until the expand animation completes to avoid mid-transition layout shifts.
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    if (isLibraryVisible) {
+      timeoutId = setTimeout(() => setShowLibraryContent(true), 220)
+    } else {
+      setShowLibraryContent(false)
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [isLibraryVisible])
 
   if (isLoading) {
     return (
@@ -362,6 +396,29 @@ function WorkflowBuilderContent() {
         onRun={handleRun}
         onSave={handleSave}
       />
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={toggleLibrary}
+        className={cn(
+          'fixed z-50 flex items-center gap-2 rounded-full border bg-background/95 text-xs font-medium shadow-lg transition-all duration-200 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+          isLibraryVisible
+            ? 'top-[88px] left-[300px] md:left-[364px] h-10 w-10 justify-center'
+            : 'top-[88px] left-5 md:left-[72px] h-10 px-4 py-2'
+        )}
+        aria-expanded={isLibraryVisible}
+        aria-label={isLibraryVisible ? 'Hide component library' : 'Show component library'}
+        title={isLibraryVisible ? 'Hide components' : 'Show components'}
+      >
+        {isLibraryVisible ? (
+          <PanelLeftClose className="h-5 w-5 flex-shrink-0" />
+        ) : (
+          <PanelLeftOpen className="h-5 w-5 flex-shrink-0" />
+        )}
+        <span className={cn('font-medium whitespace-nowrap', isLibraryVisible ? 'hidden' : 'block')}>
+          Show components
+        </span>
+      </Button>
 
       <div ref={layoutRef} className="flex flex-1 overflow-hidden">
         <aside
@@ -373,7 +430,7 @@ function WorkflowBuilderContent() {
           <div
             className={cn(
               'absolute inset-0 transition-opacity duration-150',
-              isLibraryVisible ? 'opacity-100' : 'opacity-0 pointer-events-none select-none'
+              showLibraryContent ? 'opacity-100' : 'opacity-0 pointer-events-none select-none'
             )}
           >
             <Sidebar />

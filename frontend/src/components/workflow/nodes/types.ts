@@ -1,41 +1,6 @@
 import { ComponentMetadata } from '@/schemas/component'
 
 /**
- * Component category display configuration
- */
-export interface CategoryConfig {
-  label: string
-  description: string
-  icon: string
-}
-
-export const CATEGORY_CONFIGS: Record<
-  ComponentMetadata['category'],
-  CategoryConfig
-> = {
-  'security-tool': {
-    label: 'Security Tools',
-    description: 'Security scanning and enumeration tools',
-    icon: 'Shield',
-  },
-  'building-block': {
-    label: 'Building Blocks',
-    description: 'Data processing and transformation utilities',
-    icon: 'Blocks',
-  },
-  'input-output': {
-    label: 'Input/Output',
-    description: 'Data input and output components',
-    icon: 'FileJson',
-  },
-  trigger: {
-    label: 'Triggers',
-    description: 'Workflow entrypoint components',
-    icon: 'Play',
-  },
-}
-
-/**
  * Component type display configuration
  */
 export interface TypeConfig {

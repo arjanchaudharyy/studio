@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, runComponentWithRunner } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  port,
+  runComponentWithRunner,
+} from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
   targets: z
@@ -92,7 +97,7 @@ const dockerTimeoutSeconds = (() => {
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.naabu.scan',
   label: 'Naabu Port Scan',
-  category: 'discovery',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'projectdiscovery/naabu:latest',
@@ -191,7 +196,7 @@ eval "$CMD"
     slug: 'naabu',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
     description: 'Fast active port scanning using ProjectDiscovery Naabu.',
     documentation: 'ProjectDiscovery Naabu documentation covers usage, CLI flags, and configuration examples.',
     documentationUrl: 'https://github.com/projectdiscovery/naabu',
@@ -207,7 +212,7 @@ eval "$CMD"
       {
         id: 'targets',
         label: 'Targets',
-        type: 'array',
+        dataType: port.list(port.text()),
         required: true,
         description: 'Hostnames or IP addresses to scan for open ports.',
       },
@@ -216,13 +221,13 @@ eval "$CMD"
       {
         id: 'findings',
         label: 'Open Ports',
-        type: 'array',
+        dataType: port.list(port.json()),
         description: 'List of open ports discovered per target.',
       },
       {
         id: 'rawOutput',
         label: 'Raw Output',
-        type: 'string',
+        dataType: port.text(),
         description: 'Raw Naabu output lines (JSON per host:port).',
       },
     ],

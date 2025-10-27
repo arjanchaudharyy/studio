@@ -9,9 +9,6 @@ import {
   StopCircle,
   PencilLine,
   MonitorPlay,
-  PanelLeftClose,
-  PanelLeftOpen,
-  KeyRound,
 } from 'lucide-react'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
@@ -32,7 +29,7 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
   const { status, runStatus, reset } = useExecutionStore()
   const isRunning = status === 'running' || status === 'queued'
-  const { mode, setMode, libraryOpen, toggleLibrary } = useWorkflowUiStore()
+  const { mode, setMode } = useWorkflowUiStore()
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -74,28 +71,6 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-3 ml-auto">
-        <Button
-          variant="outline"
-          onClick={() => navigate('/secrets')}
-          className="gap-2"
-        >
-          <KeyRound className="h-4 w-4" />
-          Secrets
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="inline-flex"
-          onClick={toggleLibrary}
-          aria-label={libraryOpen ? 'Hide component library' : 'Show component library'}
-        >
-          {libraryOpen ? (
-            <PanelLeftClose className="h-5 w-5" />
-          ) : (
-            <PanelLeftOpen className="h-5 w-5" />
-          )}
-        </Button>
-
         <div className="flex rounded-lg border bg-muted/40 overflow-hidden text-xs font-medium shadow-sm">
           <Button
             variant={mode === 'design' ? 'default' : 'ghost'}

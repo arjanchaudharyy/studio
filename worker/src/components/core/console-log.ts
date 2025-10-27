@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  port,
+  registerContract,
+} from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
   data: z.any().describe('Data to log to console'),
@@ -18,6 +23,16 @@ const outputSchema = z.object({
   preview: z.string(),
 });
 
+const CONSOLE_RESULT_CONTRACT = 'core.console-log.result.v1';
+
+registerContract({
+  name: CONSOLE_RESULT_CONTRACT,
+  schema: outputSchema,
+  summary: 'Console log execution result payload',
+  description:
+    'Confirms that the Console Log component emitted data, including a preview string for UI display.',
+});
+
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.console.log',
   label: 'Console Log',
@@ -30,7 +45,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'console-log',
     version: '1.0.0',
     type: 'output',
-    category: 'input-output',
+    category: 'output',
     description: 'Output data to workflow execution logs for debugging and monitoring.',
     icon: 'Terminal',
     author: {
@@ -43,7 +58,7 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'data',
         label: 'Data',
-        type: ['string', 'number', 'object', 'array', 'file', 'secret'],
+        dataType: port.json({ coerceFrom: ['text'] }),
         required: true,
         description: 'Any data to log (objects will be JSON stringified).',
       },
@@ -52,7 +67,7 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'result',
         label: 'Result',
-        type: 'object',
+        dataType: port.contract(CONSOLE_RESULT_CONTRACT),
         description: 'Confirmation that data was logged.',
       },
     ],

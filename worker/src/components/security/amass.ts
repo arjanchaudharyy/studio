@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, runComponentWithRunner } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  port,
+  runComponentWithRunner,
+} from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
   domains: z
@@ -132,7 +137,7 @@ const dockerTimeoutSeconds = (() => {
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.amass.enum',
   label: 'Amass Enumeration',
-  category: 'discovery',
+  category: 'security',
   runner: {
     kind: 'docker',
     image: 'owaspamass/amass:latest',
@@ -356,7 +361,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
     slug: 'amass',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
     description: 'OWASP Amass powered subdomain enumeration with optional brute force, alterations, and recursion controls.',
     documentation: 'OWASP Amass is a comprehensive attack surface mapping toolkit. Adjust enumeration depth, mutation behaviour, and DNS query rates to match your engagement.',
     documentationUrl: 'https://github.com/owasp-amass/amass',
@@ -372,7 +377,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
       {
         id: 'domains',
         label: 'Target Domains',
-        type: 'array',
+        dataType: port.list(port.text()),
         required: true,
         description: 'Root domains to enumerate using Amass.',
       },
@@ -381,13 +386,13 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
       {
         id: 'subdomains',
         label: 'Discovered Subdomains',
-        type: 'array',
+        dataType: port.list(port.text()),
         description: 'Unique list of subdomains discovered by Amass.',
       },
       {
         id: 'rawOutput',
         label: 'Raw Output',
-        type: 'string',
+        dataType: port.text(),
         description: 'Raw Amass console output for deeper inspection.',
       },
     ],

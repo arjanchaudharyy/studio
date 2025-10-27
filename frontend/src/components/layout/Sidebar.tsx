@@ -1,17 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import * as LucideIcons from 'lucide-react'
 import { useComponentStore } from '@/store/componentStore'
+import { Input } from '@/components/ui/input'
 import type { ComponentMetadata } from '@/schemas/component'
 import { cn } from '@/lib/utils'
 import { env } from '@/config/env'
 
-const TYPE_CONFIG = {
-  trigger: { label: 'Triggers', color: 'text-gray-500' },
-  input: { label: 'Inputs', color: 'text-blue-600' },
-  scan: { label: 'Security Tools', color: 'text-purple-600' },
-  process: { label: 'Processing', color: 'text-green-600' },
-  output: { label: 'Outputs', color: 'text-orange-600' },
-} as const satisfies Record<string, { label: string; color: string }>
+// Use backend-provided category configuration
+// The frontend will no longer categorize components - it will use backend data
 
 interface ComponentItemProps {
   component: ComponentMetadata
@@ -74,7 +70,8 @@ function ComponentItem({ component }: ComponentItemProps) {
 }
 
 export function Sidebar() {
-  const { getAllComponents, getComponentsByType, fetchComponents, loading, error } = useComponentStore()
+  const { getAllComponents, fetchComponents, loading, error } = useComponentStore()
+  const [searchQuery, setSearchQuery] = useState('')
   const frontendBranch = env.VITE_FRONTEND_BRANCH.trim()
   const backendBranch = env.VITE_BACKEND_BRANCH.trim()
   const hasBranchInfo = Boolean(frontendBranch || backendBranch)
@@ -87,23 +84,73 @@ export function Sidebar() {
   }, [fetchComponents])
 
   const allComponents = getAllComponents()
-  const componentsByType = {
-    trigger: getComponentsByType('trigger'),
-    input: getComponentsByType('input'),
-    scan: getComponentsByType('scan'),
-    process: getComponentsByType('process'),
-    output: getComponentsByType('output'),
-  }
+
+  // Group components by backend-provided categories
+  const componentsByCategory = allComponents.reduce((acc, component) => {
+    const category = component.category
+    if (!acc[category]) {
+      acc[category] = []
+    }
+    acc[category].push(component)
+    return acc
+  }, {} as Record<string, ComponentMetadata[]>)
+
+  // Filter components based on search query
+  const filteredComponentsByCategory = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return componentsByCategory
+    }
+
+    const query = searchQuery.toLowerCase()
+    const filtered = {} as Record<string, ComponentMetadata[]>
+
+    Object.entries(componentsByCategory).forEach(([category, components]) => {
+      const firstComponent = components[0]
+      const categoryConfig = firstComponent?.categoryConfig
+
+      // Check if category name matches the search query
+      const categoryMatches =
+        categoryConfig?.label.toLowerCase().includes(query) ||
+        categoryConfig?.description.toLowerCase().includes(query) ||
+        category.toLowerCase().includes(query)
+
+      // Filter components within this category
+      const matchingComponents = components.filter(component =>
+        component.name.toLowerCase().includes(query) ||
+        component.description?.toLowerCase().includes(query) ||
+        component.id.toLowerCase().includes(query)
+      )
+
+      // Include category if either category name matches or components within it match
+      if (categoryMatches || matchingComponents.length > 0) {
+        filtered[category] = matchingComponents
+      }
+    })
+
+    return filtered
+  }, [componentsByCategory, searchQuery])
 
   return (
     <div className="h-full w-full max-w-[320px] border-r bg-background flex flex-col">
-      <div className="p-4 border-b">
-        <h2 className="text-lg font-semibold">Components</h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          Drag and drop to add to workflow
-        </p>
+      <div className="p-4 border-b space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Components</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Drag and drop to add to workflow
+          </p>
+        </div>
+
+        <div className="relative">
+          <Input
+            placeholder="Search components..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="text-sm"
+          />
+        </div>
+
         {hasBranchInfo && (
-          <div className="mt-2 space-y-1">
+          <div className="space-y-1">
             {frontendBranch && (
               <p className="text-xs text-muted-foreground">Frontend branch: {frontendBranch}</p>
             )}
@@ -129,19 +176,31 @@ export function Sidebar() {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Search results message */}
+            {searchQuery.trim() && (
+              <div className="text-xs text-muted-foreground">
+                Found {Object.values(filteredComponentsByCategory).reduce((total, components) => total + components.length, 0)}
+                {Object.values(filteredComponentsByCategory).reduce((total, components) => total + components.length, 0) !== 1 ? ' components' : ' component'}
+                matching "{searchQuery}"
+              </div>
+            )}
+
             <div className="space-y-6">
-              {(Object.keys(componentsByType) as Array<keyof typeof componentsByType>).map((type) => {
-                const components = componentsByType[type]
+              {Object.entries(filteredComponentsByCategory).map(([category, components]) => {
                 if (components.length === 0) return null
 
-                const config = TYPE_CONFIG[type as keyof typeof TYPE_CONFIG]
-                if (!config) return null
+                const categoryConfig = components[0]?.categoryConfig
 
                 return (
-                  <div key={type}>
-                    <h3 className={cn('text-sm font-semibold mb-3', config.color)}>
-                      {config.label}
-                    </h3>
+                  <div key={category}>
+                    <div className="mb-3">
+                      <h3 className={cn('text-sm font-semibold', categoryConfig?.color || 'text-gray-600')}>
+                        {categoryConfig?.label || category}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {categoryConfig?.description || `${category} components`}
+                      </p>
+                    </div>
                     <div className="space-y-2">
                       {components.map((component) => (
                         <ComponentItem key={component.id} component={component} />
@@ -152,9 +211,24 @@ export function Sidebar() {
               })}
             </div>
 
+            {/* Show no results message if search yields nothing */}
+            {searchQuery.trim() && Object.values(filteredComponentsByCategory).every(components => components.length === 0) && (
+              <div className="text-center py-8">
+                <p className="text-sm text-muted-foreground">
+                  No components found matching "{searchQuery}"
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Try different keywords or clear the search
+                </p>
+              </div>
+            )}
+
             <div className="pt-4 border-t">
               <p className="text-xs text-muted-foreground">
-                {allComponents.length} component{allComponents.length !== 1 ? 's' : ''} available
+                {searchQuery.trim()
+                  ? `${Object.values(filteredComponentsByCategory).reduce((total, components) => total + components.length, 0)} of ${allComponents.length} component${allComponents.length !== 1 ? 's' : ''} shown`
+                  : `${allComponents.length} component${allComponents.length !== 1 ? 's' : ''} available`
+                }
               </p>
             </div>
           </div>

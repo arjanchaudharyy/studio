@@ -209,6 +209,14 @@
                           "workflowId": {
                             "type": "string"
                           },
+                          "workflowVersionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "workflowVersion": {
+                            "type": "number",
+                            "nullable": true
+                          },
                           "status": {
                             "type": "string",
                             "enum": [
@@ -238,6 +246,12 @@
                             "type": "string"
                           },
                           "eventCount": {
+                            "type": "number"
+                          },
+                          "nodeCount": {
+                            "type": "number"
+                          },
+                          "duration": {
                             "type": "number"
                           }
                         }
@@ -374,6 +388,14 @@
                     "workflowId": {
                       "type": "string",
                       "description": "Workflow record id"
+                    },
+                    "workflowVersionId": {
+                      "type": "string",
+                      "description": "Workflow version identifier used for execution"
+                    },
+                    "workflowVersion": {
+                      "type": "integer",
+                      "description": "Workflow version number used for execution"
                     },
                     "temporalRunId": {
                       "type": "string",
@@ -1101,7 +1123,7 @@
                       },
                       "category": {
                         "type": "string",
-                        "example": "input-output"
+                        "example": "input"
                       },
                       "description": {
                         "type": "string",
@@ -2248,6 +2270,16 @@
               "zoom"
             ]
           },
+          "currentVersionId": {
+            "format": "uuid",
+            "type": "string",
+            "nullable": true
+          },
+          "currentVersion": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1
+          },
           "compiledDefinition": {
             "nullable": true
           },
@@ -2412,6 +2444,12 @@
               "type": "string"
             },
             "additionalProperties": {}
+          },
+          "versionId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
           }
         }
       },

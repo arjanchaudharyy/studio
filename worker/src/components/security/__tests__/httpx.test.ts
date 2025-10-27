@@ -68,7 +68,7 @@ describeHttpx('httpx component', () => {
     const component = componentRegistry.get<HttpxInput, HttpxOutput>('shipsec.httpx.scan');
     expect(component).toBeDefined();
     expect(component!.label).toBe('httpx Web Probe');
-    expect(component!.category).toBe('discovery');
+    expect(component!.category).toBe('security');
   });
 
   test('normalises docker runner JSON output', async () => {

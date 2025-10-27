@@ -1,13 +1,17 @@
 import { z } from 'zod';
 import { generateText as generateTextImpl } from 'ai';
 import { createOpenAI as createOpenAIImpl } from '@ai-sdk/openai';
-import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  port,
+} from '@shipsec/component-sdk';
 
 // Define types for dependencies to enable dependency injection for testing
 export type GenerateTextFn = typeof generateTextImpl;
 export type CreateOpenAIFn = typeof createOpenAIImpl;
 
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const DEFAULT_MODEL = 'gpt-5-mini';
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 512;
 const DEFAULT_BASE_URL = process.env.OPENAI_BASE_URL ?? '';
@@ -83,7 +87,7 @@ const outputSchema = z.object({
 const definition: ComponentDefinition<Input, Output> = {
   id: 'core.openai.chat',
   label: 'OpenAI Chat Completion',
-  category: 'transform',
+  category: 'ai',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
@@ -92,7 +96,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'openai-chat-completion',
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'ai',
     description:
       'Send a system + user prompt to an OpenAI compatible chat completion API and return the response.',
     icon: 'MessageCircle',
@@ -104,14 +108,14 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'systemPrompt',
         label: 'System Prompt',
-        type: 'string',
+        dataType: port.text(),
         required: false,
         description: 'Optional system message that primes the model.',
       },
       {
         id: 'userPrompt',
         label: 'User Prompt',
-        type: 'string',
+        dataType: port.text(),
         required: true,
         description: 'User input that will be sent to the assistant.',
       },
@@ -120,25 +124,25 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'responseText',
         label: 'Response Text',
-        type: 'string',
+        dataType: port.text(),
         description: 'The assistant response from the model.',
       },
       {
         id: 'rawResponse',
         label: 'Raw Response',
-        type: 'object',
+        dataType: port.json(),
         description: 'Raw response metadata returned by the provider for debugging.',
       },
       {
         id: 'usage',
         label: 'Token Usage',
-        type: 'object',
+        dataType: port.json(),
         description: 'Token usage metadata returned by the provider, if available.',
       },
       {
         id: 'chatModel',
         label: 'Chat Model Config',
-        type: 'object',
+        dataType: port.json(),
         description: 'Configuration object (provider, model, overrides) for wiring into downstream nodes such as the AI Agent.',
       },
     ],
@@ -151,9 +155,11 @@ const definition: ComponentDefinition<Input, Output> = {
         default: DEFAULT_MODEL,
         description: 'OpenAI compatible chat model to invoke.',
         options: [
-          { label: 'gpt-4o-mini', value: 'gpt-4o-mini' },
-          { label: 'gpt-4o', value: 'gpt-4o' },
-          { label: 'gpt-4.1-mini', value: 'gpt-4.1-mini' },
+          { label: 'GPT-5 Mini', value: 'gpt-5-mini' },
+          { label: 'GPT-5 Pro', value: 'gpt-5-pro' },
+          { label: 'GPT-5', value: 'gpt-5' },
+          { label: 'GPT-4o', value: 'gpt-4o' },
+          { label: 'GPT-4.1 Mini', value: 'gpt-4.1-mini' },
         ],
       },
       {

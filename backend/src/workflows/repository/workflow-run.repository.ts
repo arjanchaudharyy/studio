@@ -12,6 +12,8 @@ import {
 interface CreateWorkflowRunInput {
   runId: string;
   workflowId: string;
+  workflowVersionId: string;
+  workflowVersion: number;
   temporalRunId: string;
   totalActions: number;
 }
@@ -27,6 +29,8 @@ export class WorkflowRunRepository {
     const values: WorkflowRunInsert = {
       runId: input.runId,
       workflowId: input.workflowId,
+      workflowVersionId: input.workflowVersionId,
+      workflowVersion: input.workflowVersion,
       temporalRunId: input.temporalRunId,
       totalActions: input.totalActions,
       updatedAt: new Date(),
@@ -39,6 +43,8 @@ export class WorkflowRunRepository {
         target: workflowRunsTable.runId,
         set: {
           workflowId: input.workflowId,
+          workflowVersionId: input.workflowVersionId,
+          workflowVersion: input.workflowVersion,
           temporalRunId: input.temporalRunId,
           totalActions: input.totalActions,
           updatedAt: new Date(),

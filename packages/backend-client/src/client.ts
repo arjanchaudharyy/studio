@@ -535,6 +535,8 @@ export interface components {
                 y: number;
                 zoom: number;
             };
+            currentVersionId: string | null;
+            currentVersion: number | null;
             compiledDefinition: unknown;
             lastRun: string | null;
             runCount: number;
@@ -577,6 +579,8 @@ export interface components {
             inputs?: {
                 [key: string]: unknown;
             };
+            versionId?: string;
+            version?: number;
         };
         SecretVersionResponse: {
             id: string;
@@ -781,6 +785,8 @@ export interface operations {
                         runs?: {
                             id?: string;
                             workflowId?: string;
+                            workflowVersionId?: string | null;
+                            workflowVersion?: number | null;
                             /** @enum {string} */
                             status?: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "TERMINATED" | "CONTINUED_AS_NEW" | "TIMED_OUT" | "UNKNOWN";
                             /** Format: date-time */
@@ -790,6 +796,8 @@ export interface operations {
                             temporalRunId?: string;
                             workflowName?: string;
                             eventCount?: number;
+                            nodeCount?: number;
+                            duration?: number;
                         }[];
                     };
                 };
@@ -860,12 +868,16 @@ export interface operations {
                     "application/json": {
                         /** @description Temporal workflow identifier */
                         runId?: string;
-                        /** @description Workflow record id */
-                        workflowId?: string;
-                        /** @description Temporal first execution run id */
-                        temporalRunId?: string;
-                        /** @description Temporal task queue used for execution */
-                        taskQueue?: string;
+                    /** @description Workflow record id */
+                    workflowId?: string;
+                    /** @description Workflow version identifier used for execution */
+                    workflowVersionId?: string;
+                    /** @description Workflow version number used for execution */
+                    workflowVersion?: number;
+                    /** @description Temporal first execution run id */
+                    temporalRunId?: string;
+                    /** @description Temporal task queue used for execution */
+                    taskQueue?: string;
                         /** @enum {string} */
                         status?: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "TERMINATED" | "CONTINUED_AS_NEW" | "TIMED_OUT" | "UNKNOWN";
                     };
@@ -1195,7 +1207,7 @@ export interface operations {
                         version?: string;
                         /** @example input */
                         type?: string;
-                        /** @example input-output */
+                        /** @example input */
                         category?: string;
                         /** @example Load files from filesystem */
                         description?: string;

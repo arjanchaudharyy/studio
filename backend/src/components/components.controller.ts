@@ -4,6 +4,7 @@ import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 // Ensure all worker components are registered before accessing the registry
 import '@shipsec/worker/components';
 import { componentRegistry } from '@shipsec/component-sdk';
+import { categorizeComponent, getCategoryConfig } from './utils/categorization';
 
 function serializeComponent(component: ReturnType<typeof componentRegistry.get>) {
   if (!component) {
@@ -14,8 +15,12 @@ function serializeComponent(component: ReturnType<typeof componentRegistry.get>)
     slug: component.id,
     version: '1.0.0',
     type: 'process',
-    category: 'building-block',
+    category: 'transform',
   };
+
+  // Categorize the component using the new backend logic
+  const category = categorizeComponent(component);
+  const categoryConfig = getCategoryConfig(category);
 
   return {
     id: component.id,
@@ -23,7 +28,8 @@ function serializeComponent(component: ReturnType<typeof componentRegistry.get>)
     name: component.label,
     version: metadata.version ?? '1.0.0',
     type: metadata.type ?? 'process',
-    category: metadata.category ?? component.category,
+    category: category,
+    categoryConfig: categoryConfig,
     description: metadata.description ?? component.docs ?? '',
     documentation: metadata.documentation ?? component.docs ?? '',
     documentationUrl: metadata.documentationUrl ?? null,
@@ -57,7 +63,16 @@ export class ComponentsController {
           name: { type: 'string', example: 'File Loader' },
           version: { type: 'string', example: '1.0.0' },
           type: { type: 'string', example: 'input' },
-          category: { type: 'string', example: 'input-output' },
+          category: { type: 'string', example: 'input' },
+          categoryConfig: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', example: '📥 Input' },
+              color: { type: 'string', example: 'text-blue-600' },
+              description: { type: 'string', example: 'Data sources, triggers, and credential access' },
+              emoji: { type: 'string', example: '📥' },
+            },
+          },
           description: { type: 'string', example: 'Load files from filesystem' },
           documentation: { type: 'string', nullable: true },
           documentationUrl: { type: 'string', nullable: true },
@@ -98,18 +113,32 @@ export class ComponentsController {
               properties: {
                 id: { type: 'string' },
                 label: { type: 'string' },
-                type: {
-                  oneOf: [
-                    { type: 'string', enum: ['string', 'array', 'object', 'file', 'secret', 'number'] },
-                    {
-                      type: 'array',
-                      items: { type: 'string', enum: ['string', 'array', 'object', 'file', 'secret', 'number'] },
-                      minItems: 1,
+                dataType: {
+                  type: 'object',
+                  properties: {
+                    kind: { type: 'string', enum: ['primitive', 'list', 'map', 'contract'] },
+                    name: { type: 'string' },
+                    element: { type: 'object' },
+                    value: { type: 'object' },
+                    coercion: {
+                      type: 'object',
+                      properties: {
+                        from: {
+                          type: 'array',
+                          items: {
+                            type: 'string',
+                            enum: ['text', 'secret', 'number', 'boolean', 'file', 'json'],
+                          },
+                        },
+                      },
                     },
-                  ],
+                  },
+                  required: ['kind'],
+                  additionalProperties: true,
                 },
                 required: { type: 'boolean' },
                 description: { type: 'string', nullable: true },
+                valuePriority: { type: 'string', enum: ['manual-first', 'connection-first'], nullable: true },
               },
             },
           },
@@ -120,7 +149,29 @@ export class ComponentsController {
               properties: {
                 id: { type: 'string' },
                 label: { type: 'string' },
-                type: { type: 'string', enum: ['string', 'array', 'object', 'file', 'secret', 'number'] },
+                dataType: {
+                  type: 'object',
+                  properties: {
+                    kind: { type: 'string', enum: ['primitive', 'list', 'map', 'contract'] },
+                    name: { type: 'string' },
+                    element: { type: 'object' },
+                    value: { type: 'object' },
+                    coercion: {
+                      type: 'object',
+                      properties: {
+                        from: {
+                          type: 'array',
+                          items: {
+                            type: 'string',
+                            enum: ['text', 'secret', 'number', 'boolean', 'file', 'json'],
+                          },
+                        },
+                      },
+                    },
+                  },
+                  required: ['kind'],
+                  additionalProperties: true,
+                },
                 description: { type: 'string', nullable: true },
               },
             },
@@ -185,6 +236,116 @@ export class ComponentsController {
   @Get(':id')
   @ApiOkResponse({
     description: 'Get a specific component by ID',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        slug: { type: 'string' },
+        name: { type: 'string' },
+        version: { type: 'string' },
+        type: { type: 'string' },
+        category: { type: 'string' },
+        categoryConfig: {
+          type: 'object',
+          properties: {
+            label: { type: 'string' },
+            color: { type: 'string' },
+            description: { type: 'string' },
+            emoji: { type: 'string' },
+          },
+        },
+        description: { type: 'string', nullable: true },
+        documentation: { type: 'string', nullable: true },
+        documentationUrl: { type: 'string', nullable: true },
+        icon: { type: 'string', nullable: true },
+        logo: { type: 'string', nullable: true },
+        author: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            name: { type: 'string' },
+            type: { type: 'string' },
+            url: { type: 'string', nullable: true },
+          },
+        },
+        runner: { type: 'object' },
+        inputs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              label: { type: 'string' },
+              dataType: {
+                type: 'object',
+                properties: {
+                  kind: { type: 'string', enum: ['primitive', 'list', 'map', 'contract'] },
+                  name: { type: 'string' },
+                  element: { type: 'object' },
+                  value: { type: 'object' },
+                  coercion: {
+                    type: 'object',
+                    properties: {
+                      from: {
+                        type: 'array',
+                        items: {
+                          type: 'string',
+                          enum: ['text', 'secret', 'number', 'boolean', 'file', 'json'],
+                        },
+                      },
+                    },
+                  },
+                },
+                required: ['kind'],
+                additionalProperties: true,
+              },
+              required: { type: 'boolean' },
+              description: { type: 'string', nullable: true },
+              valuePriority: { type: 'string', enum: ['manual-first', 'connection-first'], nullable: true },
+            },
+          },
+        },
+        outputs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              label: { type: 'string' },
+              dataType: {
+                type: 'object',
+                properties: {
+                  kind: { type: 'string', enum: ['primitive', 'list', 'map', 'contract'] },
+                  name: { type: 'string' },
+                  element: { type: 'object' },
+                  value: { type: 'object' },
+                  coercion: {
+                    type: 'object',
+                    properties: {
+                      from: {
+                        type: 'array',
+                        items: {
+                          type: 'string',
+                          enum: ['text', 'secret', 'number', 'boolean', 'file', 'json'],
+                        },
+                      },
+                    },
+                  },
+                },
+                required: ['kind'],
+                additionalProperties: true,
+              },
+              description: { type: 'string', nullable: true },
+            },
+          },
+        },
+        parameters: { type: 'array' },
+        examples: { type: 'array' },
+        isLatest: { type: 'boolean', nullable: true },
+        deprecated: { type: 'boolean', nullable: true },
+        example: { type: 'string', nullable: true },
+      },
+    },
   })
   getComponent(@Param('id') id: string) {
     const component = componentRegistry.get(id);

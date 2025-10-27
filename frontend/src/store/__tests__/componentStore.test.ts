@@ -10,7 +10,13 @@ const mockComponents: ComponentMetadata[] = [
     name: 'Manual Trigger',
     version: '2.0.0',
     type: 'trigger',
-    category: 'trigger',
+    category: 'input',
+    categoryConfig: {
+      label: '📥 Input',
+      color: 'text-blue-600',
+      description: 'Data sources, triggers, and credential access',
+      emoji: '📥'
+    },
     description: '',
     documentation: null,
     documentationUrl: null,
@@ -32,7 +38,13 @@ const mockComponents: ComponentMetadata[] = [
     name: 'Subfinder',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
+    categoryConfig: {
+      label: '🔒 Security Tools',
+      color: 'text-red-600',
+      description: 'Security scanning and assessment tools',
+      emoji: '🔒'
+    },
     description: '',
     documentation: null,
     documentationUrl: null,
@@ -54,7 +66,13 @@ const mockComponents: ComponentMetadata[] = [
     name: 'httpx Web Probe',
     version: '1.0.0',
     type: 'scan',
-    category: 'security-tool',
+    category: 'security',
+    categoryConfig: {
+      label: '🔒 Security Tools',
+      color: 'text-red-600',
+      description: 'Security scanning and assessment tools',
+      emoji: '🔒'
+    },
     description: '',
     documentation: null,
     documentationUrl: null,
