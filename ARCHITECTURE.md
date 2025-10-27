@@ -34,7 +34,7 @@ shipsec-studio/
 │       │   └── trace.adapter.ts         # In-memory trace collector
 │       └── temporal/
 │           ├── workflows/      # Temporal workflow definitions
-│           ├── activities/     # runWorkflowActivity
+│           ├── activities/     # runComponentActivity, setRunMetadataActivity, finalizeRunActivity
 │           └── workers/        # dev.worker.ts
 │
 ├── backend/                    # 🌐 REST API (NestJS on Bun)
@@ -151,13 +151,24 @@ const secretsAdapter = new SecretsAdapter(db);
 const logAdapter = new LokiLogAdapter(new LokiLogClient({ baseUrl: process.env.LOKI_URL! }), db);
 
 // Inject into activities
-initializeActivityServices(storageAdapter, traceAdapter, logAdapter, secretsAdapter);
+initializeComponentActivityServices({
+  storage: storageAdapter, 
+  trace: traceAdapter, 
+  logs: logAdapter, 
+  secrets: secretsAdapter
+});
 
 // Start worker
 const worker = await Worker.create({
   connection,
+  namespace,
+  taskQueue,
   workflowsPath,
-  activities: { runWorkflowActivity },
+  activities: {
+    runComponentActivity,
+    setRunMetadataActivity,
+    finalizeRunActivity,
+  },
 });
 ```
 
@@ -201,17 +212,17 @@ const worker = await Worker.create({
    └─> Picks up workflow task
    └─> Executes shipsecWorkflowRun() workflow function
 
-5. Workflow calls runWorkflowActivity()
-   └─> Activity receives DSL definition
-   └─> For each action in order:
-       ├─> Looks up component in registry
-       ├─> Creates ExecutionContext with injected services
-       ├─> Runs component.execute(params, context)
-       └─> Component uses context.storage.downloadFile(...)
+5. Workflow orchestrates component execution by calling runComponentActivity() for each component
+   └─> Each component execution uses the same runComponentActivity
+   └─> Activity receives componentId and parameters
+   └─> Looks up component in registry by componentId
+   └─> Creates ExecutionContext with injected services
+   └─> Runs component.execute(params, context)
+   └─> Component uses context.storage.downloadFile(...)
 
 6. Results flow back
    └─> Activity completes with outputs
-   └─> Workflow completes
+   └─> Workflow continues to next component or completes
    └─> Backend polls Temporal for result
    └─> Frontend displays result
 ```
@@ -249,6 +260,11 @@ const context = createExecutionContext({
 });
 ```
 
+**How injection happens during execution**:
+- Activities receive service adapters during worker initialization via `initializeComponentActivityServices`
+- Each component execution gets an ExecutionContext with injected services
+- Single activity (`runComponentActivity`) handles all component types dynamically using the componentId to look up the right component in the registry
+
 **Benefits**:
 - ✅ Components are portable and testable (mock interfaces)
 - ✅ Adapters can be swapped (MinIO → S3, PostgreSQL → MongoDB)
@@ -257,17 +273,15 @@ const context = createExecutionContext({
 ## Running the System
 
 ```bash
-# Start Temporal cluster (docker-compose)
-cd temporal && docker-compose up -d
+# Start infrastructure (Temporal, PostgreSQL, MinIO, Loki via docker-compose)
+docker compose up -d
 
-# Start PostgreSQL + MinIO
-cd .. && docker-compose up -d postgres minio
+# Start backend + worker + frontend (via PM2)
+bun run dev:stack
 
-# Start backend + worker (via PM2)
-pm2 start pm2.config.cjs
-
-# Start frontend
-cd frontend && bun dev
+# Or start services individually
+pm2 start pm2.config.cjs  # starts backend and worker
+cd frontend && bun dev    # starts frontend dev server
 ```
 
 ## Development Workflow
@@ -300,17 +314,20 @@ backend
 
 worker
   ├─> @shipsec/component-sdk (SDK types + registry)
-  └─> (MinIO, PostgreSQL, Temporal SDKs)
+  └─> @shipsec/shared (execution schemas and types)
 
 component-sdk
   └─> (zod only - zero runtime dependencies)
+
+shared
+  └─> (zod, TypeScript types for execution contracts)
 ```
 
 ## Future Enhancements
 
 - [ ] Docker runner implementation (currently stubbed)
 - [ ] Remote runner for distributed execution
-- [ ] Secrets management service
-- [ ] Artifact storage service
-- [ ] Real-time trace streaming via WebSockets
+- [x] Secrets management service (completed: SecretsAdapter with PostgreSQL backend)
+- [x] Artifact storage service (completed: IArtifactService interface implemented)
+- [x] Real-time trace streaming via WebSockets (completed: ITraceService with TraceAdapter)
 - [ ] Component marketplace

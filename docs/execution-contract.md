@@ -45,6 +45,25 @@ import { WorkflowRunStatusPayload } from '@shipsec/shared';
 
 ---
 
+## Workflow Version Metadata
+
+Workflow definitions are immutable per save. The backend snapshots each edit into `workflow_versions` and attaches version metadata to run handles so replays always target the correct graph.
+
+- `POST /workflows/:id/run` now returns the version identifier used for execution (`workflowVersionId`, `workflowVersion`).
+- `GET /workflows/runs` exposes the same fields for every timeline entry, alongside existing metrics.
+- Workflow CRUD responses include `currentVersionId` and `currentVersion` so the UI can surface which revision is active.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `currentVersionId` | `string \| null` | Latest immutable revision for the workflow record. Present on workflow CRUD responses. |
+| `currentVersion` | `number \| null` | Monotonic version number (`1..n`) for the latest revision. |
+| `workflowVersionId` | `string` | Version snapshot executed by a run (handle + timeline entries). |
+| `workflowVersion` | `number` | Sequential version number executed by a run. |
+
+Consumers should treat these values as immutable references—selecting an older version and invoking `POST /workflows/:id/run` with `version` or `versionId` forces a replay against that snapshot.
+
+---
+
 ## Trace Event Payload
 
 ```ts
@@ -110,4 +129,3 @@ Each event represents a discrete change in node execution state or log output. E
 ## Versioning
 
 The contract is versioned alongside the shared package. Consumers should depend on `@shipsec/shared` and avoid duplicating inline enums or schemas. Any breaking change must bump the package minor version and update this document.
-

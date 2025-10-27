@@ -229,8 +229,12 @@ export class WorkflowsController {
               startTime: { type: 'string', format: 'date-time' },
               endTime: { type: 'string', format: 'date-time', nullable: true },
               temporalRunId: { type: 'string' },
+              workflowVersionId: { type: 'string', nullable: true },
+              workflowVersion: { type: 'number', nullable: true },
               workflowName: { type: 'string' },
               eventCount: { type: 'number' },
+              nodeCount: { type: 'number' },
+              duration: { type: 'number' },
             },
           },
         },
@@ -322,6 +326,14 @@ export class WorkflowsController {
           type: 'string',
           description: 'Temporal task queue used for execution',
         },
+        workflowVersionId: {
+          type: 'string',
+          description: 'Workflow version identifier used for execution',
+        },
+        workflowVersion: {
+          type: 'integer',
+          description: 'Workflow version number used for execution',
+        },
         status: {
           type: 'string',
           enum: [
@@ -345,6 +357,8 @@ export class WorkflowsController {
   ) {
     return this.workflowsService.run(id, {
       inputs: body.inputs,
+      versionId: body.versionId,
+      version: body.version,
     });
   }
 

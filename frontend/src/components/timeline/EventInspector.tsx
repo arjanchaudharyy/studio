@@ -196,8 +196,17 @@ export function EventInspector({ className }: EventInspectorProps) {
   const formatDuration = (start: string, end?: string): string => {
     const startTime = new Date(start).getTime()
     const endTime = end ? new Date(end).getTime() : Date.now()
-    const duration = endTime - startTime
-    return `${duration}ms`
+    const duration = Math.max(0, endTime - startTime)
+    
+    if (duration < 1000) {
+      return `${duration}ms`
+    } else if (duration < 60000) {
+      return `${(duration / 1000).toFixed(2)}s`
+    } else {
+      const minutes = Math.floor(duration / 60000)
+      const seconds = ((duration % 60000) / 1000).toFixed(1)
+      return `${minutes}m ${seconds}s`
+    }
   }
 
   const formatData = (data: Record<string, unknown>) => {
@@ -257,7 +266,7 @@ export function EventInspector({ className }: EventInspectorProps) {
                 const IconComponent = EVENT_ICONS[event.type] || FileText
                 const isExpanded = expandedEvents.has(event.id)
                 const isSelected = event.id === selectedEventId
-                const isCurrent = Math.abs(event.offsetMs - currentTime) < 300 // Tighter tolerance for precise selection
+                const isCurrent = Math.abs(event.offsetMs - currentTime) < 500 // More generous tolerance for better highlighting
                 const isLatestEvent = index === displayEvents.length - 1
                 const isRecentLiveEvent = playbackMode === 'live' && isLatestEvent
                 const isCurrentReplayEvent = playbackMode === 'replay' && isCurrent

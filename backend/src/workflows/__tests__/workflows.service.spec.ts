@@ -56,6 +56,44 @@ describe('WorkflowsService', () => {
   let storedRunMeta: any = null;
   let completedCount = 0;
 
+  type MockWorkflowVersion = {
+    id: string;
+    workflowId: string;
+    version: number;
+    graph: typeof sampleGraph;
+    compiledDefinition: WorkflowDefinition | null;
+    createdAt: Date;
+  };
+
+  let workflowVersionSeq = 0;
+  let workflowVersionStore = new Map<string, MockWorkflowVersion>();
+  const workflowVersionsByWorkflow = new Map<string, MockWorkflowVersion[]>();
+
+  const resetWorkflowVersions = () => {
+    workflowVersionSeq = 0;
+    workflowVersionStore = new Map();
+    workflowVersionsByWorkflow.clear();
+  };
+
+  const createWorkflowVersionRecord = (
+    workflowId: string,
+    graph: typeof sampleGraph = sampleGraph,
+  ): MockWorkflowVersion => {
+    workflowVersionSeq += 1;
+    const record: MockWorkflowVersion = {
+      id: `version-${workflowVersionSeq}`,
+      workflowId,
+      version: workflowVersionSeq,
+      graph,
+      compiledDefinition: null,
+      createdAt: new Date(now),
+    };
+    workflowVersionStore.set(record.id, record);
+    const list = workflowVersionsByWorkflow.get(workflowId) ?? [];
+    workflowVersionsByWorkflow.set(workflowId, [...list, record]);
+    return record;
+  };
+
   const repositoryMock = {
     async create() {
       createCalls += 1;
@@ -114,11 +152,45 @@ describe('WorkflowsService', () => {
     },
   } as unknown as WorkflowRepository;
 
+  const versionRepositoryMock = {
+    async create(input: { workflowId: string; graph: typeof sampleGraph }) {
+      return createWorkflowVersionRecord(input.workflowId, input.graph);
+    },
+    async findLatestByWorkflowId(workflowId: string) {
+      const list = workflowVersionsByWorkflow.get(workflowId);
+      return list ? list[list.length - 1] : undefined;
+    },
+    async findById(id: string) {
+      return workflowVersionStore.get(id);
+    },
+    async findByWorkflowAndVersion(input: { workflowId: string; version: number }) {
+      const list = workflowVersionsByWorkflow.get(input.workflowId);
+      return list?.find((record) => record.version === input.version);
+    },
+    async setCompiledDefinition(id: string, definition: WorkflowDefinition) {
+      const record = workflowVersionStore.get(id);
+      if (!record) {
+        return undefined;
+      }
+      record.compiledDefinition = definition;
+      return record;
+    },
+  };
+
   const runRepositoryMock = {
-    async upsert(data: { runId: string; workflowId: string; temporalRunId: string; totalActions: number }) {
+    async upsert(data: {
+      runId: string;
+      workflowId: string;
+      workflowVersionId: string;
+      workflowVersion: number;
+      temporalRunId: string;
+      totalActions: number;
+    }) {
       storedRunMeta = {
         runId: data.runId,
         workflowId: data.workflowId,
+        workflowVersionId: data.workflowVersionId,
+        workflowVersion: data.workflowVersion,
         temporalRunId: data.temporalRunId,
         totalActions: data.totalActions,
         createdAt: new Date(now),
@@ -192,10 +264,12 @@ describe('WorkflowsService', () => {
     savedDefinition = null;
     storedRunMeta = null;
     completedCount = 0;
+    resetWorkflowVersions();
 
     const temporalService = buildTemporalStub();
     service = new WorkflowsService(
       repositoryMock,
+      versionRepositoryMock as any,
       runRepositoryMock as any,
       traceRepositoryMock as any,
       temporalService,
@@ -206,15 +280,23 @@ describe('WorkflowsService', () => {
     const created = await service.create(sampleGraph);
     expect(created.id).toBe('workflow-id');
     expect(createCalls).toBe(1);
+    expect(created.currentVersion).toBe(1);
+    expect(created.currentVersionId).toBeDefined();
   });
 
   it('commits a workflow definition', async () => {
+    await service.create(sampleGraph);
     const definition = await service.commit('workflow-id');
     expect(definition.actions.length).toBeGreaterThan(0);
     expect(savedDefinition).toEqual(definition);
+    const latestVersion = versionRepositoryMock.findLatestByWorkflowId
+      ? await versionRepositoryMock.findLatestByWorkflowId('workflow-id')
+      : undefined;
+    expect(latestVersion?.compiledDefinition).toEqual(definition);
   });
 
   it('runs a workflow definition via the Temporal service', async () => {
+    const created = await service.create(sampleGraph);
     const definition = compileWorkflowGraph(sampleGraph);
     repositoryMock.findById = async () => ({
       id: 'workflow-id',
@@ -246,9 +328,19 @@ describe('WorkflowsService', () => {
       workflowId: 'workflow-id',
       totalActions: definition.actions.length,
     });
+    expect(run.workflowVersionId).toEqual(created.currentVersionId);
+    expect(run.workflowVersion).toEqual(created.currentVersion);
+    expect(storedRunMeta).toMatchObject({
+      runId: run.runId,
+      workflowId: 'workflow-id',
+      workflowVersionId: created.currentVersionId,
+      workflowVersion: created.currentVersion,
+      totalActions: definition.actions.length,
+    });
   });
 
   it('delegates status, result, and cancel operations to the Temporal service', async () => {
+    await service.create(sampleGraph);
     const run = await service.run('workflow-id');
     completedCount = 1;
     const status = await service.getRunStatus(run.runId, run.temporalRunId);
@@ -273,6 +365,7 @@ describe('WorkflowsService', () => {
   });
 
   it('maps failure details into a failure summary', async () => {
+    resetWorkflowVersions();
     const failureTemporalService = buildTemporalStub({
       status: 'FAILED',
       closeTime: now,
@@ -288,14 +381,19 @@ describe('WorkflowsService', () => {
 
     service = new WorkflowsService(
       repositoryMock,
+      versionRepositoryMock as any,
       runRepositoryMock as any,
       traceRepositoryMock as any,
       failureTemporalService,
     );
 
+    const versionRecord = createWorkflowVersionRecord('workflow-id');
+
     storedRunMeta = {
       runId: 'shipsec-run-fail',
       workflowId: 'workflow-id',
+      workflowVersionId: versionRecord.id,
+      workflowVersion: versionRecord.version,
       temporalRunId: 'temporal-run-mock',
       totalActions: 2,
       createdAt: new Date(now),

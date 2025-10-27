@@ -201,8 +201,8 @@ export function ExecutionTimeline() {
     setPlaybackSpeed(speed)
   }, [setPlaybackSpeed])
 
-  // Calculate progress percentage
-  const progress = totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0
+  // Calculate progress percentage with better bounds checking
+  const progress = totalDuration > 0 ? Math.min(100, Math.max(0, (currentTime / totalDuration) * 100)) : 0
 
   // Generate event markers
   const eventMarkers = events.map((event) => {
@@ -216,8 +216,8 @@ export function ExecutionTimeline() {
       ? (percentage / 100) >= timelineStart && (percentage / 100) <= (timelineStart + viewportWidth)
       : true // Show all events when zoomed out
       
-    // Determine if event is close to current seeker position (within 1% of timeline)
-    const isNearSeeker = Math.abs(percentage - progress) <= 1
+    // Determine if event is close to current seeker position (within 2% of timeline for better highlighting)
+    const isNearSeeker = Math.abs(percentage - progress) <= 2
 
     let markerColor = isNearSeeker ? 'bg-purple-500' : 'bg-gray-400' // Highlight events near seeker
     if (event.type === 'COMPLETED') markerColor = isNearSeeker ? 'bg-green-600' : 'bg-green-500'

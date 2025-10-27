@@ -8,12 +8,18 @@ import {
   TemporalService,
   type WorkflowRunStatus as TemporalWorkflowRunStatus,
 } from '../temporal/temporal.service';
-import { WorkflowGraphDto, WorkflowGraphSchema, WorkflowResponse, ServiceWorkflowResponse } from './dto/workflow-graph.dto';
+import {
+  WorkflowGraphDto,
+  WorkflowGraphSchema,
+  WorkflowResponse,
+  ServiceWorkflowResponse,
+} from './dto/workflow-graph.dto';
 import {
   WorkflowRecord,
   WorkflowRepository,
 } from './repository/workflow.repository';
 import { WorkflowRunRepository } from './repository/workflow-run.repository';
+import { WorkflowVersionRepository } from './repository/workflow-version.repository';
 import { TraceRepository } from '../trace/trace.repository';
 import {
   ExecutionStatus,
@@ -21,14 +27,19 @@ import {
   WorkflowRunStatusPayload,
   TraceEventPayload,
 } from '@shipsec/shared';
+import type { WorkflowVersionRecord } from '../database/schema';
 
 export interface WorkflowRunRequest {
   inputs?: Record<string, unknown>;
+  versionId?: string;
+  version?: number;
 }
 
 export interface WorkflowRunHandle {
   runId: string;
   workflowId: string;
+  workflowVersionId: string;
+  workflowVersion: number;
   temporalRunId: string;
   status: ExecutionStatus;
   taskQueue: string;
@@ -51,6 +62,8 @@ export interface DataFlowPacketDto {
 
 interface FlowContext {
   workflowId: string;
+  workflowVersionId: string;
+  workflowVersion: number;
   definition: WorkflowDefinition;
   targetsBySource: Map<
     string,
@@ -69,6 +82,7 @@ export class WorkflowsService {
 
   constructor(
     private readonly repository: WorkflowRepository,
+    private readonly versionRepository: WorkflowVersionRepository,
     private readonly runRepository: WorkflowRunRepository,
     private readonly traceRepository: TraceRepository,
     private readonly temporalService: TemporalService,
@@ -77,9 +91,19 @@ export class WorkflowsService {
   async create(dto: WorkflowGraphDto): Promise<ServiceWorkflowResponse> {
     const input = this.parse(dto);
     const record = await this.repository.create(input);
-    const flattened = this.flattenWorkflowGraph(record);
+    let version: WorkflowVersionRecord;
+    try {
+      version = await this.versionRepository.create({
+        workflowId: record.id,
+        graph: input,
+      });
+    } catch (error) {
+      await this.repository.delete(record.id);
+      throw error;
+    }
+    const flattened = this.flattenWorkflowGraph(record, version);
     this.logger.log(
-      `Created workflow ${flattened.id} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
+      `Created workflow ${flattened.id} version ${version.version} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
     );
     return flattened;
   }
@@ -87,9 +111,13 @@ export class WorkflowsService {
   async update(id: string, dto: WorkflowGraphDto): Promise<ServiceWorkflowResponse> {
     const input = this.parse(dto);
     const record = await this.repository.update(id, input);
-    const flattened = this.flattenWorkflowGraph(record);
+    const version = await this.versionRepository.create({
+      workflowId: record.id,
+      graph: input,
+    });
+    const flattened = this.flattenWorkflowGraph(record, version);
     this.logger.log(
-      `Updated workflow ${flattened.id} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
+      `Updated workflow ${flattened.id} to version ${version.version} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
     );
     return flattened;
   }
@@ -99,16 +127,22 @@ export class WorkflowsService {
     if (!record) {
       throw new NotFoundException(`Workflow ${id} not found`);
     }
-    return this.flattenWorkflowGraph(record);
+    const version = await this.versionRepository.findLatestByWorkflowId(id);
+    return this.flattenWorkflowGraph(record, version ?? null);
   }
 
-  private flattenWorkflowGraph(record: WorkflowRecord): ServiceWorkflowResponse {
+  private flattenWorkflowGraph(
+    record: WorkflowRecord,
+    version?: WorkflowVersionRecord | null,
+  ): ServiceWorkflowResponse {
     // Flatten graph.{nodes, edges, viewport} to top level for API compatibility
     return {
       ...record,
       nodes: record.graph.nodes,
       edges: record.graph.edges,
       viewport: record.graph.viewport,
+      currentVersionId: version?.id ?? null,
+      currentVersion: version?.version ?? null,
     };
   }
 
@@ -119,7 +153,12 @@ export class WorkflowsService {
 
   async list(): Promise<ServiceWorkflowResponse[]> {
     const records = await this.repository.list();
-    const flattened = records.map((record) => this.flattenWorkflowGraph(record));
+    const versions = await Promise.all(
+      records.map((record) => this.versionRepository.findLatestByWorkflowId(record.id)),
+    );
+    const flattened = records.map((record, index) =>
+      this.flattenWorkflowGraph(record, versions[index] ?? null),
+    );
     this.logger.log(`Loaded ${flattened.length} workflow(s) from repository`);
     return flattened;
   }
@@ -145,7 +184,12 @@ export class WorkflowsService {
       // Get workflow name
       const workflow = await this.repository.findById(run.workflowId);
       const workflowName = workflow?.name ?? 'Unknown Workflow';
-      const graph = workflow?.graph as { nodes?: unknown[] } | undefined;
+      const version = run.workflowVersionId
+        ? await this.versionRepository.findById(run.workflowVersionId)
+        : workflow
+          ? await this.versionRepository.findLatestByWorkflowId(workflow.id)
+          : undefined;
+      const graph = (version?.graph ?? workflow?.graph) as { nodes?: unknown[] } | undefined;
       const nodeCount = Array.isArray(graph?.nodes) ? graph!.nodes!.length : 0;
 
       // Get event count
@@ -166,6 +210,8 @@ export class WorkflowsService {
       enrichedRuns.push({
         id: run.runId,
         workflowId: run.workflowId,
+        workflowVersionId: run.workflowVersionId ?? null,
+        workflowVersion: run.workflowVersion ?? null,
         status: currentStatus,
         startTime: run.createdAt,
         endTime: run.updatedAt,
@@ -185,36 +231,39 @@ export class WorkflowsService {
   }
 
   async commit(id: string): Promise<WorkflowDefinition> {
-    const workflow = await this.findById(id);
-    this.logger.log(`Compiling workflow ${workflow.id}`);
-    const definition = compileWorkflowGraph(workflow.graph);
+    const workflow = await this.repository.findById(id);
+    if (!workflow) {
+      throw new NotFoundException(`Workflow ${id} not found`);
+    }
+
+    const version = await this.versionRepository.findLatestByWorkflowId(id);
+    if (!version) {
+      throw new NotFoundException(`No versions recorded for workflow ${id}`);
+    }
+
+    this.logger.log(`Compiling workflow ${workflow.id} version ${version.version}`);
+    const graph = WorkflowGraphSchema.parse(version.graph);
+    const definition = compileWorkflowGraph(graph);
     await this.repository.saveCompiledDefinition(id, definition);
+    await this.versionRepository.setCompiledDefinition(version.id, definition);
     this.logger.log(
-      `Compiled workflow ${workflow.id} with ${definition.actions.length} action(s); entrypoint=${definition.entrypoint.ref}`,
+      `Compiled workflow ${workflow.id} version ${version.version} with ${definition.actions.length} action(s); entrypoint=${definition.entrypoint.ref}`,
     );
     return definition;
   }
 
   async run(id: string, request: WorkflowRunRequest = {}): Promise<WorkflowRunHandle> {
-    const workflow = await this.findById(id);
+    const workflow = await this.repository.findById(id);
+    if (!workflow) {
+      throw new NotFoundException(`Workflow ${id} not found`);
+    }
     const inputSummary = this.formatInputSummary(request.inputs);
     this.logger.log(
       `Received run request for workflow ${workflow.id} (inputs=${inputSummary})`,
     );
 
-    let definition = workflow.compiledDefinition;
-    const needsRecompile =
-      !definition?.actions?.every((action: any) => action && 'inputMappings' in action);
-
-    if (!definition || needsRecompile) {
-      this.logger.log(`Recompiling workflow ${workflow.id} for latest schema`);
-      definition = await this.commit(id);
-    }
-
-    if (!definition) {
-      throw new Error(`Failed to compile workflow ${workflow.id}`);
-    }
-    const compiledDefinition = definition as WorkflowDefinition;
+    const version = await this.resolveWorkflowVersion(workflow.id, request);
+    const compiledDefinition = await this.ensureDefinitionForVersion(workflow, version);
     const runId = `shipsec-run-${randomUUID()}`;
 
     // Track execution stats
@@ -235,12 +284,14 @@ export class WorkflowsService {
       });
 
       this.logger.log(
-        `Started workflow run ${runId} (temporalRunId=${temporalRun.runId}, taskQueue=${temporalRun.taskQueue}, actions=${compiledDefinition.actions.length})`,
+        `Started workflow run ${runId} (workflowVersion=${version.version}, temporalRunId=${temporalRun.runId}, taskQueue=${temporalRun.taskQueue}, actions=${compiledDefinition.actions.length})`,
       );
 
       await this.runRepository.upsert({
         runId,
         workflowId: workflow.id,
+        workflowVersionId: version.id,
+        workflowVersion: version.version,
         temporalRunId: temporalRun.runId,
         totalActions: compiledDefinition.actions.length,
       });
@@ -248,6 +299,8 @@ export class WorkflowsService {
       return {
         runId,
         workflowId: workflow.id,
+        workflowVersionId: version.id,
+        workflowVersion: version.version,
         temporalRunId: temporalRun.runId,
         status: 'RUNNING',
         taskQueue: temporalRun.taskQueue,
@@ -260,6 +313,59 @@ export class WorkflowsService {
       );
       throw error;
     }
+  }
+
+  private async resolveWorkflowVersion(
+    workflowId: string,
+    request: WorkflowRunRequest,
+  ): Promise<WorkflowVersionRecord> {
+    if (request.versionId) {
+      const version = await this.versionRepository.findById(request.versionId);
+      if (!version || version.workflowId !== workflowId) {
+        throw new NotFoundException(
+          `Workflow ${workflowId} version ${request.versionId} not found`,
+        );
+      }
+      return version;
+    }
+
+    if (request.version) {
+      const version = await this.versionRepository.findByWorkflowAndVersion({
+        workflowId,
+        version: request.version,
+      });
+      if (!version) {
+        throw new NotFoundException(
+          `Workflow ${workflowId} version ${request.version} not found`,
+        );
+      }
+      return version;
+    }
+
+    const latest = await this.versionRepository.findLatestByWorkflowId(workflowId);
+    if (!latest) {
+      throw new NotFoundException(`No versions recorded for workflow ${workflowId}`);
+    }
+    return latest;
+  }
+
+  private async ensureDefinitionForVersion(
+    workflow: WorkflowRecord,
+    version: WorkflowVersionRecord,
+  ): Promise<WorkflowDefinition> {
+    if (version.compiledDefinition) {
+      return version.compiledDefinition as WorkflowDefinition;
+    }
+
+    this.logger.log(
+      `Compiling workflow ${workflow.id} version ${version.version} for execution`,
+    );
+    const graph = WorkflowGraphSchema.parse(version.graph);
+    const definition = compileWorkflowGraph(graph);
+
+    await this.versionRepository.setCompiledDefinition(version.id, definition);
+
+    return definition;
   }
 
   async getRunStatus(
@@ -398,26 +504,28 @@ export class WorkflowsService {
       throw new NotFoundException(`Workflow ${run.workflowId} not found for run ${runId}`);
     }
 
-    const definition = this.ensureDefinition(workflow);
+    const version = run.workflowVersionId
+      ? await this.versionRepository.findById(run.workflowVersionId)
+      : await this.versionRepository.findLatestByWorkflowId(run.workflowId);
+    if (!version) {
+      throw new NotFoundException(
+        `Workflow version not found for run ${runId} (workflow=${run.workflowId})`,
+      );
+    }
+
+    const definition = await this.ensureDefinitionForVersion(workflow, version);
     const targetsBySource = this.buildTargetsIndex(definition);
 
     const context: FlowContext = {
       workflowId: workflow.id,
+      workflowVersionId: version.id,
+      workflowVersion: version.version,
       definition,
       targetsBySource,
     };
 
     this.flowContexts.set(runId, context);
     return context;
-  }
-
-  private ensureDefinition(workflow: WorkflowRecord): WorkflowDefinition {
-    if (workflow.compiledDefinition) {
-      return workflow.compiledDefinition as WorkflowDefinition;
-    }
-
-    const graph = WorkflowGraphSchema.parse(workflow.graph);
-    return compileWorkflowGraph(graph);
   }
 
   private buildTargetsIndex(
