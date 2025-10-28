@@ -1,5 +1,5 @@
 import { vi } from 'bun:test';
-import { ExecutionContext, ISecretsService } from '@shipsec/component-sdk';
+import { ExecutionContext, ISecretsService, TraceService, LogCollector } from '@shipsec/component-sdk';
 
 export function createMockExecutionContext(
   overrides: Partial<ExecutionContext> = {},
@@ -36,5 +36,39 @@ export function createMockExecutionContext(
     ...overrides,
     logger: { ...defaultContext.logger, ...overrides.logger },
     secrets: mergedSecrets,
+  };
+}
+
+export function createMockSecretsService(secrets: Record<string, string> = {}): ISecretsService {
+  return {
+    get: vi.fn().mockImplementation((secretId: string) => {
+      const secretValue = secrets[secretId];
+      return secretValue ? Promise.resolve({ value: secretValue }) : Promise.resolve(null);
+    }),
+    list: vi.fn().mockResolvedValue([]),
+  };
+}
+
+export function createMockTrace(): TraceService {
+  const events: any[] = [];
+  return {
+    record: vi.fn().mockImplementation((event) => {
+      events.push(event);
+      console.log('TRACE:', event.type, event.nodeRef, event.message);
+    }),
+    flush: vi.fn().mockResolvedValue(undefined),
+    events,
+  };
+}
+
+export function createMockLogCollector(): LogCollector {
+  const logs: any[] = [];
+  return {
+    append: vi.fn().mockImplementation((log) => {
+      logs.push(log);
+      console.log('LOG:', log.level, log.message);
+    }),
+    flush: vi.fn().mockResolvedValue(undefined),
+    logs,
   };
 }
