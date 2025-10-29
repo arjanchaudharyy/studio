@@ -117,12 +117,13 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
       console.error('Failed to parse runtimeInputs:', error)
     }
   }
-  
-  const supportsManualOverride = (input: InputPort) =>
-    inputSupportsManualValue(input) || input.valuePriority === 'manual-first'
+  const manualOverridesPort = (input: InputPort) =>
+    input.valuePriority === 'manual-first'
 
-  const manualValueProvidedForInput = (input: InputPort) => {
-    if (!supportsManualOverride(input)) return false
+  const manualValueProvidedForInput = (input: InputPort, hasConnection: boolean) => {
+    const manualEligible = inputSupportsManualValue(input) || manualOverridesPort(input)
+    if (!manualEligible) return false
+    if (hasConnection && !manualOverridesPort(input)) return false
     const manualCandidate = manualParameters[input.id]
     if (manualCandidate === undefined || manualCandidate === null) return false
     if (typeof manualCandidate === 'string') {
@@ -142,7 +143,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
     requiredInputs.some(input => {
       const hasConnection = Boolean(nodeData.inputs?.[input.id])
       if (hasConnection) return false
-      if (manualValueProvidedForInput(input)) return false
+      if (manualValueProvidedForInput(input, hasConnection)) return false
       return true // No connection or manual value
     })
 
@@ -294,10 +295,11 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
               // Check if this input has a connection
               const edges = getEdges()
               const connection = edges.find(edge => edge.target === id && edge.targetHandle === input.id)
+              const hasConnection = Boolean(connection)
 
               // Get source node and output info if connected
               const manualCandidate = manualParameters[input.id]
-              const manualValueProvided = manualValueProvidedForInput(input)
+              const manualValueProvided = manualValueProvidedForInput(input, hasConnection)
 
               let sourceInfo: string | null = null
               if (!manualValueProvided && connection) {
@@ -323,6 +325,12 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                 manualDisplay.length > 24
                   ? `${manualDisplay.slice(0, 24)}…`
                   : manualDisplay
+              const handleClassName = cn(
+                '!w-[10px] !h-[10px] !border-2 !rounded-full',
+                input.required
+                  ? '!bg-blue-500 !border-blue-500'
+                  : '!bg-background !border-blue-500'
+              )
 
               return (
                 <div key={input.id} className="relative flex items-center gap-2 text-xs">
@@ -330,8 +338,8 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                     type="target"
                     position={Position.Left}
                     id={input.id}
-                    className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white"
-                    style={{ top: '50%', left: '-0.5rem', transform: 'translate(-50%, -50%)' }}
+                    className={handleClassName}
+                    style={{ top: '50%', left: '-18px', transform: 'translateY(-50%)' }}
                   />
                   <div className="flex-1">
                     <div className="text-muted-foreground font-medium">{input.label}</div>
@@ -373,8 +381,8 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                   type="source"
                   position={Position.Right}
                   id={output.id}
-                  className="!w-3 !h-3 !bg-green-500 !border-2 !border-white"
-                  style={{ top: '50%', right: '-0.5rem', transform: 'translate(50%, -50%)' }}
+                  className="!w-[10px] !h-[10px] !border-2 !border-green-500 !bg-green-500 !rounded-full"
+                  style={{ top: '50%', right: '-18px', transform: 'translateY(-50%)' }}
                 />
               </div>
             ))}

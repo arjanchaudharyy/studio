@@ -64,11 +64,10 @@ const definition: ComponentDefinition<Input, Output> = {
     inputs: [
       {
         id: 'secretId',
-        label: 'Secret',
+        label: 'Secret ID',
         dataType: port.text({ coerceFrom: [] }),
         required: true,
-        description: 'Select a secret from the platform store. Stored as the secret ID.',
-        valuePriority: 'manual-first',
+        description: 'Secret identifier from the platform store.',
       },
       {
         id: 'version',
@@ -76,7 +75,6 @@ const definition: ComponentDefinition<Input, Output> = {
         dataType: port.number(),
         required: false,
         description: 'Optional version pin. Defaults to the active version.',
-        valuePriority: 'manual-first',
       },
       {
         id: 'outputFormat',
@@ -84,7 +82,6 @@ const definition: ComponentDefinition<Input, Output> = {
         dataType: port.text({ coerceFrom: [] }),
         required: false,
         description: 'Return as raw string or JSON-decoded object.',
-        valuePriority: 'manual-first',
       },
     ],
     outputs: [
@@ -103,26 +100,8 @@ const definition: ComponentDefinition<Input, Output> = {
     ],
     parameters: [
       {
-        id: 'secretId',
-        label: 'Secret ID',
-        type: 'secret',
-        required: false,
-        placeholder: '00000000-0000-0000-0000-000000000000',
-        description:
-          'Provide a secret identifier manually. Overrides connected inputs when set.',
-        helpText: 'Leave blank to use a connected node or runtime input.',
-      },
-      {
-        id: 'version',
-        label: 'Version',
-        type: 'number',
-        required: false,
-        description: 'Optional version override. Leave empty to use the active version.',
-        helpText: 'Manual value takes priority over connected inputs when provided.',
-      },
-      {
-        id: 'outputFormat',
-        label: 'Output Format',
+        id: 'defaultOutputFormat',
+        label: 'Default Output Format',
         type: 'select',
         required: false,
         default: 'raw',
@@ -130,8 +109,8 @@ const definition: ComponentDefinition<Input, Output> = {
           { label: 'Raw', value: 'raw' },
           { label: 'JSON', value: 'json' },
         ],
-        description: 'Choose how the secret value should be returned.',
-        helpText: 'Manual selection takes priority over connected inputs when provided.',
+        description: 'Default output format when no format is provided via input.',
+        helpText: 'Used when outputFormat input is not connected or empty.',
       },
     ],
   },
@@ -174,6 +153,7 @@ const definition: ComponentDefinition<Input, Output> = {
       },
     };
   },
+
 };
 
 componentRegistry.register(definition);

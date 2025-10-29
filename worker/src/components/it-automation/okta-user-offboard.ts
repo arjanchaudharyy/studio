@@ -4,7 +4,7 @@ import {
   ComponentDefinition,
   port,
 } from '@shipsec/component-sdk';
-import { Client, User, UserSchema } from '@okta/okta-sdk-nodejs';
+import * as Okta from '@okta/okta-sdk-nodejs';
 
 const inputSchema = z.object({
   user_email: z.string().email(),
@@ -79,8 +79,8 @@ const outputSchema = z.object({
 /**
  * Initialize Okta client
  */
-function initializeOktaClient(oktaDomain: string, apiToken: string): Client {
-  const client = new Client({
+function initializeOktaClient(oktaDomain: string, apiToken: string): Okta.Client {
+  const client = new Okta.Client({
     orgUrl: `https://${oktaDomain}`,
     token: apiToken,
   });
@@ -93,10 +93,10 @@ function initializeOktaClient(oktaDomain: string, apiToken: string): Client {
  */
 async function getUserDetails(
   userEmail: string,
-  client: Client
+  client: Okta.Client
 ): Promise<UserState> {
   try {
-    const user: User = await client.userApi.getUser({ userId: userEmail });
+    const user: Okta.User = await client.userApi.getUser({ userId: userEmail });
 
     return {
       id: user.id || '',
@@ -121,7 +121,7 @@ async function getUserDetails(
  */
 async function deactivateUser(
   userId: string,
-  client: Client
+  client: Okta.Client
 ): Promise<void> {
   try {
     await client.userApi.deactivateUser({ userId });
@@ -138,7 +138,7 @@ async function deactivateUser(
  */
 async function deleteUser(
   userId: string,
-  client: Client
+  client: Okta.Client
 ): Promise<void> {
   try {
     await client.userApi.deleteUser({ userId });
@@ -172,7 +172,29 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [],
+    inputs: [
+      {
+        id: 'user_email',
+        label: 'User Email',
+        dataType: port.text({ coerceFrom: [] }),
+        required: true,
+        description: 'Email address of the user to offboard.',
+      },
+      {
+        id: 'okta_domain',
+        label: 'Okta Domain',
+        dataType: port.text({ coerceFrom: [] }),
+        required: true,
+        description: 'Your Okta organization domain.',
+      },
+      {
+        id: 'api_token_secret_id',
+        label: 'API Token Secret',
+        dataType: port.text({ coerceFrom: [] }),
+        required: true,
+        description: 'Secret ID containing the Okta API token.',
+      },
+    ],
     outputs: [
       {
         id: 'result',
@@ -188,22 +210,6 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
     ],
     parameters: [
       {
-        id: 'user_email',
-        label: 'User Email',
-        type: 'text',
-        required: true,
-        placeholder: 'user@company.com',
-        description: 'Email address of the user to offboard.',
-      },
-      {
-        id: 'okta_domain',
-        label: 'Okta Domain',
-        type: 'text',
-        required: true,
-        placeholder: 'your-org.okta.com',
-        description: 'Your Okta organization domain (e.g., company.okta.com).',
-      },
-      {
         id: 'action',
         label: 'Action',
         type: 'select',
@@ -214,6 +220,7 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
           { label: 'Delete Permanently', value: 'delete' },
         ],
         description: 'Choose to deactivate (recommended) or delete the user account.',
+        helpText: 'Business logic choice - use sidebar for operational decisions.',
       },
       {
         id: 'dry_run',
@@ -221,14 +228,7 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
         type: 'boolean',
         default: false,
         description: 'Preview what would happen without making actual changes.',
-      },
-      {
-        id: 'api_token_secret_id',
-        label: 'API Token Secret',
-        type: 'secret',
-        required: true,
-        description: 'Secret ID containing the Okta API token.',
-        helpText: 'Create a secret in ShipSec containing an Okta API token with okta.users.manage scope.',
+        helpText: 'Safety setting - enable to test operations without affecting users.',
       },
     ],
   },

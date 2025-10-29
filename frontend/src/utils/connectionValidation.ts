@@ -173,9 +173,10 @@ export function getNodeValidationWarnings(
         (edge) => edge.target === node.id && edge.targetHandle === input.id
       )
 
-      const supportsManualOverride = inputSupportsManualValue(input) || input.valuePriority === 'manual-first'
+      const manualOverridesPort = input.valuePriority === 'manual-first'
+      const allowsManualInput = inputSupportsManualValue(input) || manualOverridesPort
       const manualCandidate = manualParameters[input.id]
-      const manualValueProvided = supportsManualOverride && manualCandidate !== undefined && manualCandidate !== null && (
+      const manualValueProvided = allowsManualInput && (!hasConnection || manualOverridesPort) && manualCandidate !== undefined && manualCandidate !== null && (
         typeof manualCandidate === 'string' ? manualCandidate.trim().length > 0 : true
       )
 

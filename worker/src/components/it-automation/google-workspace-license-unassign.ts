@@ -10,10 +10,7 @@ import { GoogleAuth } from 'google-auth-library';
 const inputSchema = z.object({
   primary_email: z.string().email(),
   dry_run: z.boolean().default(false),
-  service_account_secret_id: z
-    .string()
-    .min(1, 'Provide the secret ID for the Google Workspace service account JSON key.')
-    .describe('Secret ID for Google Workspace service account JSON key'),
+  service_account_secret: z.string().describe('Google Workspace service account JSON key from Secret Fetch component'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -204,24 +201,14 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
         label: 'User Email',
         dataType: port.text({ coerceFrom: [] }),
         required: true,
-        description: 'Primary email address of the account to delete.',
-        valuePriority: 'manual-first',
+        description: 'Email address of the user to delete.',
       },
       {
-        id: 'dry_run',
-        label: 'Dry Run Mode',
-        dataType: port.boolean(),
-        required: false,
-        description: 'Toggle to simulate the deletion without calling the Admin SDK.',
-        valuePriority: 'manual-first',
-      },
-      {
-        id: 'service_account_secret_id',
+        id: 'service_account_secret',
         label: 'Service Account Secret',
-        dataType: port.secret(),
+        dataType: port.secret(),  // Changed from text to secret for proper masking
         required: true,
-        description: 'Secret ID pointing to a Google Workspace service account JSON key.',
-        valuePriority: 'manual-first',
+        description: 'Google Workspace service account JSON key (can be provided directly or via Secret Fetch component).',
       },
     ],
     outputs: [
@@ -239,27 +226,12 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
     ],
     parameters: [
       {
-        id: 'primary_email',
-        label: 'User Email',
-        type: 'text',
-        required: true,
-        placeholder: 'user@company.com',
-        description: 'Primary email address of the user to delete.',
-      },
-      {
         id: 'dry_run',
         label: 'Dry Run Mode',
         type: 'boolean',
         default: false,
         description: 'Preview what would happen without making actual changes.',
-      },
-      {
-        id: 'service_account_secret_id',
-        label: 'Service Account Secret',
-        type: 'secret',
-        required: false,
-        description: 'Secret ID containing the Google Workspace service account JSON key.',
-        helpText: 'Create a secret in ShipSec containing the service account JSON with domain-wide delegation enabled.',
+        helpText: 'Safety setting - enable to test operations without affecting users.',
       },
     ],
   },
@@ -267,7 +239,7 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
     const {
       primary_email,
       dry_run = false,
-      service_account_secret_id,
+      service_account_secret,
     } = params;
 
     context.logger.info(`[GoogleWorkspace] Starting user deletion for ${primary_email}`);
@@ -282,28 +254,17 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
     let userDeleted = false;
 
     try {
-      // Validate secrets service
-      if (!context.secrets) {
-        throw new Error('Google Workspace User Delete component requires the secrets service. Ensure the worker injects ISecretsService.');
+      // Validate secret input
+      if (!service_account_secret) {
+        throw new Error('Service account secret is required. Please provide the Google Workspace service account JSON key directly or connect a Secret Fetch component.');
       }
 
-      // Validate secret ID input
-      if (!service_account_secret_id) {
-        throw new Error('Service account secret ID is required. Please provide a secret ID containing the Google Workspace service account JSON key.');
-      }
-
-      // Get and validate secret
-      const resolvedSecret = await context.secrets.get(service_account_secret_id);
-      if (!resolvedSecret) {
-        throw new Error(`Secret ${service_account_secret_id} not found or has no active version.`);
-      }
-
-      // Parse service account key
+      // Parse service account key from the input (could be string or object)
       let serviceKey: string;
       try {
-        serviceKey = typeof resolvedSecret.value === 'string'
-          ? resolvedSecret.value
-          : JSON.stringify(resolvedSecret.value);
+        serviceKey = typeof service_account_secret === 'string'
+          ? service_account_secret
+          : JSON.stringify(service_account_secret);
       } catch (error) {
         throw new Error(`Failed to parse service account secret: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }

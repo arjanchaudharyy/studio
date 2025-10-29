@@ -166,7 +166,21 @@ function coercePrimitive(
       if (typeof value === 'string') {
         return { ok: true, value };
       }
-      return { ok: false, error: 'Secret values must be strings' };
+      if (typeof value === 'object') {
+        try {
+          // JSON stringify to preserve structured secrets for downstream consumers
+          return { ok: true, value: JSON.stringify(value) };
+        } catch (error) {
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? `Secret value is not JSON-serializable: ${error.message}`
+                : 'Secret value is not JSON-serializable',
+          };
+        }
+      }
+      return { ok: false, error: 'Secret values must be strings or JSON objects' };
     }
     case 'file':
     case 'json': {

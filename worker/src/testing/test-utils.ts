@@ -1,5 +1,5 @@
 import { vi } from 'bun:test';
-import { ExecutionContext, ISecretsService, TraceService, LogCollector } from '@shipsec/component-sdk';
+import { ExecutionContext, ISecretsService } from '@shipsec/component-sdk';
 
 export function createMockExecutionContext(
   overrides: Partial<ExecutionContext> = {},
@@ -49,7 +49,7 @@ export function createMockSecretsService(secrets: Record<string, string> = {}): 
   };
 }
 
-export function createMockTrace(): TraceService {
+export function createMockTrace(): any {
   const events: any[] = [];
   return {
     record: vi.fn().mockImplementation((event) => {
@@ -57,11 +57,13 @@ export function createMockTrace(): TraceService {
       console.log('TRACE:', event.type, event.nodeRef, event.message);
     }),
     flush: vi.fn().mockResolvedValue(undefined),
+    setRunMetadata: vi.fn(),
+    finalizeRun: vi.fn(),
     events,
   };
 }
 
-export function createMockLogCollector(): LogCollector {
+export function createMockLogCollector(): any {
   const logs: any[] = [];
   return {
     append: vi.fn().mockImplementation((log) => {

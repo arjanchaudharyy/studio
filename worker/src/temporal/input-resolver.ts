@@ -44,8 +44,14 @@ type ComponentMetadataSnapshot = {
 export function buildActionParams(
   action: WorkflowAction,
   results: Map<string, unknown>,
-  options: { componentMetadata?: ComponentMetadataSnapshot } = {},
-): { params: Record<string, unknown>; warnings: InputWarning[]; manualOverrides: ManualOverride[] } {
+  options: {
+    componentMetadata?: ComponentMetadataSnapshot;
+  } = {},
+): {
+    params: Record<string, unknown>;
+    warnings: InputWarning[];
+    manualOverrides: ManualOverride[];
+  } {
   const params = { ...(action.params ?? {}) } as Record<string, unknown>;
   const warnings: InputWarning[] = [];
   const manualOverrides: ManualOverride[] = [];

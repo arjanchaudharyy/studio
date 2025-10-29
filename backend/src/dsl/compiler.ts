@@ -112,9 +112,9 @@ export function compileWorkflowGraph(graph: WorkflowGraph): WorkflowDefinition {
       maxConcurrency: _maxConcurrency,
       ...componentParams
     } = config;
-    const params = componentParams;
-    const inputMappings: WorkflowAction['inputMappings'] = {};
 
+    // Build input mappings from edges
+    const inputMappings: WorkflowAction['inputMappings'] = {};
     for (const edge of edgesByTarget.get(id) ?? []) {
       const targetHandle = edge.targetHandle ?? edge.sourceHandle;
       const sourceHandle = edge.sourceHandle ?? '__self__';
@@ -127,6 +127,42 @@ export function compileWorkflowGraph(graph: WorkflowGraph): WorkflowDefinition {
         sourceRef: edge.source,
         sourceHandle,
       };
+    }
+
+    const component = componentRegistry.get(node.type);
+    const params: Record<string, unknown> = { ...componentParams };
+
+    const inputMetadata = new Map(
+      component?.metadata?.inputs?.map((input) => [input.id, input]) ?? [],
+    );
+
+    // Remove manual values for connected ports unless the port explicitly prefers manual overrides
+    for (const targetKey of Object.keys(inputMappings)) {
+      const metadata = inputMetadata.get(targetKey);
+      const prefersManual = metadata?.valuePriority === 'manual-first';
+      if (!prefersManual) {
+        delete params[targetKey];
+      }
+    }
+
+    // Validate required inputs have either a manual value or a connection
+    for (const [inputId, metadata] of inputMetadata.entries()) {
+      if (!metadata.required) {
+        continue;
+      }
+
+      const hasPortMapping = Boolean(inputMappings[inputId]);
+      const manualValue = componentParams[inputId];
+      const hasManual =
+        manualValue !== undefined &&
+        manualValue !== null &&
+        (typeof manualValue !== 'string' || manualValue.trim().length > 0);
+
+      if (!hasPortMapping && !hasManual) {
+        throw new Error(
+          `[${node.type}] Required input '${inputId}' is missing. Provide a manual value or connect a port.`,
+        );
+      }
     }
 
     return {

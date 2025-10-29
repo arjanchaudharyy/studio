@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useComponentStore } from '@/store/componentStore'
 import { ParameterFieldWrapper } from './ParameterField'
+import { SecretSelect } from '@/components/inputs/SecretSelect'
 import type { Node } from 'reactflow'
 import type { NodeData } from '@/schemas/node'
 import { describePortDataType, inputSupportsManualValue } from '@/utils/portUtils'
@@ -148,16 +149,25 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
               <div className="space-y-3">
                 {componentInputs.map((input) => {
                   const connection = nodeData.inputs?.[input.id]
+                  const hasConnection = Boolean(connection)
                   const manualValue = manualParameters[input.id]
-                  const supportsManualString = inputSupportsManualValue(input)
-                  const supportsManualOverride = supportsManualString || input.valuePriority === 'manual-first'
+                  const manualOverridesPort = input.valuePriority === 'manual-first'
+                  const allowsManualInput = inputSupportsManualValue(input) || manualOverridesPort
                   const manualValueProvided =
-                    supportsManualOverride &&
+                    allowsManualInput &&
+                    (!hasConnection || manualOverridesPort) &&
                     manualValue !== undefined &&
                     manualValue !== null &&
                     (typeof manualValue === 'string'
                       ? manualValue.trim().length > 0
                       : true)
+                  const manualLocked = hasConnection && !manualOverridesPort
+                  const useSecretSelect =
+                    (component.slug === 'secret-fetch' || component.id === 'core.secret.fetch') &&
+                    input.id === 'secretId'
+                  const manualPlaceholder = useSecretSelect
+                    ? 'Select a secret...'
+                    : 'Enter text to use without a connection'
                   const typeLabel = describePortDataType(input.dataType)
 
                   return (
@@ -180,7 +190,7 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                         </p>
                       )}
 
-                      {supportsManualString && (
+                      {inputSupportsManualValue(input) && (
                         <div className="mt-2 space-y-1">
                           <label
                             htmlFor={`manual-${input.id}`}
@@ -188,24 +198,48 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                           >
                             Manual value
                           </label>
-                          <Input
-                            id={`manual-${input.id}`}
-                            type="text"
-                            value={typeof manualValue === 'string' ? manualValue : ''}
-                            onChange={(e) => {
-                              const nextValue = e.target.value
-                              if (nextValue === '') {
-                                handleParameterChange(input.id, undefined)
-                              } else {
-                                handleParameterChange(input.id, nextValue)
-                              }
-                            }}
-                            placeholder="Enter text to use without a connection"
-                            className="text-sm"
-                          />
-                          <p className="text-[10px] text-muted-foreground">
-                            When set, this input no longer requires a connection.
-                          </p>
+                          {useSecretSelect ? (
+                            <SecretSelect
+                              value={typeof manualValue === 'string' ? manualValue : ''}
+                              onChange={(value) => {
+                                if (value === '') {
+                                  handleParameterChange(input.id, undefined)
+                                } else {
+                                  handleParameterChange(input.id, value)
+                                }
+                              }}
+                              placeholder={manualPlaceholder}
+                              className="text-sm"
+                              disabled={manualLocked}
+                              allowManualEntry={!manualLocked}
+                            />
+                          ) : (
+                            <Input
+                              id={`manual-${input.id}`}
+                              type="text"
+                              value={typeof manualValue === 'string' ? manualValue : ''}
+                              onChange={(e) => {
+                                const nextValue = e.target.value
+                                if (nextValue === '') {
+                                  handleParameterChange(input.id, undefined)
+                                } else {
+                                  handleParameterChange(input.id, nextValue)
+                                }
+                              }}
+                              placeholder={manualPlaceholder}
+                              className="text-sm"
+                              disabled={manualLocked}
+                            />
+                          )}
+                          {manualLocked ? (
+                            <p className="text-xs text-muted-foreground italic">
+                              Disconnect the port to edit manual input.
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-muted-foreground">
+                              Leave blank to require a port connection.
+                            </p>
+                          )}
                         </div>
                       )}
 
@@ -217,7 +251,7 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                               <div className="text-blue-600 flex items-center gap-1">
                                 • <span className="font-medium">Manual value in use</span>
                               </div>
-                              {supportsManualString && typeof manualValue === 'string' && manualValue.trim().length > 0 && (
+                              {inputSupportsManualValue(input) && typeof manualValue === 'string' && manualValue.trim().length > 0 && (
                                 <div className="text-muted-foreground break-words">
                                   Value:{' '}
                                   <span className="font-mono text-blue-600">
@@ -225,13 +259,12 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                                   </span>
                                 </div>
                               )}
-                              {connection ? (
+                              {hasConnection ? (
                                 <div className="text-muted-foreground">
-                                  Connection available from{' '}
+                                  Manual override active even though a port is connected. Clear the manual value to use{' '}
                                   <span className="font-mono text-blue-600">
-                                    {connection.source}
-                                  </span>
-                                  . It will be used if the manual value is cleared.
+                                    {connection?.source}.{connection?.output}
+                                  </span>.
                                 </div>
                               ) : (
                                 <div className="text-muted-foreground">
@@ -239,7 +272,7 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                                 </div>
                               )}
                             </>
-                          ) : connection ? (
+                          ) : hasConnection ? (
                             <div className="space-y-1">
                               <div className="text-green-600 flex items-center gap-1">
                                 ✓ <span className="font-medium">Connected</span>
@@ -247,14 +280,17 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                               <div className="text-muted-foreground">
                                 Source:{' '}
                                 <span className="font-mono text-blue-600">
-                                  {connection.source}
+                                  {connection?.source}
                                 </span>
                               </div>
                               <div className="text-muted-foreground">
                                 Output:{' '}
-                                <span className="font-mono">
-                                  {connection.output}
+                                <span className="font-mono text-blue-600">
+                                  {connection?.output}
                                 </span>
+                              </div>
+                              <div className="text-muted-foreground">
+                                Port input overrides manual values while connected.
                               </div>
                             </div>
                           ) : (
@@ -265,7 +301,7 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                                 </span>
                               ) : (
                                 <span className="text-muted-foreground">
-                                  ○ <span className="font-medium">Not connected (optional)</span>
+                                  Optional input – connect a port or provide a manual value.
                                 </span>
                               )}
                             </div>

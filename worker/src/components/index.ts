@@ -28,6 +28,7 @@ import './security/notify';
 
 // IT Automation components
 import './it-automation/google-workspace-license-unassign';
+import './it-automation/okta-user-offboard';
 
 // Test utility components
 import './test/sleep-parallel';
