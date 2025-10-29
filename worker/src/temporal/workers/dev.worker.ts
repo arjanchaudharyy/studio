@@ -112,25 +112,34 @@ async function main() {
     bundlerOptions: {
       ignoreModules: ['child_process'],
       webpackConfigHook: (config: any) => {
-        // In ESM, `require` is not defined; use Node's createRequire for resolution
-        const require = createRequire(import.meta.url);
-        if (config?.module?.rules && Array.isArray(config.module.rules)) {
-          config.module.rules = config.module.rules.map((rule: any) => {
-            const usesSwc = typeof rule?.use === 'object' && rule.use?.loader && /swc-loader/.test(String(rule.use.loader));
-            if (usesSwc) {
-              return {
-                test: /\.ts$/,
-                exclude: /node_modules/,
-                use: {
-                  loader: require.resolve('ts-loader'),
-                  options: {
-                    transpileOnly: true,
+        // Force webpack to transpile TypeScript with ts-loader instead of swc-loader.
+        // swc native bindings can fail to load on some Node/OS combos when installed via Bun.
+        try {
+          const require = createRequire(import.meta.url);
+          if (config?.module?.rules && Array.isArray(config.module.rules)) {
+            config.module.rules = config.module.rules.map((rule: any) => {
+              const usesSwc =
+                typeof rule?.use === 'object' && rule.use?.loader && /swc-loader/.test(String(rule.use.loader));
+              const isTsRule = rule && rule.test && rule.test.toString() === /\.ts$/.toString();
+              if (usesSwc || isTsRule) {
+                return {
+                  ...rule,
+                  test: /\.ts$/,
+                  exclude: /node_modules/,
+                  use: {
+                    loader: require.resolve('ts-loader'),
+                    options: {
+                      transpileOnly: true,
+                      compilerOptions: { target: 'ES2017' },
+                    },
                   },
-                },
-              };
-            }
-            return rule;
-          });
+                };
+              }
+              return rule;
+            });
+          }
+        } catch (err) {
+          console.warn('Failed to apply webpackConfigHook override; falling back to default SWC loader', err);
         }
         return config;
       },
