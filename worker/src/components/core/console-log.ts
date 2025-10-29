@@ -58,7 +58,7 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'data',
         label: 'Data',
-        dataType: port.any(),
+        dataType: port.list(port.text()),
         required: true,
         description: 'Any data to log (objects will be JSON stringified).',
       },
