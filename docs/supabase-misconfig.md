@@ -42,3 +42,14 @@ to keep traces noisy enough for observability dashboards.
 ## Testing Notes
 - Unit coverage mocks `pg` and `fetch` to exercise both clean and failing scenarios.
 - Full suite currently requires installing `pg` headers but no live Supabase project.
+
+## Workflow Template
+- Manual trigger collects two runtime inputs:
+  - `supabaseUrl` (`text`)
+  - `serviceRoleKey` (`secret`) – ensure the workflow node maps this secret port.
+- The component schema still expects default values at compile time, so placeholders are
+  stored with the node configuration (`https://placeholder.supabase.co`,
+  `service-role-key-placeholder`). Runtime inputs overwrite these when the workflow runs.
+- After seeding the workflow, run it from the UI, supply your real Supabase URL and
+  service role key, and the component will infer the project reference automatically
+  unless you set it manually.
