@@ -147,7 +147,36 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
-  docs: 'Delete a Google Workspace user account to free up all associated licenses and complete the offboarding process.',
+  docs: `Delete a Google Workspace user account to free up all associated licenses and complete the offboarding process.
+
+How it works:
+- Resolves the Google Workspace service account JSON (with domain-wide delegation) from ShipSec Secrets.
+- Fetches the current user profile to capture org unit, admin status, suspension flag, and last login details for auditing.
+- Deletes the account through the Admin SDK Directory API unless Dry Run is enabled.
+- Emits an audit log containing the before state and whether the deletion was executed or simulated.
+
+Inputs:
+1. **User Email** – Primary email address of the account to remove. Must exist in the tenant.
+2. **Dry Run Mode** – Toggle to preview the deletion without calling the Admin SDK delete endpoint. Still returns an audit log.
+3. **Service Account Secret** – Secret ID pointing to a JSON key authorised for the Admin SDK with domain-wide delegation.
+
+Service account setup:
+1. In Google Cloud Console create or select a project that will host the service account used for automation. The account that creates the key needs the **Service Account Token Creator** IAM role (or Editor/Owner) on that project.
+2. Enable the **Admin SDK API** inside that project. The Directory API is the only scope this component uses.
+3. Create a **service account** (IAM & Admin → Service Accounts → Create service account). Grant it at least the Service Account Token Creator role so workflow runs can mint delegated credentials.
+4. From the service account details page open the **Keys** tab → **Add Key** → **Create new key** (JSON). Download the JSON file, upload it to ShipSec Secrets, and note the resulting secret ID to supply as the component input.
+5. Still within the service account, open **Show domain-wide delegation**, enable the toggle, and capture the generated OAuth2 client ID.
+6. In the Google Workspace Admin Console, go to Security → Access and data control → API controls → **Domain-wide delegation**. Add a new delegation entry with the client ID and authorise the scope `https://www.googleapis.com/auth/admin.directory.user`.
+7. Choose a Workspace user that can delete accounts (Super Admin or a delegated admin with the **User Management Admin** or equivalent custom role) and allow the service account to impersonate that user via domain-wide delegation. The impersonated admin must retain delete permissions or the Directory API will reject the call.
+8. Rotate the service account key on a regular cadence, re-upload the updated JSON to ShipSec Secrets, and update any workflows that reference the secret when you change its identifier.
+
+Outputs:
+- **User Deletion Result** – JSON payload with success, userDeleted, message, optional error, and an audit object capturing before/after state and dry-run status.
+
+Operational notes:
+- The component requires the worker to inject the Secrets service (ISecretsService). Missing secrets or invalid JSON keys result in failure and a surfaced error message.
+- Dry Run mode returns userDeleted: true to indicate the action would succeed while leaving the account untouched.
+- Progress updates stream via context.emitProgress so downstream workflow consumers can display live status.`,
   metadata: {
     slug: 'google-workspace-user-delete',
     version: '2.0.0',
