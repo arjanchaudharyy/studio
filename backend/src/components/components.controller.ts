@@ -127,7 +127,7 @@ export class ComponentsController {
                           type: 'array',
                           items: {
                             type: 'string',
-                            enum: ['text', 'secret', 'number', 'boolean', 'file', 'json'],
+                            enum: ['any', 'text', 'secret', 'number', 'boolean', 'file', 'json'],
                           },
                         },
                       },
@@ -163,7 +163,7 @@ export class ComponentsController {
                           type: 'array',
                           items: {
                             type: 'string',
-                            enum: ['text', 'secret', 'number', 'boolean', 'file', 'json'],
+                            enum: ['any', 'text', 'secret', 'number', 'boolean', 'file', 'json'],
                           },
                         },
                       },
@@ -290,7 +290,7 @@ export class ComponentsController {
                         type: 'array',
                         items: {
                           type: 'string',
-                          enum: ['text', 'secret', 'number', 'boolean', 'file', 'json'],
+                          enum: ['any', 'text', 'secret', 'number', 'boolean', 'file', 'json'],
                         },
                       },
                     },
@@ -326,7 +326,7 @@ export class ComponentsController {
                         type: 'array',
                         items: {
                           type: 'string',
-                          enum: ['text', 'secret', 'number', 'boolean', 'file', 'json'],
+                          enum: ['any', 'text', 'secret', 'number', 'boolean', 'file', 'json'],
                         },
                       },
                     },

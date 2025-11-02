@@ -31,6 +31,14 @@ function canCoercePrimitive(source: PrimitivePort, target: PrimitivePort): boole
 }
 
 function comparePortDataTypes(source: PortDataType, target: PortDataType): boolean {
+  if (isPrimitive(target) && target.name === 'any') {
+    return true;
+  }
+
+  if (isPrimitive(source) && source.name === 'any') {
+    return true;
+  }
+
   if (isPrimitive(source) && isPrimitive(target)) {
     return canCoercePrimitive(source, target);
   }
@@ -77,6 +85,8 @@ export function describePortDataType(dataType: PortDataType): string {
 export function runtimeInputTypeToPortDataType(type: string): PortDataType {
   const normalized = type.toLowerCase();
   switch (normalized) {
+    case 'any':
+      return { kind: 'primitive', name: 'any' };
     case 'text':
     case 'string':
       return { kind: 'primitive', name: 'text' };
@@ -121,6 +131,8 @@ export function createPlaceholderForPort(dataType?: PortDataType): unknown {
         return {};
       case 'json':
         return {};
+      case 'any':
+        return null;
       default:
         return null;
     }

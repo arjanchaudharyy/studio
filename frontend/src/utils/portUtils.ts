@@ -1,6 +1,7 @@
 import type { InputPort, PortDataType } from '@/schemas/component'
 
 const primitiveLabelMap: Record<string, string> = {
+  any: 'any',
   text: 'text',
   secret: 'secret',
   number: 'number',
@@ -41,6 +42,14 @@ const canCoercePrimitive = (
 }
 
 const comparePortDataTypes = (source: PortDataType, target: PortDataType): boolean => {
+  if (isPrimitive(target) && target.name === 'any') {
+    return true
+  }
+
+  if (isPrimitive(source) && source.name === 'any') {
+    return true
+  }
+
   if (isPrimitive(source) && isPrimitive(target)) {
     return canCoercePrimitive(source, target)
   }
@@ -94,6 +103,8 @@ export const inputSupportsManualValue = (input: InputPort): boolean =>
 export const runtimeInputTypeToPortDataType = (type: string): PortDataType => {
   const normalized = type.toLowerCase()
   switch (normalized) {
+    case 'any':
+      return { kind: 'primitive', name: 'any' }
     case 'text':
     case 'string':
       return { kind: 'primitive', name: 'text' }

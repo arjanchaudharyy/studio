@@ -62,6 +62,7 @@ export interface LogEventInput {
 }
 
 export type PrimitivePortTypeName =
+  | 'any'
   | 'text'
   | 'secret'
   | 'number'

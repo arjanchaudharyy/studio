@@ -6,7 +6,7 @@ export const ComponentRunnerSchema = z
   })
   .passthrough()
 
-const PrimitivePortTypes = ['text', 'secret', 'number', 'boolean', 'file', 'json'] as const
+const PrimitivePortTypes = ['any', 'text', 'secret', 'number', 'boolean', 'file', 'json'] as const
 
 export const PrimitivePortTypeEnum = z.enum(PrimitivePortTypes)
 

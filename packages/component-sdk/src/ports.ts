@@ -56,6 +56,10 @@ function json(options: PrimitiveOptions = {}): PrimitivePortType {
   return primitive('json', options);
 }
 
+function any(options: PrimitiveOptions = {}): PrimitivePortType {
+  return primitive('any', options);
+}
+
 function list(element: PrimitivePortType | ContractPortType): ListPortType {
   return {
     kind: 'list',
@@ -85,6 +89,7 @@ export const port = Object.freeze({
   secret,
   file,
   json,
+  any,
   list,
   map,
   contract,
@@ -165,6 +170,9 @@ function coercePrimitive(
     }
     case 'file':
     case 'json': {
+      return { ok: true, value };
+    }
+    case 'any': {
       return { ok: true, value };
     }
     default: {
