@@ -24,21 +24,30 @@ These changes remove the dependency on SWC native binaries for development bundl
 
 Using `ts-loader` is the simplest, least hacky solution that “just works” after `git clone && bun install`.
 
-## How to run
+## Quick Start
 
 Prereqs:
 
-- Bun installed (`bun@1.1.20+`).
-- Docker for the infra (Temporal, Postgres, MinIO, Loki).
+- Bun (`bun@1.1.20+`)
+- Docker (for Temporal, Postgres, MinIO, Loki)
 
-Commands:
+Steps:
 
-- Install: `bun install`
-- Start infra + apps: `docker compose -p shipsec up -d && pm2 startOrReload pm2.config.cjs --only shipsec-frontend,shipsec-backend,shipsec-worker --time`
-- Tail worker logs (timeboxed): `timeout 5s pm2 logs shipsec-worker --lines 80`
+1) Install deps: `bun install`
+2) Copy env files (use `.env.example` in each directory):
+   - Root: `cp .env.example .env`
+   - Frontend: `cp frontend/.env.example frontend/.env`
+   - Worker: `cp worker/.env.example worker/.env`
+   - Backend: `cp backend/.env.example backend/.env`
+3) Start full stack: `bun run dev:stack`
+   - Brings up Docker infra, runs PM2 processes, and tails frontend logs.
+4) Inspect worker logs (timeboxed): `timeout 5s pm2 logs shipsec-worker --lines 80`
+
+Stop the stack:
+
+- `bun run dev:stack:stop`
 
 ## Troubleshooting
 
 - If you still see SWC binding errors, ensure PM2 picked up env and script changes: `pm2 startOrReload pm2.config.cjs --only shipsec-worker --update-env`.
 - To run the worker directly (bypassing PM2): `node ./node_modules/.bin/tsx worker/src/temporal/workers/dev.worker.ts`.
-
