@@ -2,7 +2,7 @@ import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 
 // Ensure all worker components are registered before accessing the registry
-import '@shipsec/worker/components';
+import '@shipsec/studio-worker/components';
 import { componentRegistry } from '@shipsec/component-sdk';
 import { categorizeComponent, getCategoryConfig } from './utils/categorization';
 

@@ -101,11 +101,11 @@ export class WorkflowsService {
       await this.repository.delete(record.id);
       throw error;
     }
-    const flattened = this.flattenWorkflowGraph(record, version);
+    const response = this.buildWorkflowResponse(record, version);
     this.logger.log(
-      `Created workflow ${flattened.id} version ${version.version} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
+      `Created workflow ${response.id} version ${version.version} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
     );
-    return flattened;
+    return response;
   }
 
   async update(id: string, dto: WorkflowGraphDto): Promise<ServiceWorkflowResponse> {
@@ -115,11 +115,11 @@ export class WorkflowsService {
       workflowId: record.id,
       graph: input,
     });
-    const flattened = this.flattenWorkflowGraph(record, version);
+    const response = this.buildWorkflowResponse(record, version);
     this.logger.log(
-      `Updated workflow ${flattened.id} to version ${version.version} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
+      `Updated workflow ${response.id} to version ${version.version} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
     );
-    return flattened;
+    return response;
   }
 
   async findById(id: string): Promise<ServiceWorkflowResponse> {
@@ -128,19 +128,15 @@ export class WorkflowsService {
       throw new NotFoundException(`Workflow ${id} not found`);
     }
     const version = await this.versionRepository.findLatestByWorkflowId(id);
-    return this.flattenWorkflowGraph(record, version ?? null);
+    return this.buildWorkflowResponse(record, version ?? null);
   }
 
-  private flattenWorkflowGraph(
+  private buildWorkflowResponse(
     record: WorkflowRecord,
     version?: WorkflowVersionRecord | null,
   ): ServiceWorkflowResponse {
-    // Flatten graph.{nodes, edges, viewport} to top level for API compatibility
     return {
       ...record,
-      nodes: record.graph.nodes,
-      edges: record.graph.edges,
-      viewport: record.graph.viewport,
       currentVersionId: version?.id ?? null,
       currentVersion: version?.version ?? null,
     };
@@ -156,11 +152,11 @@ export class WorkflowsService {
     const versions = await Promise.all(
       records.map((record) => this.versionRepository.findLatestByWorkflowId(record.id)),
     );
-    const flattened = records.map((record, index) =>
-      this.flattenWorkflowGraph(record, versions[index] ?? null),
+    const responses = records.map((record, index) =>
+      this.buildWorkflowResponse(record, versions[index] ?? null),
     );
-    this.logger.log(`Loaded ${flattened.length} workflow(s) from repository`);
-    return flattened;
+    this.logger.log(`Loaded ${responses.length} workflow(s) from repository`);
+    return responses;
   }
 
   private computeDuration(start: Date, end?: Date | null): number {

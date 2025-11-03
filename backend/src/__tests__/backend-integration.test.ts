@@ -192,7 +192,7 @@ interface Component {
       expect(workflow).toHaveProperty('id');
       expect(workflow.name).toBe(workflowData.name);
       expect(workflow.description).toBe(workflowData.description);
-      expect(workflow.nodes[0].data).toEqual(workflowData.nodes[0].data);
+      expect(workflow.graph.nodes[0].data).toEqual(workflowData.nodes[0].data);
     });
 
     it('should list all workflows', async () => {
@@ -214,8 +214,8 @@ interface Component {
       expect(Array.isArray(workflows)).toBe(true);
       expect(workflows.length).toBeGreaterThanOrEqual(2);
       workflows.forEach((w) => {
-        expect(Array.isArray(w.nodes)).toBe(true);
-        expect(w.nodes[0]).toHaveProperty('data');
+        expect(Array.isArray(w.graph.nodes)).toBe(true);
+        expect(w.graph.nodes[0]).toHaveProperty('data');
       });
     });
 
@@ -234,7 +234,7 @@ interface Component {
       const workflow: WorkflowResponse = await readJson(response);
       expect(workflow.id).toBe(created.id);
       expect(workflow.name).toBe('Test Workflow');
-      expect(workflow.nodes[0].data.label).toBe('Manual Trigger');
+      expect(workflow.graph.nodes[0].data.label).toBe('Manual Trigger');
     });
 
     it('should update a workflow', async () => {
@@ -277,8 +277,8 @@ interface Component {
       const updated: WorkflowResponse = await readJson(updateResponse);
       expect(updated.name).toBe('Updated Title');
       expect(updated.description).toBe('Updated description');
-      expect(updated.nodes[0].data.label).toBe('Updated Trigger');
-      expect(updated.nodes[0].data.config).toEqual({ message: 'hello' });
+      expect(updated.graph.nodes[0].data.label).toBe('Updated Trigger');
+      expect(updated.graph.nodes[0].data.config).toEqual({ message: 'hello' });
     });
   });
 
@@ -299,9 +299,9 @@ interface Component {
       expect(response.ok).toBe(true);
       const compiled: WorkflowDefinition = await readJson(response);
       expect(compiled.title).toBe('Commit Workflow');
-      expect(compiled.entrypoint.ref).toBe(workflow.nodes[0].id);
+      expect(compiled.entrypoint.ref).toBe(workflow.graph.nodes[0].id);
       expect(Array.isArray(compiled.actions)).toBe(true);
-      expect(compiled.actions[0].componentId).toBe(workflow.nodes[0].type);
+      expect(compiled.actions[0].componentId).toBe(workflow.graph.nodes[0].type);
     });
 
     it('should fail to commit when workflow contains unknown components', async () => {

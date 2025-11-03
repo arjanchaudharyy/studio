@@ -101,7 +101,8 @@ services:
   backend:
     build:
       context: ..
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile
+      target: backend
     container_name: shipsec-backend
     environment:
       - NODE_ENV=production
@@ -119,20 +120,16 @@ services:
       postgres:
         condition: service_healthy
       temporal:
-        condition: service_healthy
+        condition: service_started
       minio:
         condition: service_healthy
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3211/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
+    
   frontend:
     build:
       context: ..
-      dockerfile: frontend/Dockerfile
+      dockerfile: Dockerfile
+      target: frontend
     container_name: shipsec-frontend
     environment:
       - VITE_API_URL=http://localhost:3211
@@ -140,8 +137,7 @@ services:
     ports:
       - "80:8080"
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080"]
@@ -152,7 +148,8 @@ services:
   worker:
     build:
       context: ..
-      dockerfile: worker/Dockerfile
+      dockerfile: Dockerfile
+      target: worker
     container_name: shipsec-worker
     environment:
       - NODE_ENV=production
@@ -167,7 +164,7 @@ services:
       postgres:
         condition: service_healthy
       temporal:
-        condition: service_healthy
+        condition: service_started
       minio:
         condition: service_healthy
     restart: unless-stopped

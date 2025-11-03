@@ -45,7 +45,7 @@ export function validateWorkflowGraph(
         field: 'type',
         message: `Unknown component type: ${node.type}`,
         severity: 'error',
-        suggestion: 'Available components: ' + Array.from(componentRegistry.keys()).join(', '),
+        suggestion: 'Available components: ' + componentRegistry.list().map(c => c.id).join(', '),
       });
     }
   }
@@ -130,10 +130,10 @@ function isPlaceholderIssue(issue: ZodIssue, placeholderFields: Set<string>): bo
   }
 
   if (
-    issue.code === 'invalid_string' ||
+    issue.code === 'invalid_key' ||
     (issue as { code?: string }).code === 'invalid_format' ||
-    issue.code === 'invalid_enum_value' ||
-    issue.code === 'invalid_literal'
+    issue.code === 'invalid_value' ||
+    issue.code === 'unrecognized_keys'
   ) {
     return true;
   }
@@ -440,4 +440,4 @@ function resolveActionPortSnapshot(
   return { inputs, outputs };
 }
 
-export { ValidationError, ValidationResult };
+
