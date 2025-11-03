@@ -54,6 +54,12 @@ function WorkflowBuilderContent() {
   const inspectorResizingRef = useRef(false)
   const isLibraryVisible = libraryOpen && mode === 'design'
   const [showLibraryContent, setShowLibraryContent] = useState(isLibraryVisible)
+  // Ensure "New workflow" always opens in design mode
+  useEffect(() => {
+    if (isNewWorkflow) {
+      setMode('design')
+    }
+  }, [isNewWorkflow, setMode])
   // Load workflow on mount (if not new)
   useEffect(() => {
     const loadWorkflow = async () => {
