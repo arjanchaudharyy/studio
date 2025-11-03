@@ -13,7 +13,7 @@ import {
 
 // Import workflow functions (for type safety during client.start())
 // Note: Actual implementation runs in the worker
-import { shipsecWorkflowRun, testMinimalWorkflow, minimalWorkflow } from '@shipsec/worker/workflows';
+import { shipsecWorkflowRun, testMinimalWorkflow, minimalWorkflow } from '@shipsec/studio-worker/workflows';
 
 export interface StartWorkflowOptions {
   workflowType: string;

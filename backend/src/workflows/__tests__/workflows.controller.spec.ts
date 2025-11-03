@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
-import '@shipsec/worker/components'; // Register components
+import '@shipsec/studio-worker/components'; // Register components
 import type {
   TemporalService,
   WorkflowRunStatus,

@@ -26,6 +26,11 @@ function canCoercePrimitive(source: PrimitivePort, target: PrimitivePort): boole
     return true;
   }
 
+  // 'secret' and 'file' types cannot be coerced from other types
+  if (source.name === 'secret' || source.name === 'file') {
+    return false;
+  }
+
   const allowed = target.coercion?.from ?? [];
   return allowed.includes(source.name);
 }

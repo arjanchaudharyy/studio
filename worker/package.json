@@ -1,5 +1,5 @@
 {
-  "name": "@shipsec/worker",
+  "name": "@shipsec/studio-worker",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -11,8 +11,8 @@
     "./workflows": "./src/temporal/workflows/index.ts"
   },
   "scripts": {
-    "dev": "tsx src/temporal/workers/dev.worker.ts",
-    "start": "node dist/temporal/workers/dev.worker.js",
+    "dev": "bun x tsx src/temporal/workers/dev.worker.ts",
+    "start": "bun run dist/temporal/workers/dev.worker.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "bun test"

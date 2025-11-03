@@ -15,7 +15,32 @@ Before starting, ensure you have:
 - **Docker** (minimum 8 GB RAM allocated to Docker Desktop)
 - **Bun** runtime ([install here](https://bun.sh))
 - **PM2** process manager: `npm install -g pm2`
+- **Just** command runner: `sudo pacman -S just` (Arch) or `brew install just` (macOS)
 - Ports `5433`, `7233`, `8081`, `9000`, `9001`, and `3100` available
+
+## Docker Setup (Quick Start)
+
+**Infrastructure Only (Recommended for Development):**
+```bash
+just infra-up     # Start PostgreSQL, Temporal, MinIO, Loki
+just infra-down   # Stop infrastructure
+just infra-logs   # View logs
+```
+
+**Full Docker Setup:**
+```bash
+just up           # Start everything in Docker
+just down         # Stop all containers
+just logs         # View all logs
+```
+
+**Services Available:**
+- PostgreSQL: localhost:5433
+- Temporal: localhost:7233
+- Temporal UI: http://localhost:8081
+- MinIO: http://localhost:9000 (minioadmin/minioadmin)
+- MinIO Console: http://localhost:9001
+- Loki: http://localhost:3100
 
 ## Initial Setup (First Time Only)
 
@@ -47,33 +72,11 @@ Adjust values in the `.env` files if needed (defaults work for local development
 ### 3. Start Docker Infrastructure
 
 ```bash
-# Start Postgres, Temporal, MinIO, and Loki (fixed project name)
-docker compose -p shipsec up -d
-
-# Verify all services are healthy
-docker compose -p shipsec ps
-curl -f http://localhost:8081/health || echo "Temporal UI not ready yet"
+just infra-up     # Start Postgres, Temporal, MinIO, and Loki
+just status       # Verify all services are healthy
 ```
 
-> Note on project name: we pin the Docker Compose project to `shipsec` via `-p shipsec` so `up` and `down` operate on the same stack regardless of your current working directory. The npm scripts (`dev:infra`, `dev:stack:stop`) already include this flag.
-
-### 4. Create Temporal Namespace
-
-This is a **one-time setup** step. Run this only:
-- On first setup
-- After `docker compose down --volumes` (which deletes the database)
-
-```bash
-docker compose -p shipsec --profile setup up -d
-```
-
-This creates the `shipsec-dev` namespace in Temporal. Verify it worked:
-
-```bash
-docker logs shipsec-temporal-setup
-```
-
-### 5. Apply Database Migrations
+### 4. Apply Database Migrations
 
 ```bash
 bun run migrate
@@ -92,11 +95,8 @@ For regular development after initial setup:
 ### 1. Start Docker Services
 
 ```bash
-# Start infrastructure (without setup profile)
-docker compose -p shipsec up -d
-
-# Verify services are running
-docker compose -p shipsec ps
+just infra-up     # Start infrastructure
+just status       # Verify services are running
 ```
 
 ### 2. Start Backend & Worker

@@ -1,11 +1,12 @@
 {
-  "name": "shipsec-backend",
+  "name": "@shipsec/studio-backend",
   "version": "0.1.0",
   "type": "module",
   "packageManager": "bun@1.1.20",
   "scripts": {
     "dev": "bun run migration:push && bun --watch src/main.ts",
     "start": "bun run migration:push && bun run src/main.ts",
+    "start:prod": "bun run build/main.js",
     "build": "bun build src/main.ts --outdir build --target bun",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
@@ -22,7 +23,7 @@
     "@nestjs/swagger": "^11.2.0",
     "@shipsec/component-sdk": "workspace:*",
     "@shipsec/shared": "workspace:*",
-    "@shipsec/worker": "workspace:*",
+    "@shipsec/studio-worker": "workspace:*",
     "@temporalio/client": "^1.11.3",
     "@temporalio/worker": "^1.11.3",
     "@temporalio/workflow": "^1.11.3",

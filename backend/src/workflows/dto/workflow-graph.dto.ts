@@ -127,10 +127,7 @@ export interface ServiceWorkflowResponse {
   id: string;
   name: string;
   description?: string | null;
-  graph: z.infer<typeof WorkflowGraphSchema>;  // The original stored graph
-  nodes: z.infer<typeof WorkflowGraphSchema>['nodes'];  // Flattened from graph.nodes
-  edges: z.infer<typeof WorkflowGraphSchema>['edges'];  // Flattened from graph.edges
-  viewport: z.infer<typeof WorkflowGraphSchema>['viewport'];  // Flattened from graph.viewport
+  graph: z.infer<typeof WorkflowGraphSchema>;  // The original stored graph (contains nodes, edges, viewport)
   compiledDefinition: any | null;
   lastRun: Date | null;
   runCount: number;
@@ -145,10 +142,7 @@ export const WorkflowResponseSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().optional().nullable(),
-  graph: WorkflowGraphSchema,  // The original stored graph
-  nodes: z.array(WorkflowNodeSchema).min(1),  // Flattened from graph.nodes
-  edges: z.array(WorkflowEdgeSchema),  // Flattened from graph.edges
-  viewport: WorkflowViewportSchema,  // Flattened from graph.viewport
+  graph: WorkflowGraphSchema,  // The original stored graph (contains nodes, edges, viewport)
   compiledDefinition: z.unknown().nullable(),
   lastRun: z.string().nullable(), // Date string from JSON serialization
   runCount: z.number().int().nonnegative(),

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
-import '@shipsec/worker/components'; // Register components
+import '@shipsec/studio-worker/components'; // Register components
 import { WorkflowGraphSchema } from '../dto/workflow-graph.dto';
 import { compileWorkflowGraph } from '../../dsl/compiler';
 import { WorkflowDefinition } from '../../dsl/types';
@@ -336,8 +336,8 @@ describe('WorkflowsService', () => {
       workflowId: 'workflow-id',
       totalActions: definition.actions.length,
     });
-    expect(run.workflowVersionId).toEqual(created.currentVersionId);
-    expect(run.workflowVersion).toEqual(created.currentVersion);
+    expect(run.workflowVersionId).toEqual(created.currentVersionId!);
+    expect(run.workflowVersion).toEqual(created.currentVersion!);
     expect(storedRunMeta).toMatchObject({
       runId: run.runId,
       workflowId: 'workflow-id',
