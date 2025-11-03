@@ -4,6 +4,7 @@ import { and, eq, sql, type SQL } from 'drizzle-orm';
 
 import { DRIZZLE_TOKEN } from '../database/database.module';
 import { secrets, secretVersions, type NewSecret, type NewSecretVersion } from '../database/schema';
+import { DEFAULT_ORGANIZATION_ID } from '../auth/constants';
 
 export interface SecretSummary {
   id: string;
@@ -35,6 +36,10 @@ export interface SecretUpdateData {
   tags?: string[] | null;
 }
 
+export interface SecretQueryOptions {
+  organizationId?: string | null;
+}
+
 @Injectable()
 export class SecretsRepository {
   constructor(
@@ -42,8 +47,8 @@ export class SecretsRepository {
     private readonly db: NodePgDatabase,
   ) {}
 
-  async listSecrets(): Promise<SecretSummary[]> {
-    const rows = await this.db
+  async listSecrets(options: SecretQueryOptions = {}): Promise<SecretSummary[]> {
+    const baseQuery = this.db
       .select({
         id: secrets.id,
         name: secrets.name,
@@ -60,13 +65,36 @@ export class SecretsRepository {
       .leftJoin(
         secretVersions,
         and(eq(secretVersions.secretId, secrets.id), eq(secretVersions.isActive, true)),
-      )
-      .orderBy(secrets.name);
+      );
+
+    const conditions: SQL[] = [];
+    if (options.organizationId) {
+      conditions.push(eq(secrets.organizationId, options.organizationId));
+    }
+
+    const whereClause =
+      conditions.length === 0
+        ? undefined
+        : conditions.length === 1
+        ? conditions[0]
+        : and(...conditions);
+
+    const rows = await (whereClause ? baseQuery.where(whereClause) : baseQuery).orderBy(
+      secrets.name,
+    );
 
     return rows.map((row) => this.mapSummary(row));
   }
 
-  async findByName(secretName: string): Promise<SecretSummary> {
+  async findByName(secretName: string, options: SecretQueryOptions = {}): Promise<SecretSummary> {
+    const conditions: SQL[] = [eq(secrets.name, secretName)];
+    if (options.organizationId) {
+      conditions.push(eq(secrets.organizationId, options.organizationId));
+    }
+
+    const whereClause =
+      conditions.length === 1 ? conditions[0] : and(...conditions);
+
     const rows = await this.db
       .select({
         id: secrets.id,
@@ -85,7 +113,7 @@ export class SecretsRepository {
         secretVersions,
         and(eq(secretVersions.secretId, secrets.id), eq(secretVersions.isActive, true)),
       )
-      .where(eq(secrets.name, secretName))
+      .where(whereClause)
       .limit(1);
 
     const row = rows[0];
@@ -96,7 +124,15 @@ export class SecretsRepository {
     return this.mapSummary(row);
   }
 
-  async findById(secretId: string): Promise<SecretSummary> {
+  async findById(secretId: string, options: SecretQueryOptions = {}): Promise<SecretSummary> {
+    const conditions: SQL[] = [eq(secrets.id, secretId)];
+    if (options.organizationId) {
+      conditions.push(eq(secrets.organizationId, options.organizationId));
+    }
+
+    const whereClause =
+      conditions.length === 1 ? conditions[0] : and(...conditions);
+
     const rows = await this.db
       .select({
         id: secrets.id,
@@ -115,7 +151,7 @@ export class SecretsRepository {
         secretVersions,
         and(eq(secretVersions.secretId, secrets.id), eq(secretVersions.isActive, true)),
       )
-      .where(eq(secrets.id, secretId))
+      .where(whereClause)
       .limit(1);
 
     const row = rows[0];
@@ -126,13 +162,21 @@ export class SecretsRepository {
     return this.mapSummary(row);
   }
 
-  async findValueBySecretId(secretId: string, version?: number): Promise<SecretValueRecord> {
+  async findValueBySecretId(
+    secretId: string,
+    version?: number,
+    options: SecretQueryOptions = {},
+  ): Promise<SecretValueRecord> {
     const conditions: SQL[] = [eq(secretVersions.secretId, secretId)];
 
     if (typeof version === 'number') {
       conditions.push(eq(secretVersions.version, version));
     } else {
       conditions.push(eq(secretVersions.isActive, true));
+    }
+
+    if (options.organizationId) {
+      conditions.push(eq(secretVersions.organizationId, options.organizationId));
     }
 
     const rows = await this.db
@@ -162,7 +206,13 @@ export class SecretsRepository {
   ): Promise<SecretSummary> {
     try {
       return await this.db.transaction(async (tx) => {
-        const [secret] = await tx.insert(secrets).values(secretData).returning();
+        const [secret] = await tx
+          .insert(secrets)
+          .values({
+            ...secretData,
+            organizationId: secretData.organizationId ?? DEFAULT_ORGANIZATION_ID,
+          })
+          .returning();
 
         const newVersionNumber = 1;
 
@@ -173,6 +223,7 @@ export class SecretsRepository {
             secretId: secret.id,
             version: newVersionNumber,
             isActive: true,
+            organizationId: versionData.organizationId ?? secret.organizationId ?? DEFAULT_ORGANIZATION_ID,
           })
           .returning();
 
@@ -206,9 +257,15 @@ export class SecretsRepository {
   async rotateSecret(
     secretId: string,
     versionData: Omit<NewSecretVersion, 'secretId' | 'version' | 'createdAt' | 'isActive'>,
+    options: SecretQueryOptions = {},
   ): Promise<SecretSummary> {
     return this.db.transaction(async (tx) => {
-      const [secret] = await tx.select().from(secrets).where(eq(secrets.id, secretId)).limit(1);
+      const orgId = options.organizationId ?? DEFAULT_ORGANIZATION_ID;
+      const [secret] = await tx
+        .select()
+        .from(secrets)
+        .where(and(eq(secrets.id, secretId), eq(secrets.organizationId, orgId)))
+        .limit(1);
 
       if (!secret) {
         throw new NotFoundException(`Secret ${secretId} not found`);
@@ -217,14 +274,21 @@ export class SecretsRepository {
       const [{ maxVersion }] = await tx
         .select({ maxVersion: sql<number>`COALESCE(max(${secretVersions.version}), 0)` })
         .from(secretVersions)
-        .where(eq(secretVersions.secretId, secretId));
+        .where(
+          and(
+            eq(secretVersions.secretId, secretId),
+            eq(secretVersions.organizationId, orgId),
+          ),
+        );
 
       const newVersionNumber = (maxVersion ?? 0) + 1;
 
       await tx
         .update(secretVersions)
         .set({ isActive: false })
-        .where(eq(secretVersions.secretId, secretId));
+        .where(
+          and(eq(secretVersions.secretId, secretId), eq(secretVersions.organizationId, orgId)),
+        );
 
       const [insertedVersion] = await tx
         .insert(secretVersions)
@@ -233,6 +297,7 @@ export class SecretsRepository {
           secretId,
           version: newVersionNumber,
           isActive: true,
+          organizationId: versionData.organizationId ?? orgId,
         })
         .returning();
 
@@ -257,8 +322,12 @@ export class SecretsRepository {
     });
   }
 
-  async updateSecret(secretId: string, updates: SecretUpdateData): Promise<SecretSummary> {
-    await this.ensureSecretExists(secretId);
+  async updateSecret(
+    secretId: string,
+    updates: SecretUpdateData,
+    options: SecretQueryOptions = {},
+  ): Promise<SecretSummary> {
+    await this.ensureSecretExists(secretId, options);
 
     const updatePayload: Partial<Omit<NewSecret, 'id' | 'createdAt' | 'updatedAt'>> = {};
 
@@ -275,17 +344,22 @@ export class SecretsRepository {
     }
 
     if (Object.keys(updatePayload).length === 0) {
-      return this.findById(secretId);
+      return this.findById(secretId, options);
     }
 
     try {
+      const conditions: SQL[] = [eq(secrets.id, secretId)];
+      if (options.organizationId) {
+        conditions.push(eq(secrets.organizationId, options.organizationId));
+      }
+
       await this.db
         .update(secrets)
         .set({
           ...updatePayload,
           updatedAt: sql`now()`,
         })
-        .where(eq(secrets.id, secretId));
+        .where(and(...conditions));
     } catch (error: any) {
       if (error?.code === '23505' && updates.name) {
         throw new ConflictException(`Secret name '${updates.name}' already exists`);
@@ -293,13 +367,18 @@ export class SecretsRepository {
       throw error;
     }
 
-    return this.findById(secretId);
+    return this.findById(secretId, options);
   }
 
-  async deleteSecret(secretId: string): Promise<void> {
+  async deleteSecret(secretId: string, options: SecretQueryOptions = {}): Promise<void> {
+    const conditions: SQL[] = [eq(secrets.id, secretId)];
+    if (options.organizationId) {
+      conditions.push(eq(secrets.organizationId, options.organizationId));
+    }
+
     const deleted = await this.db
       .delete(secrets)
-      .where(eq(secrets.id, secretId))
+      .where(and(...conditions))
       .returning({ id: secrets.id });
 
     if (deleted.length === 0) {
@@ -338,8 +417,19 @@ export class SecretsRepository {
     };
   }
 
-  private async ensureSecretExists(secretId: string): Promise<void> {
-    const rows = await this.db.select({ id: secrets.id }).from(secrets).where(eq(secrets.id, secretId)).limit(1);
+  private async ensureSecretExists(secretId: string, options: SecretQueryOptions = {}): Promise<void> {
+    const conditions: SQL[] = [eq(secrets.id, secretId)];
+    if (options.organizationId) {
+      conditions.push(eq(secrets.organizationId, options.organizationId));
+    }
+    const whereClause =
+      conditions.length === 1 ? conditions[0] : and(...conditions);
+
+    const rows = await this.db
+      .select({ id: secrets.id })
+      .from(secrets)
+      .where(whereClause)
+      .limit(1);
     if (rows.length === 0) {
       throw new NotFoundException(`Secret ${secretId} not found`);
     }

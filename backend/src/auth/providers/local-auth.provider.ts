@@ -4,6 +4,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import type { LocalAuthConfig } from '../../config/auth.config';
 import { DEFAULT_ROLES, type AuthContext } from '../types';
 import type { AuthProviderStrategy } from './auth-provider.interface';
+import { DEFAULT_ORGANIZATION_ID } from '../constants';
 
 function extractBearerToken(headerValue: string | undefined): string | null {
   if (!headerValue) {
@@ -36,7 +37,7 @@ export class LocalAuthProvider implements AuthProviderStrategy {
   constructor(private readonly config: LocalAuthConfig) {}
 
   async authenticate(request: Request): Promise<AuthContext> {
-    const orgId = extractOrganizationId(request) ?? 'local-dev';
+    const orgId = extractOrganizationId(request) ?? DEFAULT_ORGANIZATION_ID;
 
     if (this.config.apiKey) {
       const token = extractBearerToken(request.headers.authorization);

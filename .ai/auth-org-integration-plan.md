@@ -10,9 +10,9 @@ _Last updated: 2025-02-15_
 
 | Phase | Status | Goal |
 |-------|--------|------|
-| Phase 0 | ⚪ Not Started | Baseline analysis & scaffolding |
-| Phase 1 | ⚪ Not Started | Modular auth provider abstraction |
-| Phase 2 | ⚪ Not Started | Org-scoped persistence & access guards |
+| Phase 0 | 🟢 Completed | Baseline analysis & scaffolding |
+| Phase 1 | 🟢 Completed | Modular auth provider abstraction |
+| Phase 2 | 🟡 In Progress | Org-scoped persistence & access guards |
 | Phase 3 | ⚪ Not Started | Frontend + client auth plumbing |
 | Phase 4 | ⚪ Not Started | Platform bridge & service accounts |
 | Phase 5 | ⚪ Not Started | Documentation & rollout |
@@ -55,12 +55,12 @@ _Last updated: 2025-02-15_
 
 **Goal:** Ensure every resource is stored and queried with organization context and enforced roles.
 
-- [ ] Apply schema migrations adding `organization_id` (+ indexes) to workflows, workflow runs, secrets, secret versions, files/artifacts.
+- [x] Apply schema migrations adding `organization_id` (+ indexes) to workflows, workflow runs, secrets, secret versions, files/artifacts. _(Migration `0008_add-org-scoping.sql` landed and schema types updated.)_
 - [ ] Backfill existing records using a temporary default org (or flag for manual migration).
-- [ ] Update repositories & services to require `AuthContext.organizationId`, filter queries, and reject cross-org access.
+- [ ] Update repositories & services to require `AuthContext.organizationId`, filter queries, and reject cross-org access. _(Workflows + secrets + files are scoped; trace/log APIs still pending.)_
 - [ ] Introduce `workflow_roles` (workflow/user/role) table limited to `ADMIN`/`MEMBER`.
 - [ ] Implement decorators/guards for resource-level permissions (e.g., only admins can mutate workflows).
-- [ ] Extend worker run payloads & Trace adapters to persist organization metadata end-to-end.
+- [ ] Extend worker run payloads & Trace adapters to persist organization metadata end-to-end. _(Run metadata + repositories capture `organizationId`; worker adapters still need updates.)_
 - [ ] Add regression tests covering org isolation and role enforcement.
 
 ---

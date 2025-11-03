@@ -4,6 +4,8 @@ import { BadRequestException } from '@nestjs/common';
 
 import { SecretsEncryptionService } from './secrets.encryption';
 import { SecretsRepository, type SecretSummary, type SecretUpdateData } from './secrets.repository';
+import type { AuthContext } from '../auth/types';
+import { DEFAULT_ORGANIZATION_ID } from '../auth/constants';
 
 export interface CreateSecretInput {
   name: string;
@@ -37,19 +39,35 @@ export class SecretsService {
     private readonly encryption: SecretsEncryptionService,
   ) {}
 
-  async listSecrets(): Promise<SecretSummary[]> {
-    return this.repository.listSecrets();
+  private resolveOrganizationId(auth: AuthContext | null): string {
+    return auth?.organizationId ?? DEFAULT_ORGANIZATION_ID;
   }
 
-  async getSecret(secretId: string): Promise<SecretSummary> {
-    return this.repository.findById(secretId);
+  private assertOrganizationId(auth: AuthContext | null): string {
+    const organizationId = this.resolveOrganizationId(auth);
+    if (!organizationId) {
+      throw new BadRequestException('Organization context is required');
+    }
+    return organizationId;
   }
 
-  async getSecretByName(secretName: string): Promise<SecretSummary> {
-    return this.repository.findByName(secretName);
+  async listSecrets(auth: AuthContext | null): Promise<SecretSummary[]> {
+    const organizationId = this.assertOrganizationId(auth);
+    return this.repository.listSecrets({ organizationId });
   }
 
-  async createSecret(input: CreateSecretInput): Promise<SecretSummary> {
+  async getSecret(auth: AuthContext | null, secretId: string): Promise<SecretSummary> {
+    const organizationId = this.assertOrganizationId(auth);
+    return this.repository.findById(secretId, { organizationId });
+  }
+
+  async getSecretByName(auth: AuthContext | null, secretName: string): Promise<SecretSummary> {
+    const organizationId = this.assertOrganizationId(auth);
+    return this.repository.findByName(secretName, { organizationId });
+  }
+
+  async createSecret(auth: AuthContext | null, input: CreateSecretInput): Promise<SecretSummary> {
+    const organizationId = this.assertOrganizationId(auth);
     const material = await this.encryption.encrypt(input.value);
 
     return this.repository.createSecret(
@@ -57,6 +75,7 @@ export class SecretsService {
         name: input.name,
         description: input.description ?? null,
         tags: input.tags ?? null,
+        organizationId,
       },
       {
         encryptedValue: material.ciphertext,
@@ -64,11 +83,17 @@ export class SecretsService {
         authTag: material.authTag,
         encryptionKeyId: material.keyId,
         createdBy: input.createdBy ?? null,
+        organizationId,
       },
     );
   }
 
-  async rotateSecret(secretId: string, input: RotateSecretInput): Promise<SecretSummary> {
+  async rotateSecret(
+    auth: AuthContext | null,
+    secretId: string,
+    input: RotateSecretInput,
+  ): Promise<SecretSummary> {
+    const organizationId = this.assertOrganizationId(auth);
     const material = await this.encryption.encrypt(input.value);
 
     return this.repository.rotateSecret(secretId, {
@@ -77,11 +102,17 @@ export class SecretsService {
       authTag: material.authTag,
       encryptionKeyId: material.keyId,
       createdBy: input.createdBy ?? null,
-    });
+      organizationId,
+    }, { organizationId });
   }
 
-  async getSecretValue(secretId: string, version?: number): Promise<SecretValue> {
-    const record = await this.repository.findValueBySecretId(secretId, version);
+  async getSecretValue(
+    auth: AuthContext | null,
+    secretId: string,
+    version?: number,
+  ): Promise<SecretValue> {
+    const organizationId = this.assertOrganizationId(auth);
+    const record = await this.repository.findValueBySecretId(secretId, version, { organizationId });
     const value = await this.encryption.decrypt({
       ciphertext: record.encryptedValue,
       iv: record.iv,
@@ -96,14 +127,24 @@ export class SecretsService {
     };
   }
 
-  async getSecretValueByName(secretName: string, version?: number): Promise<SecretValue> {
+  async getSecretValueByName(
+    auth: AuthContext | null,
+    secretName: string,
+    version?: number,
+  ): Promise<SecretValue> {
     // First find the secret by name to get its ID
-    const secret = await this.repository.findByName(secretName);
+    const organizationId = this.assertOrganizationId(auth);
+    const secret = await this.repository.findByName(secretName, { organizationId });
     // Then get the value using the ID
-    return this.getSecretValue(secret.id, version);
+    return this.getSecretValue(auth, secret.id, version);
   }
 
-  async updateSecret(secretId: string, input: UpdateSecretInput): Promise<SecretSummary> {
+  async updateSecret(
+    auth: AuthContext | null,
+    secretId: string,
+    input: UpdateSecretInput,
+  ): Promise<SecretSummary> {
+    const organizationId = this.assertOrganizationId(auth);
     const updates: SecretUpdateData = {};
 
     if (input.name !== undefined) {
@@ -132,10 +173,15 @@ export class SecretsService {
       }
     }
 
-    return this.repository.updateSecret(secretId, updates);
+    if (Object.keys(updates).length === 0) {
+      return this.repository.findById(secretId, { organizationId });
+    }
+
+    return this.repository.updateSecret(secretId, updates, { organizationId });
   }
 
-  async deleteSecret(secretId: string): Promise<void> {
-    await this.repository.deleteSecret(secretId);
+  async deleteSecret(auth: AuthContext | null, secretId: string): Promise<void> {
+    const organizationId = this.assertOrganizationId(auth);
+    await this.repository.deleteSecret(secretId, { organizationId });
   }
 }

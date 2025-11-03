@@ -1,10 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { DRIZZLE_TOKEN } from '../database/database.module';
 import * as schema from '../database/schema';
 import { files, NewFile, File } from '../database/schema/files.schema';
+import type { SQL } from 'drizzle-orm';
+
+export interface FileQueryOptions {
+  organizationId?: string | null;
+}
 
 @Injectable()
 export class FilesRepository {
@@ -14,30 +19,60 @@ export class FilesRepository {
   ) {}
 
   async create(data: NewFile): Promise<File> {
-    const [file] = await this.db.insert(files).values(data).returning();
+    const [file] = await this.db
+      .insert(files)
+      .values({
+        ...data,
+      })
+      .returning();
     return file;
   }
 
-  async findById(id: string): Promise<File | null> {
-    const [file] = await this.db.select().from(files).where(eq(files.id, id)).limit(1);
-    return file ?? null;
-  }
+  async findById(id: string, options: FileQueryOptions = {}): Promise<File | null> {
+    const conditions: SQL[] = [eq(files.id, id)];
+    if (options.organizationId) {
+      conditions.push(eq(files.organizationId, options.organizationId));
+    }
 
-  async findByStorageKey(storageKey: string): Promise<File | null> {
     const [file] = await this.db
       .select()
       .from(files)
-      .where(eq(files.storageKey, storageKey))
+      .where(and(...conditions))
       .limit(1);
     return file ?? null;
   }
 
-  async list(limit: number = 100): Promise<File[]> {
-    return this.db.select().from(files).limit(limit).orderBy(files.uploadedAt);
+  async findByStorageKey(storageKey: string, options: FileQueryOptions = {}): Promise<File | null> {
+    const conditions: SQL[] = [eq(files.storageKey, storageKey)];
+    if (options.organizationId) {
+      conditions.push(eq(files.organizationId, options.organizationId));
+    }
+
+    const [file] = await this.db
+      .select()
+      .from(files)
+      .where(and(...conditions))
+      .limit(1);
+    return file ?? null;
   }
 
-  async delete(id: string): Promise<void> {
-    await this.db.delete(files).where(eq(files.id, id));
+  async list(limit: number = 100, options: FileQueryOptions = {}): Promise<File[]> {
+    const whereClause =
+      options.organizationId !== undefined && options.organizationId !== null
+        ? eq(files.organizationId, options.organizationId)
+        : undefined;
+
+    const baseQuery = this.db.select().from(files);
+    const filteredQuery = whereClause ? baseQuery.where(whereClause) : baseQuery;
+    return filteredQuery.limit(limit).orderBy(files.uploadedAt);
+  }
+
+  async delete(id: string, options: FileQueryOptions = {}): Promise<void> {
+    const conditions: SQL[] = [eq(files.id, id)];
+    if (options.organizationId) {
+      conditions.push(eq(files.organizationId, options.organizationId));
+    }
+
+    await this.db.delete(files).where(and(...conditions));
   }
 }
-
