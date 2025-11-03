@@ -14,15 +14,17 @@ import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { cn } from '@/lib/utils'
+import { AuthSettingsButton } from '@/components/auth/AuthSettingsButton'
 
 interface TopBarProps {
   workflowId?: string
   isNew?: boolean
   onRun?: () => void
   onSave: () => Promise<void> | void
+  canManageWorkflows?: boolean
 }
 
-export function TopBar({ onRun, onSave }: TopBarProps) {
+export function TopBar({ onRun, onSave, canManageWorkflows = true }: TopBarProps) {
   const navigate = useNavigate()
   const [isSaving, setIsSaving] = useState(false)
 
@@ -30,8 +32,12 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
   const { status, runStatus, reset } = useExecutionStore()
   const isRunning = status === 'running' || status === 'queued'
   const { mode, setMode } = useWorkflowUiStore()
+  const canEdit = Boolean(canManageWorkflows)
 
   const handleSave = async () => {
+    if (!canEdit) {
+      return
+    }
     setIsSaving(true)
     try {
       await Promise.resolve(onSave())
@@ -41,6 +47,9 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
   }
 
   const handleRun = () => {
+    if (!canEdit) {
+      return
+    }
     if (onRun) {
       onRun()
     }
@@ -65,18 +74,25 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
         <Input
           value={metadata.name}
           onChange={(e) => setWorkflowName(e.target.value)}
+          readOnly={!canEdit}
+          aria-readonly={!canEdit}
           className="font-semibold"
           placeholder="Workflow name"
         />
       </div>
 
       <div className="flex items-center gap-3 ml-auto">
+        <AuthSettingsButton />
         <div className="flex rounded-lg border bg-muted/40 overflow-hidden text-xs font-medium shadow-sm">
           <Button
             variant={mode === 'design' ? 'default' : 'ghost'}
             size="sm"
             className="h-9 px-3 gap-2 rounded-none"
-            onClick={() => setMode('design')}
+            onClick={() => {
+              if (!canEdit) return
+              setMode('design')
+            }}
+            disabled={!canEdit}
             aria-pressed={mode === 'design'}
           >
             <PencilLine className="h-4 w-4" />
@@ -122,7 +138,7 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
           )}
           <Button
             onClick={handleSave}
-            disabled={isSaving || isRunning}
+            disabled={!canEdit || isSaving || isRunning}
             variant="outline"
             className="gap-2"
           >
@@ -134,6 +150,7 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
             <Button
               onClick={handleStop}
               variant="destructive"
+              disabled={!canEdit}
               className="gap-2"
             >
               <StopCircle className="h-4 w-4" />
@@ -142,6 +159,7 @@ export function TopBar({ onRun, onSave }: TopBarProps) {
           ) : (
             <Button
               onClick={handleRun}
+              disabled={!canEdit}
               className="gap-2"
             >
               <Play className="h-4 w-4" />

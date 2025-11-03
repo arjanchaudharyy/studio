@@ -11,14 +11,19 @@ import { env } from '@/config/env'
 
 interface ComponentItemProps {
   component: ComponentMetadata
+  disabled?: boolean
 }
 
-function ComponentItem({ component }: ComponentItemProps) {
+function ComponentItem({ component, disabled }: ComponentItemProps) {
   const iconName = component.icon && component.icon in LucideIcons ? component.icon : 'Box'
   const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>
   const description = component.description || 'No description available yet.'
 
   const onDragStart = (event: React.DragEvent) => {
+    if (disabled) {
+      event.preventDefault()
+      return
+    }
     // Store component ID for canvas to create node
     event.dataTransfer.setData('application/reactflow', component.id)
     event.dataTransfer.effectAllowed = 'move'
@@ -28,11 +33,14 @@ function ComponentItem({ component }: ComponentItemProps) {
     <div
       className={cn(
         'group relative flex items-center gap-3 p-3 border rounded-lg cursor-move',
-        'hover:bg-accent hover:border-primary/50 transition-all text-left',
+        disabled
+          ? 'cursor-not-allowed opacity-75'
+          : 'hover:bg-accent hover:border-primary/50',
+        'transition-all text-left',
         'bg-background',
         component.deprecated && 'opacity-50'
       )}
-      draggable={!component.deprecated}
+      draggable={!component.deprecated && !disabled}
       onDragStart={onDragStart}
       title={description}
     >
@@ -69,7 +77,11 @@ function ComponentItem({ component }: ComponentItemProps) {
   )
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  canManageWorkflows?: boolean
+}
+
+export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
   const { getAllComponents, fetchComponents, loading, error } = useComponentStore()
   const [searchQuery, setSearchQuery] = useState('')
   const frontendBranch = env.VITE_FRONTEND_BRANCH.trim()
@@ -203,7 +215,11 @@ export function Sidebar() {
                     </div>
                     <div className="space-y-2">
                       {components.map((component) => (
-                        <ComponentItem key={component.id} component={component} />
+                        <ComponentItem
+                          key={component.id}
+                          component={component}
+                          disabled={!canManageWorkflows}
+                        />
                       ))}
                     </div>
                   </div>

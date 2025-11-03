@@ -29,6 +29,7 @@ import {
   type ExecutionStatusResponse,
   type ExecutionTraceStream,
 } from '@/schemas/execution'
+import { useAuthStore } from '@/store/authStore'
 
 /**
  * API Client Configuration
@@ -58,6 +59,27 @@ export const API_BASE_URL = resolveApiBaseUrl()
 // Create type-safe API client
 const apiClient = createShipSecClient({
   baseUrl: API_BASE_URL,
+})
+
+apiClient.use({
+  async onRequest({ request }) {
+    const { token, organizationId } = useAuthStore.getState()
+
+    if (token && token.trim().length > 0) {
+      const headerValue = token.startsWith('Bearer ') ? token : `Bearer ${token}`
+      request.headers.set('Authorization', headerValue)
+    }
+
+    if (organizationId && organizationId.trim().length > 0) {
+      request.headers.set('X-Organization-Id', organizationId)
+    }
+
+    if (!request.headers.has('Content-Type')) {
+      request.headers.set('Content-Type', 'application/json')
+    }
+
+    return request
+  },
 })
 
 /**

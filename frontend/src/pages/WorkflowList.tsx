@@ -5,12 +5,17 @@ import { Badge } from '@/components/ui/badge'
 import { Workflow, Loader2, AlertCircle } from 'lucide-react'
 import { api } from '@/services/api'
 import type { WorkflowMetadata } from '@/schemas/workflow'
+import { useAuthStore } from '@/store/authStore'
+import { AuthStatusBanner } from '@/components/auth/AuthStatusBanner'
 
 export function WorkflowList() {
   const navigate = useNavigate()
   const [workflows, setWorkflows] = useState<WorkflowMetadata[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const roles = useAuthStore((state) => state.roles)
+  const canManageWorkflows = roles.includes('ADMIN')
+  const isReadOnly = !canManageWorkflows
 
   useEffect(() => {
     loadWorkflows()
@@ -40,9 +45,24 @@ export function WorkflowList() {
     }).format(date)
   }
 
+  const handleCreateWorkflow = () => {
+    if (!canManageWorkflows) {
+      return
+    }
+    navigate('/workflows/new')
+  }
+
   return (
     <div className="flex-1 bg-background">
       <div className="container mx-auto py-8 px-4">
+        <AuthStatusBanner />
+
+        {isReadOnly && (
+          <div className="mb-6 rounded-md border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            You are viewing workflows with read-only access. Administrators can create and edit workflows.
+          </div>
+        )}
+
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-2">Your Workflows</h2>
           <p className="text-muted-foreground">
@@ -71,7 +91,7 @@ export function WorkflowList() {
             <p className="text-muted-foreground mb-4">
               Create your first workflow to get started
             </p>
-            <Button onClick={() => navigate('/workflows/new')}>
+            <Button onClick={handleCreateWorkflow} disabled={isReadOnly}>
               Create Workflow
             </Button>
           </div>

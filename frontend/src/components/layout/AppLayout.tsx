@@ -4,6 +4,7 @@ import { AppTopBar } from '@/components/layout/AppTopBar'
 import { Button } from '@/components/ui/button'
 import { Workflow, KeyRound, Plus } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
+import { useAuthStore } from '@/store/authStore'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -28,6 +29,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const location = useLocation()
   const navigate = useNavigate()
+  const canManageWorkflows = useAuthStore((state) => state.roles.includes('ADMIN'))
 
   // Auto-collapse sidebar when opening workflow builder, expand for other routes
   useEffect(() => {
@@ -64,7 +66,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   const getPageActions = () => {
     if (location.pathname === '/') {
       return (
-        <Button onClick={() => navigate('/workflows/new')} className="gap-2">
+        <Button
+          onClick={() => {
+            if (!canManageWorkflows) return
+            navigate('/workflows/new')
+          }}
+          className="gap-2"
+          disabled={!canManageWorkflows}
+          aria-disabled={!canManageWorkflows}
+        >
           <Plus className="h-4 w-4" />
           New Workflow
         </Button>

@@ -56,11 +56,11 @@ _Last updated: 2025-02-15_
 **Goal:** Ensure every resource is stored and queried with organization context and enforced roles.
 
 - [x] Apply schema migrations adding `organization_id` (+ indexes) to workflows, workflow runs, secrets, secret versions, files/artifacts. _(Migration `0008_add-org-scoping.sql` landed and schema types updated.)_
-- [ ] Backfill existing records using a temporary default org (or flag for manual migration).
-- [ ] Update repositories & services to require `AuthContext.organizationId`, filter queries, and reject cross-org access. _(Workflows + secrets + files are scoped; trace/log APIs still pending.)_
+- [x] Backfill existing records using a temporary default org (or flag for manual migration). _(Migration `backend/drizzle/0009_backfill-org-columns.sql` seeds `local-dev` org for legacy rows.)_
+- [x] Update repositories & services to require `AuthContext.organizationId`, filter queries, and reject cross-org access. _(Workflows + secrets + files enforce org scoping; trace/log pending.)_
 - [ ] Introduce `workflow_roles` (workflow/user/role) table limited to `ADMIN`/`MEMBER`.
 - [ ] Implement decorators/guards for resource-level permissions (e.g., only admins can mutate workflows).
-- [ ] Extend worker run payloads & Trace adapters to persist organization metadata end-to-end. _(Run metadata + repositories capture `organizationId`; worker adapters still need updates.)_
+- [ ] Extend worker run payloads & Trace adapters to persist organization metadata end-to-end. _(Run metadata + repositories capture `organizationId`; worker adapters + trace service still pending.)_
 - [ ] Add regression tests covering org isolation and role enforcement.
 
 ---
