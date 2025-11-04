@@ -25,6 +25,7 @@ import './security/naabu';
 import './security/dnsx';
 import './security/httpx';
 import './security/supabase-misconfig';
+import './security/supabase-scanner';
 import './security/notify';
 import './security/prowler-scan';
 import './security/shuffledns-massdns';
