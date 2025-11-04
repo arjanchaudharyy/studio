@@ -10,6 +10,8 @@ import {
   Req,
   Res,
   UsePipes,
+  BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
@@ -307,7 +309,14 @@ export class WorkflowsController {
     },
   })
   async commit(@Param('id') id: string) {
-    return this.workflowsService.commit(id);
+    try {
+      return await this.workflowsService.commit(id);
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      const message = error instanceof Error ? error.message : 'Commit failed';
+      // Surface compile/validation details to the client for better UX
+      throw new BadRequestException(message);
+    }
   }
 
   @Post(':id/run')
@@ -355,11 +364,17 @@ export class WorkflowsController {
     @Body(new ZodValidationPipe(RunWorkflowRequestSchema))
     body: RunWorkflowRequestDto,
   ) {
-    return this.workflowsService.run(id, {
-      inputs: body.inputs,
-      versionId: body.versionId,
-      version: body.version,
-    });
+    try {
+      return await this.workflowsService.run(id, {
+        inputs: body.inputs,
+        versionId: body.versionId,
+        version: body.version,
+      });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      const message = error instanceof Error ? error.message : 'Failed to run workflow';
+      throw new BadRequestException(message);
+    }
   }
 
   @Get('/runs/:runId/status')

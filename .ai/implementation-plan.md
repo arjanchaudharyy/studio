@@ -91,6 +91,7 @@ This plan supersedes the previous implementation playbook. It focuses on deliver
 - [x] Update `createExecutionContext.emitProgress` to accept `{ level, message, data }` and persist via `TraceAdapter`.
 - [x] Record `NODE_STARTED/COMPLETED/FAILED/PROGRESS` with explicit levels.
 - [x] Ensure `TraceAdapter` writes new fields to Postgres (using Phase 2 migration).
+- [x] Supabase misconfiguration scanner emits progress updates per check to stay compatible with trace visualisation.
 - [x] Tests:
   - [x] Unit tests for `TraceAdapter.persist` verifying `level/data` stored.
   - [x] Workflow runner tests capturing emitted progress events and order.

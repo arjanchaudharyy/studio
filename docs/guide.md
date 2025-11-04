@@ -7,6 +7,7 @@ Use this guide as the table of contents for all living documentation in the repo
 - `ARCHITECTURE.md` – High-level system design and package map.
 - `docs/execution-contract.md` – Canonical execution/trace schemas shared across backend, worker, and frontend.
 - `docs/enterprise-components.md` – Enterprise-grade component backlog (secret store, secret fetcher, etc.).
+- `docs/supabase-misconfig.md` – Supabase misconfiguration scan component overview and usage.
 
 ## Package-Level Guides
 - `frontend/README.md` – Frontend quickstart + command reference.

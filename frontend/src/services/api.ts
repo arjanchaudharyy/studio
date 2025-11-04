@@ -173,8 +173,11 @@ export const api = {
      * Commit workflow (compile DSL)
      */
     commit: async (id: string) => {
-      const response = await apiClient.commitWorkflow(id)
-      if (response.error) throw new Error('Failed to commit workflow')
+      const response: any = await apiClient.commitWorkflow(id)
+      if (response.error) {
+        const message = response.error?.message || 'Failed to commit workflow'
+        throw new Error(message)
+      }
       return response.data
     },
 
@@ -182,8 +185,11 @@ export const api = {
      * Run workflow
      */
     run: async (id: string, body?: { inputs?: Record<string, unknown> }) => {
-      const response = await apiClient.runWorkflow(id, body)
-      if (response.error) throw new Error('Failed to run workflow')
+      const response: any = await apiClient.runWorkflow(id, body)
+      if (response.error) {
+        const message = response.error?.message || 'Failed to run workflow'
+        throw new Error(message)
+      }
       return response.data
     },
   },

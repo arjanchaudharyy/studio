@@ -167,7 +167,9 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                     input.id === 'secretId'
                   const manualPlaceholder = useSecretSelect
                     ? 'Select a secret...'
-                    : 'Enter text to use without a connection'
+                    : input.id === 'supabaseUrl'
+                      ? 'https://<project-ref>.supabase.co or <project_ref>'
+                      : 'Enter text to use without a connection'
                   const typeLabel = describePortDataType(input.dataType)
 
                   return (
