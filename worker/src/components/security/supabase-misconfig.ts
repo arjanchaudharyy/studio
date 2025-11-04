@@ -17,11 +17,26 @@ const inputSchema = z
     supabaseUrl: z
       .string()
       .trim()
-      .url()
-      .refine((value) => value.startsWith('https://'), {
-        message: 'Supabase URL must use HTTPS',
+      .transform((value) => {
+        const refOnly = /^[a-z0-9]{20}$/i.test(value);
+        return refOnly ? `https://${value}.supabase.co` : value;
+      })
+      .refine((value) => {
+        try {
+          const url = new URL(value);
+          return url.protocol === 'https:' && /\.supabase\.co$/i.test(url.hostname);
+        } catch {
+          return false;
+        }
+      }, {
+        message:
+          'Provide a Supabase URL like https://<project-ref>.supabase.co or a 20-character project ref.',
       }),
-    serviceRoleKey: z.string().min(12, 'Service role key is required'),
+    databaseUrl: z.string().min(10).optional(),
+    serviceRoleKey: z
+      .preprocess((v) => (typeof v === 'string' && v.trim().length > 0 ? v : undefined),
+        z.string().min(12, 'Service role key must be at least 12 characters.').optional(),
+      ),
     projectRef: z
       .string()
       .regex(/^[a-z0-9]{20}$/i, 'Project ref must be a 20 character base36 string')
@@ -109,7 +124,7 @@ type CheckDefinition = {
 type CheckContext = {
   pg: PgClient | null;
   supabaseUrl: string;
-  serviceRoleKey: string;
+  serviceRoleKey?: string;
   projectRef: string | null;
   fetchJson: <T>(path: string) => Promise<T>;
   envFiles: Array<{ fileName: string; content: string }>;
@@ -155,14 +170,22 @@ const definition: ComponentDefinition<SupabaseMisconfigInput, SupabaseMisconfigO
         label: 'Supabase URL',
         dataType: port.text(),
         required: true,
-        description: 'Supabase project base URL (https://<project-ref>.supabase.co).',
+        description:
+          'Project URL in the form https://<project-ref>.supabase.co (e.g., https://abcdefghijklmno12345.supabase.co).',
+      },
+      {
+        id: 'databaseUrl',
+        label: 'Database URL',
+        dataType: port.secret(),
+        required: false,
+        description: 'Optional Postgres connection string (URI). If provided, used for DB checks instead of inferring from project ref.',
       },
       {
         id: 'serviceRoleKey',
         label: 'Service Role Key',
         dataType: port.secret(),
-        required: true,
-        description: 'Supabase service role key with admin access.',
+        required: false,
+        description: 'Optional Supabase service role key (enables additional API checks).',
       },
       {
         id: 'projectRef',
@@ -347,6 +370,23 @@ function createProgressEmitter(emit: (event: ProgressUpdate) => void) {
 }
 
 async function createDatabaseClient(input: SupabaseMisconfigInput, emit: ReturnType<typeof createProgressEmitter>) {
+  // Prefer explicit database URL when provided
+  if (input.databaseUrl && input.databaseUrl.trim().length > 0) {
+    const client = new PgClient({
+      connectionString: input.databaseUrl,
+      ssl: { rejectUnauthorized: false },
+      statement_timeout: 10_000,
+    });
+    try {
+      await client.connect();
+      emit('info', 'Connected to Supabase Postgres (via Database URL)');
+      return client;
+    } catch (error) {
+      emit('error', `Failed to connect using Database URL: ${error instanceof Error ? error.message : 'unknown error'}`);
+      return null;
+    }
+  }
+
   if (!input.projectRef) {
     emit('warn', 'Project reference could not be inferred; database checks will be skipped.');
     return null;
@@ -379,15 +419,15 @@ async function createDatabaseClient(input: SupabaseMisconfigInput, emit: ReturnT
   }
 }
 
-function createSupabaseFetcher(baseUrl: string, serviceRoleKey: string) {
+function createSupabaseFetcher(baseUrl: string, serviceRoleKey?: string) {
   return async <T>(path: string): Promise<T> => {
     const targetUrl = new URL(path.replace(/^\//, ''), baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
-    const response = await fetch(targetUrl, {
-      headers: {
-        apikey: serviceRoleKey,
-        Authorization: `Bearer ${serviceRoleKey}`,
-      },
-    });
+    const headers: Record<string, string> = {};
+    if (serviceRoleKey && serviceRoleKey.trim().length > 0) {
+      headers.apikey = serviceRoleKey;
+      headers.Authorization = `Bearer ${serviceRoleKey}`;
+    }
+    const response = await fetch(targetUrl, { headers });
 
     if (!response.ok) {
       throw new Error(`Request to ${targetUrl.pathname} failed (${response.status})`);
