@@ -53,6 +53,11 @@ export interface ProviderTokenResponse {
   expiresAt: Date | null;
 }
 
+type ResolvedProviderConfig = IntegrationProviderConfig & {
+  clientId: string;
+  clientSecret: string;
+};
+
 const TOKEN_REFRESH_BUFFER_MS = 60_000; // proactively refresh 1 minute before expiry
 
 interface TokenRequestOptions {
@@ -376,14 +381,15 @@ export class IntegrationsService implements OnModuleInit {
     return this.cleanScopes(source);
   }
 
-  private async resolveProviderForAuth(providerId: string): Promise<IntegrationProviderConfig> {
+  private async resolveProviderForAuth(providerId: string): Promise<ResolvedProviderConfig> {
     const base = this.requireProvider(providerId);
     const override = this.providerOverrides.get(providerId);
 
-    const clientId = override?.clientId ?? base.clientId ?? null;
-    const clientSecret = override
+    const clientId = (override?.clientId ?? base.clientId ?? '').trim();
+    const decryptedSecret = override
       ? await this.encryption.decrypt(override.clientSecret)
-      : base.clientSecret ?? null;
+      : base.clientSecret ?? '';
+    const clientSecret = decryptedSecret.trim();
 
     if (!clientId || !clientSecret) {
       throw new BadRequestException(`Provider ${providerId} is not configured for OAuth`);
