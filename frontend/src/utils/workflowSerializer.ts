@@ -3,8 +3,8 @@ import type { NodeData } from '@/schemas/node'
 import type { components } from '@shipsec/backend-client'
 
 // Backend types
-type BackendNode = components['schemas']['WorkflowResponseDto']['nodes'][number]
-type BackendEdge = components['schemas']['WorkflowResponseDto']['edges'][number]
+type BackendNode = components['schemas']['WorkflowResponseDto']['graph']['nodes'][number]
+type BackendEdge = components['schemas']['WorkflowResponseDto']['graph']['edges'][number]
 type CreateWorkflowRequestDto = components['schemas']['CreateWorkflowRequestDto']
 type UpdateWorkflowRequestDto = components['schemas']['UpdateWorkflowRequestDto']
 

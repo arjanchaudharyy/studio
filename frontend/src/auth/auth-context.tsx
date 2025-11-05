@@ -20,10 +20,11 @@ function getAuthProviderName(): string {
 
   // Debug logging to help diagnose issues
   if (import.meta.env.DEV) {
+    const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
     console.log('[Auth] Provider selection:', {
       envProvider: envProvider || 'undefined',
       hasClerkKey,
-      clerkKeyPreview: hasClerkKey ? import.meta.env.VITE_CLERK_PUBLISHABLE_KEY.substring(0, 20) + '...' : 'missing',
+      clerkKeyPreview: hasClerkKey && typeof clerkKey === 'string' ? clerkKey.substring(0, 20) + '...' : 'missing',
       allEnvKeys: Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')),
     });
     console.log('[Auth] VITE_AUTH_PROVIDER value:', import.meta.env.VITE_AUTH_PROVIDER);

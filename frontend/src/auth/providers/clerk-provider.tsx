@@ -229,10 +229,6 @@ const ClerkUserButtonComponent = ({
       },
       ...appearance,
     }}
-    // Enable organization list in UserButton dropdown - this shows orgs in the menu
-    organizationListMode="navigation"
-    organizationProfileMode="navigation"
-    organizationProfileUrl="/organization"
     userProfileMode="navigation"
     userProfileUrl="/user"
   />
