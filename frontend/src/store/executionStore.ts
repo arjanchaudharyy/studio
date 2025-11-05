@@ -242,7 +242,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     set({ ...INITIAL_STATE, streamingMode: 'none' })
   },
 
-  connectStream: (runId: string) => {
+  connectStream: async (runId: string) => {
     if (typeof EventSource === 'undefined') {
       return
     }
@@ -251,7 +251,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     get().disconnectStream()
 
     try {
-      const source = api.executions.stream(runId, cursor ? { cursor } : undefined)
+      const source = await api.executions.stream(runId, cursor ? { cursor } : undefined)
 
       source.addEventListener('trace', (event) => {
         try {

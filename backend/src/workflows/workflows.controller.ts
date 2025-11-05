@@ -470,6 +470,8 @@ export class WorkflowsController {
     @Res() res: Response,
     @Req() req: Request,
   ): Promise<void> {
+    // Auth is now handled via headers (Authorization and X-Organization-Id)
+    // using a fetch-based SSE client that supports custom headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');

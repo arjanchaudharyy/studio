@@ -37,51 +37,68 @@ function resolveApiBaseUrl() {
 
 export const API_BASE_URL = resolveApiBaseUrl()
 
+// Helper function to get auth headers (reused by middleware and file operations)
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const storeState = useAuthStore.getState()
+  let token = storeState.token
+  const organizationId = storeState.organizationId
+
+  // For Clerk auth, always fetch a fresh token on-demand to prevent expiration issues
+  // This ensures we never use a stale/expired token
+  if (storeState.provider === 'clerk') {
+    try {
+      const freshToken = await getFreshClerkToken()
+      if (freshToken) {
+        token = freshToken
+        // Update store with fresh token so it's available for next time
+        storeState.setToken(freshToken)
+      } else {
+        // If we can't get a fresh token, fall back to store token
+        console.warn('[API] Failed to get fresh Clerk token, using store token');
+      }
+    } catch (error) {
+      console.error('[API] Error fetching fresh Clerk token:', error);
+      // Fall back to store token if fresh token fetch fails
+    }
+  }
+
+  const headers: Record<string, string> = {}
+
+  if (token && token.trim().length > 0) {
+    const headerValue = token.startsWith('Bearer ') ? token : `Bearer ${token}`
+    headers['Authorization'] = headerValue
+  } else {
+    console.warn('[API] No token available for request');
+  }
+
+  if (organizationId && organizationId.trim().length > 0) {
+    headers['X-Organization-Id'] = organizationId
+  }
+
+  return headers
+}
+
 // Create type-safe API client
 const apiClient = createShipSecClient({
   baseUrl: API_BASE_URL,
   middleware: {
-  async onRequest({ request }) {
-    const storeState = useAuthStore.getState()
-    let token = storeState.token
-    const organizationId = storeState.organizationId
+    async onRequest({ request }) {
+      const headers = await getAuthHeaders()
 
-    // For Clerk auth, always fetch a fresh token on-demand to prevent expiration issues
-    // This ensures we never use a stale/expired token
-    if (storeState.provider === 'clerk') {
-      try {
-        const freshToken = await getFreshClerkToken()
-        if (freshToken) {
-          token = freshToken
-          // Update store with fresh token so it's available for next time
-          storeState.setToken(freshToken)
-        } else {
-          // If we can't get a fresh token, fall back to store token
-          console.warn('[API] Failed to get fresh Clerk token, using store token');
-        }
-      } catch (error) {
-        console.error('[API] Error fetching fresh Clerk token:', error);
-        // Fall back to store token if fresh token fetch fails
+      // Apply auth headers to the request
+      if (headers['Authorization']) {
+        request.headers.set('Authorization', headers['Authorization'])
       }
-    }
+      if (headers['X-Organization-Id']) {
+        request.headers.set('X-Organization-Id', headers['X-Organization-Id'])
+      }
 
-    if (token && token.trim().length > 0) {
-      const headerValue = token.startsWith('Bearer ') ? token : `Bearer ${token}`
-      request.headers.set('Authorization', headerValue)
-    } else {
-      console.warn('[API] No token available for request:', request.url);
-    }
+      if (!request.headers.has('Content-Type')) {
+        request.headers.set('Content-Type', 'application/json')
+      }
 
-    if (organizationId && organizationId.trim().length > 0) {
-      request.headers.set('X-Organization-Id', organizationId)
-    }
-
-    if (!request.headers.has('Content-Type')) {
-      request.headers.set('Content-Type', 'application/json')
-    }
-
-    return request
-  },
+      return request
+    },
   },
 })
 
@@ -232,13 +249,45 @@ export const api = {
       return response.data || []
     },
 
-        stream: (executionId: string, options?: { cursor?: string; temporalRunId?: string }) => {
+        stream: async (executionId: string, options?: { cursor?: string; temporalRunId?: string }): Promise<EventSource> => {
+          // Use fetch-based SSE client that supports custom headers (including Authorization)
+          const { FetchEventSource } = await import('@/utils/sse-client')
+          
+          const storeState = useAuthStore.getState()
+          let token = storeState.token
+          const organizationId = storeState.organizationId
+
+          // For Clerk auth, fetch a fresh token
+          if (storeState.provider === 'clerk') {
+            try {
+              const freshToken = await getFreshClerkToken()
+              if (freshToken) {
+                token = freshToken
+                storeState.setToken(freshToken)
+              }
+            } catch (error) {
+              console.error('[API] Error fetching fresh Clerk token for SSE:', error)
+            }
+          }
+
+          // Build URL with query params
           const params = new URLSearchParams()
           if (options?.cursor) params.set('cursor', options.cursor)
           if (options?.temporalRunId) params.set('temporalRunId', options.temporalRunId)
           const query = params.toString()
           const url = `${API_BASE_URL}/api/v1/workflows/runs/${executionId}/stream${query ? `?${query}` : ''}`
-          return new EventSource(url)
+
+          // Build auth headers
+          const headers: Record<string, string> = {}
+          if (token && token.trim().length > 0) {
+            const headerValue = token.startsWith('Bearer ') ? token : `Bearer ${token}`
+            headers['Authorization'] = headerValue
+          }
+          if (organizationId && organizationId.trim().length > 0) {
+            headers['X-Organization-Id'] = organizationId
+          }
+
+          return new FetchEventSource(url, { headers })
         },
 
     cancel: async (executionId: string) => {
@@ -266,8 +315,15 @@ export const api = {
     },
 
     upload: async (file: File) => {
-      const response = await apiClient.uploadFile(file)
-      if (response.error) throw new Error('Failed to upload file')
+      const response = await apiClient.uploadFile(file) as any
+      if (response.error) {
+        const errorMessage = response.error instanceof Error 
+          ? response.error.message 
+          : typeof response.error === 'string'
+          ? response.error
+          : 'Failed to upload file'
+        throw new Error(errorMessage)
+      }
       return response.data
     },
 

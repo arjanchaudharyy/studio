@@ -174,18 +174,12 @@ export class ShipSecApiClient {
     const formData = new FormData();
     formData.append('file', file);
     
-    // Use fetch directly for multipart/form-data uploads
-    const response = await fetch(`${this.baseUrl}/api/v1/files/upload`, {
-      method: 'POST',
-      body: formData,
+    // Use the typed client - it will automatically apply middleware (including auth headers)
+    // For multipart/form-data, openapi-fetch accepts FormData directly
+    return this.client.POST('/api/v1/files/upload', {
+      body: formData as any, // Type assertion needed as generated types expect { file?: string } but FormData works at runtime
+      // openapi-fetch will automatically set Content-Type for FormData
     });
-    
-    if (!response.ok) {
-      return { error: new Error(`Upload failed: ${response.statusText}`), data: undefined };
-    }
-    
-    const data = await response.json();
-    return { data, error: undefined };
   }
 
   async getFileMetadata(id: string) {
@@ -195,11 +189,19 @@ export class ShipSecApiClient {
   }
 
   async downloadFile(id: string): Promise<Blob> {
-    const response = await fetch(`${this.baseUrl}/api/v1/files/${id}/download`);
-    if (!response.ok) {
-      throw new Error(`Failed to download file: ${response.statusText}`);
+    // Use the typed client - it will automatically apply middleware (including auth headers)
+    // For blob responses, openapi-fetch returns the blob directly or in a response object
+    const response = await this.client.GET('/api/v1/files/{id}/download', {
+      params: { path: { id } },
+      parseAs: 'blob', // Request blob response for binary data
+    }) as any; // Type assertion needed as parseAs: 'blob' changes the response type
+    
+    // Handle both response.data and direct blob response
+    if (response?.error) {
+      throw new Error(`Failed to download file: ${String(response.error)}`);
     }
-    return response.blob();
+    
+    return (response?.data ?? response) as Blob;
   }
 
   async deleteFile(id: string) {

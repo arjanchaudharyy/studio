@@ -59,7 +59,7 @@ mock.module('@/services/api', () => ({
   api: {
     executions: {
       ...mockExecutions,
-      stream: mock((runId: string, _options?: any) => {
+      stream: mock(async (runId: string, _options?: any) => {
         return new MockEventSource(`/api/workflows/runs/${runId}/stream`)
       }),
     },
@@ -152,10 +152,10 @@ describe('useExecutionStore', () => {
   })
 
   describe('Streaming functionality', () => {
-    it('connects to streaming endpoint and handles ready event', () => {
+    it('connects to streaming endpoint and handles ready event', async () => {
       const { connectStream } = useExecutionStore.getState()
 
-      connectStream('test-run-id')
+      await connectStream('test-run-id')
 
       expect(useExecutionStore.getState().streamingMode).toBe('connecting')
       expect(useExecutionStore.getState().eventSource).toBeInstanceOf(MockEventSource)
@@ -169,10 +169,10 @@ describe('useExecutionStore', () => {
       expect(useExecutionStore.getState().streamingMode).toBe('realtime')
     })
 
-    it('handles incoming trace events from stream', () => {
+    it('handles incoming trace events from stream', async () => {
       const { connectStream } = useExecutionStore.getState()
 
-      connectStream('test-run-id')
+      await connectStream('test-run-id')
 
       const newEvents = [
         event({ id: '1', type: 'STARTED', nodeId: 'node-1' }),
@@ -190,10 +190,10 @@ describe('useExecutionStore', () => {
       expect(logs[1].message).toBe('Processing...')
     })
 
-    it('handles status updates from stream', () => {
+    it('handles status updates from stream', async () => {
       const { connectStream } = useExecutionStore.getState()
 
-      connectStream('test-run-id')
+      await connectStream('test-run-id')
 
       MockEventSource.dispatchEvent('status', baseStatus({ status: 'COMPLETED' }))
 
@@ -202,7 +202,7 @@ describe('useExecutionStore', () => {
       expect(runStatus?.status).toBe('COMPLETED')
     })
 
-    it('handles completion event and stops polling', () => {
+    it('handles completion event and stops polling', async () => {
       const interval = setInterval(() => {}, 1000)
       useExecutionStore.setState({
         runId: 'test-run-id',
@@ -210,7 +210,7 @@ describe('useExecutionStore', () => {
       })
 
       const { connectStream } = useExecutionStore.getState()
-      connectStream('test-run-id')
+      await connectStream('test-run-id')
 
       MockEventSource.dispatchEvent('complete', { runId: 'test-run-id', status: 'COMPLETED' })
 
@@ -219,10 +219,10 @@ describe('useExecutionStore', () => {
       expect(useExecutionStore.getState().eventSource).toBeNull()
     })
 
-    it('handles streaming errors gracefully', () => {
+    it('handles streaming errors gracefully', async () => {
       const { connectStream } = useExecutionStore.getState()
 
-      connectStream('test-run-id')
+      await connectStream('test-run-id')
 
       // Simulate error event
       const mockEventSource = useExecutionStore.getState().eventSource as MockEventSource
@@ -237,10 +237,10 @@ describe('useExecutionStore', () => {
       expect(useExecutionStore.getState().streamingMode).toBe('none')
     })
 
-    it('disconnects stream properly', () => {
+    it('disconnects stream properly', async () => {
       const { connectStream, disconnectStream } = useExecutionStore.getState()
 
-      connectStream('test-run-id')
+      await connectStream('test-run-id')
       expect(useExecutionStore.getState().eventSource).toBeInstanceOf(MockEventSource)
 
       disconnectStream()
@@ -249,10 +249,10 @@ describe('useExecutionStore', () => {
       expect(useExecutionStore.getState().streamingMode).toBe('none')
     })
 
-    it('falls back to polling mode when realtime is not available', () => {
+    it('falls back to polling mode when realtime is not available', async () => {
       const { connectStream } = useExecutionStore.getState()
 
-      connectStream('test-run-id')
+      await connectStream('test-run-id')
 
       // Simulate ready event for polling mode
       MockEventSource.dispatchEvent('ready', {
