@@ -6,16 +6,19 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Headers,
   Param,
   Post,
   Put,
   Query,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 
 import {
   CompleteOAuthDto,
   DisconnectConnectionDto,
+  ConnectionTokenResponseDto,
   IntegrationConnectionResponse,
   IntegrationProviderResponse,
   ProviderConfigurationResponse,
@@ -161,5 +164,35 @@ export class IntegrationsController {
     @Body() body: DisconnectConnectionDto,
   ): Promise<void> {
     await this.integrations.disconnect(id, body.userId);
+  }
+
+  @Post('connections/:id/token')
+  @ApiOkResponse({ type: ConnectionTokenResponseDto })
+  async issueConnectionToken(
+    @Param('id') id: string,
+    @Headers('x-internal-token') internalToken?: string,
+  ): Promise<ConnectionTokenResponseDto> {
+    this.assertInternalAccess(internalToken);
+
+    const token = await this.integrations.getConnectionToken(id);
+    return {
+      provider: token.provider,
+      userId: token.userId,
+      accessToken: token.accessToken,
+      tokenType: token.tokenType,
+      scopes: token.scopes,
+      expiresAt: token.expiresAt ? token.expiresAt.toISOString() : null,
+    };
+  }
+
+  private assertInternalAccess(token?: string): void {
+    const expected = process.env.INTERNAL_SERVICE_TOKEN;
+    if (!expected) {
+      return;
+    }
+
+    if (token !== expected) {
+      throw new UnauthorizedException('Invalid internal access token');
+    }
   }
 }

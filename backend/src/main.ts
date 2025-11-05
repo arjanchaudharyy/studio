@@ -14,6 +14,11 @@ async function bootstrap() {
   // Set global prefix for all routes
   app.setGlobalPrefix('api/v1');
 
+  const httpAdapter = app.getHttpAdapter().getInstance();
+  if (httpAdapter?.set) {
+    httpAdapter.set('etag', false);
+  }
+
   // Enable CORS for frontend
   app.enableCors({
     origin: [

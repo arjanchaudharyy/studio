@@ -358,6 +358,9 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                     value={nodeData.parameters?.[param.id]}
                     onChange={(value) => handleParameterChange(param.id, value)}
                     connectedInput={nodeData.inputs?.[param.id]}
+                    componentSlug={component.slug ?? component.id}
+                    parameters={nodeData.parameters}
+                    onUpdateParameter={handleParameterChange}
                   />
                 ))}
               </div>

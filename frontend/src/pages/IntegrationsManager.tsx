@@ -79,6 +79,7 @@ export function IntegrationsManager() {
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null)
   const [refreshingConnectionId, setRefreshingConnectionId] = useState<string | null>(null)
   const [deletingConnectionId, setDeletingConnectionId] = useState<string | null>(null)
+  const [customScopes, setCustomScopes] = useState<Record<string, string>>({})
 
   useEffect(() => {
     fetchProviders().catch((err) => {
@@ -121,6 +122,26 @@ export function IntegrationsManager() {
     return new Map(connections.map((connection) => [connection.provider, connection]))
   }, [connections])
 
+const parseAdditionalScopes = (input: string | undefined): string[] => {
+  if (!input) {
+    return []
+  }
+  return Array.from(
+    new Set(
+      input
+        .split(/[\s,]+/)
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+const buildRequestedScopes = (provider: IntegrationProvider): string[] => {
+  const baseScopes = provider.defaultScopes ?? []
+  const extraScopes = parseAdditionalScopes(customScopes[provider.id])
+  return Array.from(new Set([...baseScopes, ...extraScopes]))
+}
+
   const handleConnect = async (provider: IntegrationProvider) => {
     resetError()
 
@@ -135,7 +156,7 @@ export function IntegrationsManager() {
       const response = await api.integrations.startOAuth(provider.id, {
         userId,
         redirectUri,
-        scopes: provider.defaultScopes,
+        scopes: buildRequestedScopes(provider),
       })
       window.location.href = response.authorizationUrl
     } catch (err) {
@@ -376,6 +397,8 @@ export function IntegrationsManager() {
             {providers.map((provider) => {
               const connection = getProviderConnection(provider.id, connectionByProvider)
               const isConnecting = connectingProvider === provider.id
+              const requestedScopes = buildRequestedScopes(provider)
+              const additionalScopesValue = customScopes[provider.id] ?? ''
               const configuredBadge = provider.isConfigured ? (
                 <Badge variant="secondary">Configured</Badge>
               ) : (
@@ -396,11 +419,47 @@ export function IntegrationsManager() {
                   </div>
 
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    {provider.defaultScopes.map((scope) => (
+                    {requestedScopes.map((scope) => (
                       <Badge key={scope} variant="outline" className="text-[11px]">
                         {scope}
                       </Badge>
                     ))}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={`additional-scopes-${provider.id}`} className="text-xs font-medium">
+                      Additional scopes
+                    </Label>
+                    <Input
+                      id={`additional-scopes-${provider.id}`}
+                      value={additionalScopesValue}
+                      placeholder="repo delete_repo"
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          const normalized = parseAdditionalScopes(additionalScopesValue)
+                          if (normalized.length > 0) {
+                            setCustomScopes((prev) => ({
+                              ...prev,
+                              [provider.id]: normalized.join(' '),
+                            }))
+                            toast({
+                              title: 'Scopes added',
+                              description: `Queued ${normalized.join(', ')} for next connection attempt.`,
+                            })
+                          }
+                        }
+                      }}
+                      onChange={(event) =>
+                        setCustomScopes((prev) => ({
+                          ...prev,
+                          [provider.id]: event.target.value,
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Separate scopes with spaces or commas. Press Enter to normalize them. Default scopes stay included automatically.
+                    </p>
                   </div>
 
                   {connection ? (

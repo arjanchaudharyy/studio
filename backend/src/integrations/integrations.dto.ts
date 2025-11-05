@@ -165,3 +165,23 @@ export class IntegrationConnectionResponse {
   @ApiPropertyOptional({ description: 'Provider-specific metadata saved alongside the connection' })
   metadata?: Record<string, unknown>;
 }
+
+export class ConnectionTokenResponseDto {
+  @ApiProperty()
+  provider!: string;
+
+  @ApiProperty()
+  userId!: string;
+
+  @ApiProperty()
+  accessToken!: string;
+
+  @ApiProperty()
+  tokenType!: string;
+
+  @ApiProperty({ type: [String] })
+  scopes!: string[];
+
+  @ApiPropertyOptional()
+  expiresAt?: string | null;
+}

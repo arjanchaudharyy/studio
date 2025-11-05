@@ -1,28 +1,33 @@
 import { z } from 'zod';
-import { componentRegistry, type ComponentDefinition, type ExecutionContext } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  port,
+  type ComponentDefinition,
+  type ExecutionContext,
+} from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  organization: z.string().trim().min(1, 'Organization is required.'),
-  teamSlug: z
-    .string()
-    .trim()
-    .min(1, 'Team slug cannot be empty.')
-    .optional(),
-  userIdentifier: z
-    .string()
-    .trim()
-    .min(1, 'Provide a GitHub username or email address.'),
-  clientId: z
-    .string()
-    .trim()
-    .min(1, 'GitHub OAuth client ID is required.')
-    .describe('GitHub OAuth client ID'),
-  clientSecret: z
-    .string()
-    .trim()
-    .min(1, 'GitHub OAuth client secret is required.')
-    .describe('GitHub OAuth client secret'),
-});
+const inputSchema = z
+  .object({
+    organization: z.string().trim().min(1, 'Organization is required.'),
+    teamSlug: z
+      .string()
+      .trim()
+      .min(1, 'Team slug cannot be empty.')
+      .optional(),
+    userIdentifier: z
+      .string()
+      .trim()
+      .min(1, 'Provide a GitHub username or email address.'),
+    connectionId: z
+      .string()
+      .trim()
+      .min(1, 'Select a GitHub connection to reuse.')
+      .describe('GitHub integration connection ID'),
+  })
+  .transform((value) => ({
+    ...value,
+    connectionId: value.connectionId.trim(),
+  }));
 
 export type GitHubRemoveOrgMembershipInput = z.infer<typeof inputSchema>;
 
@@ -56,7 +61,7 @@ const definition: ComponentDefinition<
     slug: 'github-remove-org-membership',
     version: '1.0.0',
     type: 'output',
-    category: 'building-block',
+    category: 'it_ops',
     description:
       'Automates GitHub organization seat recovery by running a device OAuth flow (client ID + secret) and removing the user from the organization and optionally a team.',
     icon: 'UserMinus',
@@ -70,44 +75,39 @@ const definition: ComponentDefinition<
       {
         id: 'organization',
         label: 'Organization',
-        type: 'string',
+        dataType: port.text({ coerceFrom: [] }),
         required: true,
         description: 'GitHub organization login (e.g. shipsecai).',
       },
       {
         id: 'teamSlug',
         label: 'Team Slug',
-        type: 'string',
+        dataType: port.text({ coerceFrom: [] }),
         required: false,
         description: 'Optional GitHub team slug to remove the user before organization removal.',
       },
       {
         id: 'userIdentifier',
         label: 'Username or Email',
-        type: 'string',
+        dataType: port.text({ coerceFrom: [] }),
         required: true,
         description: 'GitHub username or email of the member to remove.',
       },
       {
-        id: 'clientId',
-        label: 'OAuth Client ID',
-        type: 'string',
+        id: 'connectionId',
+        label: 'GitHub Connection',
+        dataType: port.text({ coerceFrom: [] }),
         required: true,
-        description: 'GitHub OAuth App client ID. Required to initiate the device authorization flow.',
-      },
-      {
-        id: 'clientSecret',
-        label: 'OAuth Client Secret',
-        type: 'secret',
-        required: true,
-        description: 'GitHub OAuth App client secret. Store in ShipSec secrets and connect here.',
+        description:
+          'GitHub integration connection ID supplied from the GitHub Connection Provider component.',
+        valuePriority: 'connection-first',
       },
     ],
     outputs: [
       {
         id: 'result',
         label: 'Removal Result',
-        type: 'object',
+        dataType: port.json(),
         description: 'Outcome of team and organization removal attempts.',
       },
     ],
@@ -131,33 +131,53 @@ const definition: ComponentDefinition<
         description: 'Optional team slug to target before removing the organization membership.',
       },
       {
-        id: 'clientId',
-        label: 'GitHub OAuth Client ID',
+        id: 'connectionId',
+        label: 'GitHub Connection',
         type: 'text',
-        required: true,
-        description: 'Client ID from your GitHub OAuth App with admin:org scope.',
-      },
-      {
-        id: 'clientSecret',
-        label: 'GitHub OAuth Client Secret',
-        type: 'secret',
-        required: true,
-        description: 'Client secret from your GitHub OAuth App. Store in secrets and reference here.',
+        required: false,
+        description:
+          'Active GitHub connection to reuse. Select from the dropdown or wire a GitHub Connection Provider node.',
+        helpText:
+          'Manage connections from the Connections page. Tokens stay server-side and are fetched at runtime.',
       },
     ],
   },
   async execute(params, context) {
-    const { organization, teamSlug, userIdentifier, clientId, clientSecret } = params;
+    const {
+      organization,
+      teamSlug,
+      userIdentifier,
+      connectionId,
+    } = params;
 
-    const { accessToken, scope: tokenScope } = await completeDeviceAuthorization(
-      clientId,
-      clientSecret,
-      context,
+    let accessToken: string;
+    let tokenType = 'Bearer';
+    let tokenScope: string | undefined;
+
+    const trimmedConnectionId = connectionId.trim();
+
+    if (trimmedConnectionId.length === 0) {
+      throw new Error('GitHub connection ID is required when using an existing connection.');
+    }
+
+    context.emitProgress(
+      `Retrieving GitHub access token from connection ${trimmedConnectionId}...`,
     );
+    const connectionToken = await fetchConnectionAccessToken(trimmedConnectionId, context);
+    accessToken = connectionToken.accessToken;
+    tokenType = connectionToken.tokenType ?? 'Bearer';
+    tokenScope =
+      Array.isArray(connectionToken.scopes) && connectionToken.scopes.length > 0
+        ? connectionToken.scopes.join(' ')
+        : undefined;
+
+
+    const authorizationScheme =
+      tokenType && tokenType.trim().length > 0 ? tokenType.trim() : 'Bearer';
 
     const headers = {
-      // Use bearer token obtained via OAuth device flow
-      Authorization: `Bearer ${accessToken}`,
+      // Use token obtained via selected authentication mode
+      Authorization: `${authorizationScheme} ${accessToken}`,
       Accept: 'application/vnd.github+json',
       'User-Agent': 'shipsecai-worker/1.0',
       'X-GitHub-Api-Version': '2022-11-28',
@@ -242,6 +262,71 @@ const definition: ComponentDefinition<
     );
   },
 };
+
+async function fetchConnectionAccessToken(
+  connectionId: string,
+  context: ExecutionContext,
+): Promise<{ accessToken: string; tokenType?: string; scopes?: string[]; expiresAt?: string | null }> {
+  const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
+
+  const baseUrl =
+    process.env.STUDIO_API_BASE_URL ??
+    process.env.SHIPSEC_API_BASE_URL ??
+    process.env.API_BASE_URL ??
+    'http://localhost:3211';
+
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+  if (!internalToken) {
+    context.emitProgress({
+      level: 'warn',
+      message:
+        'INTERNAL_SERVICE_TOKEN env var not set; requesting GitHub connection token without internal auth header.',
+    });
+  }
+
+  const response = await fetch(
+    `${normalizedBase}/integrations/connections/${encodeURIComponent(connectionId)}/token`,
+    {
+      method: 'POST',
+      headers: internalToken
+        ? {
+            'Content-Type': 'application/json',
+            'X-Internal-Token': internalToken,
+          }
+        : {
+            'Content-Type': 'application/json',
+          },
+    },
+  );
+
+  if (!response.ok) {
+    const raw = await safeReadText(response);
+    throw new Error(
+      `Failed to fetch GitHub token from connection ${connectionId}: ${response.status} ${response.statusText} ${raw}`,
+    );
+  }
+
+  const payload = (await response.json()) as {
+    accessToken?: string;
+    tokenType?: string;
+    scopes?: string[];
+    expiresAt?: string | null;
+  };
+
+  if (!payload.accessToken || payload.accessToken.trim().length === 0) {
+    throw new Error(`GitHub connection ${connectionId} did not provide an access token.`);
+  }
+
+  context.logger.info(`[GitHub] Using stored OAuth token from connection ${connectionId}.`);
+
+  return {
+    accessToken: payload.accessToken,
+    tokenType: payload.tokenType,
+    scopes: payload.scopes,
+    expiresAt: payload.expiresAt,
+  };
+}
 
 async function completeDeviceAuthorization(
   clientId: string,

@@ -317,18 +317,8 @@ export class IntegrationsService implements OnModuleInit {
       throw new NotFoundException(`No credentials found for provider ${providerId}`);
     }
 
-    let hydratedRecord = record;
     const provider = this.requireProvider(providerId);
-    const expiresAt = record.expiresAt ? new Date(record.expiresAt) : null;
-
-    if (
-      expiresAt &&
-      provider.supportsRefresh &&
-      record.refreshToken &&
-      expiresAt.getTime() - Date.now() < TOKEN_REFRESH_BUFFER_MS
-    ) {
-      hydratedRecord = await this.refreshTokenRecord(record);
-    }
+    const hydratedRecord = await this.ensureFreshToken(record, provider);
 
     const accessToken = await this.encryption.decrypt(
       hydratedRecord.accessToken as SecretEncryptionMaterial,
@@ -340,7 +330,30 @@ export class IntegrationsService implements OnModuleInit {
       accessToken,
       tokenType: hydratedRecord.tokenType ?? 'Bearer',
       scopes: hydratedRecord.scopes ?? [],
-      expiresAt: hydratedRecord.expiresAt ? new Date(hydratedRecord.expiresAt) : null,
+      expiresAt: this.parseDate(hydratedRecord.expiresAt),
+    };
+  }
+
+  async getConnectionToken(connectionId: string): Promise<ProviderTokenResponse> {
+    const record = await this.repository.findById(connectionId);
+    if (!record) {
+      throw new NotFoundException(`Connection ${connectionId} was not found`);
+    }
+
+    const provider = this.requireProvider(record.provider);
+    const hydratedRecord = await this.ensureFreshToken(record, provider);
+
+    const accessToken = await this.encryption.decrypt(
+      hydratedRecord.accessToken as SecretEncryptionMaterial,
+    );
+
+    return {
+      provider: record.provider,
+      userId: hydratedRecord.userId,
+      accessToken,
+      tokenType: hydratedRecord.tokenType ?? 'Bearer',
+      scopes: hydratedRecord.scopes ?? [],
+      expiresAt: this.parseDate(hydratedRecord.expiresAt),
     };
   }
 
@@ -683,5 +696,48 @@ export class IntegrationsService implements OnModuleInit {
   private safeProviderPayload(payload: Record<string, any>): Record<string, unknown> {
     const { access_token, refresh_token, id_token, ...rest } = payload;
     return rest;
+  }
+
+  private async ensureFreshToken(
+    record: IntegrationTokenRecord,
+    provider: IntegrationProviderConfig,
+  ): Promise<IntegrationTokenRecord> {
+    if (this.shouldRefreshToken(record, provider)) {
+      return this.refreshTokenRecord(record);
+    }
+    return record;
+  }
+
+  private shouldRefreshToken(
+    record: IntegrationTokenRecord,
+    provider: IntegrationProviderConfig,
+  ): boolean {
+    if (!provider.supportsRefresh || !record.refreshToken) {
+      return false;
+    }
+
+    const expiresAt = this.parseDate(record.expiresAt);
+    if (!expiresAt) {
+      return false;
+    }
+
+    return expiresAt.getTime() - Date.now() < TOKEN_REFRESH_BUFFER_MS;
+  }
+
+  private parseDate(value: Date | string | null | undefined): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      return value;
+    }
+
+    const timestamp = Date.parse(value);
+    if (Number.isNaN(timestamp)) {
+      return null;
+    }
+
+    return new Date(timestamp);
   }
 }

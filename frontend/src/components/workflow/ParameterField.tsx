@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -8,18 +8,31 @@ import { RuntimeInputsEditor } from './RuntimeInputsEditor'
 import type { Parameter } from '@/schemas/component'
 import type { InputMapping } from '@/schemas/node'
 import { useSecretStore } from '@/store/secretStore'
+import { useIntegrationStore } from '@/store/integrationStore'
+import { getCurrentUserId } from '@/lib/currentUser'
 
 interface ParameterFieldProps {
   parameter: Parameter
   value: any
   onChange: (value: any) => void
   connectedInput?: InputMapping
+  componentSlug?: string
+  parameters?: Record<string, unknown> | undefined
+  onUpdateParameter?: (paramId: string, value: any) => void
 }
 
 /**
  * ParameterField - Renders appropriate input field based on parameter type
  */
-export function ParameterField({ parameter, value, onChange, connectedInput }: ParameterFieldProps) {
+export function ParameterField({
+  parameter,
+  value,
+  onChange,
+  connectedInput,
+  componentSlug,
+  parameters,
+  onUpdateParameter,
+}: ParameterFieldProps) {
   const currentValue = value !== undefined ? value : parameter.default
   const [jsonText, setJsonText] = useState<string>('')
   const [jsonError, setJsonError] = useState<string | null>(null)
@@ -30,6 +43,98 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
   const secretsError = useSecretStore((state) => state.error)
   const fetchSecrets = useSecretStore((state) => state.fetchSecrets)
   const refreshSecrets = useSecretStore((state) => state.refresh)
+
+  const integrationConnections = useIntegrationStore((state) => state.connections)
+  const fetchIntegrationConnections = useIntegrationStore((state) => state.fetchConnections)
+  const integrationLoading = useIntegrationStore((state) => state.loadingConnections)
+  const integrationError = useIntegrationStore((state) => state.error)
+
+  const currentUserId = useMemo(() => getCurrentUserId(), [])
+  const hasFetchedConnectionsRef = useRef(false)
+  const autoSelectedConnectionRef = useRef(false)
+
+  const authModeFromParameters: 'manual' | 'connection' = useMemo(() => {
+    const map = parameters as Record<string, unknown> | undefined
+    if (map && typeof map.authMode === 'string') {
+      return map.authMode as 'manual' | 'connection'
+    }
+    const connectionCandidate = map?.connectionId
+    if (typeof connectionCandidate === 'string' && connectionCandidate.trim().length > 0) {
+      return 'connection'
+    }
+    return 'manual'
+  }, [parameters])
+
+  const isRemoveGithubComponent = componentSlug === 'github-remove-org-membership'
+  const isProviderGithubComponent = componentSlug === 'github-connection-provider'
+  const isGitHubConnectionComponent = isRemoveGithubComponent || isProviderGithubComponent
+  const isConnectionSelector = isGitHubConnectionComponent && parameter.id === 'connectionId'
+  const isGithubConnectionMode = isRemoveGithubComponent && authModeFromParameters === 'connection'
+
+  const githubConnections = useMemo(
+    () => integrationConnections.filter((connection) => connection.provider === 'github'),
+    [integrationConnections],
+  )
+
+  useEffect(() => {
+    if (!isConnectionSelector) {
+      return
+    }
+    if (hasFetchedConnectionsRef.current) {
+      return
+    }
+    hasFetchedConnectionsRef.current = true
+    fetchIntegrationConnections(currentUserId)
+      .catch((error) => {
+        console.error('Failed to load integration connections', error)
+      })
+  }, [isConnectionSelector, fetchIntegrationConnections, currentUserId])
+
+  useEffect(() => {
+    if (!isConnectionSelector || integrationLoading) {
+      return
+    }
+
+    const selectedValue =
+      typeof currentValue === 'string' && currentValue.trim().length > 0
+        ? currentValue.trim()
+        : ''
+
+    if (selectedValue) {
+      autoSelectedConnectionRef.current = true
+      return
+    }
+
+    if (githubConnections.length === 1 && !autoSelectedConnectionRef.current) {
+      const [firstConnection] = githubConnections
+      if (firstConnection) {
+        autoSelectedConnectionRef.current = true
+        onChange(firstConnection.id)
+        if (isRemoveGithubComponent) {
+          onUpdateParameter?.('authMode', 'connection')
+          onUpdateParameter?.('clientId', undefined)
+          onUpdateParameter?.('clientSecret', undefined)
+        }
+      }
+    }
+  }, [
+    isConnectionSelector,
+    githubConnections,
+    integrationLoading,
+    currentValue,
+    onChange,
+    onUpdateParameter,
+    isRemoveGithubComponent,
+  ])
+  
+  const handleRefreshConnections = async () => {
+    try {
+      await fetchIntegrationConnections(currentUserId, true)
+    } catch (error) {
+      console.error('Failed to refresh integration connections', error)
+    }
+  }
+
   const isReceivingInput = Boolean(connectedInput)
 
   const [secretMode, setSecretMode] = useState<'select' | 'manual'>(() => {
@@ -123,9 +228,105 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
     onChange(nextValue)
   }
 
+  if (isConnectionSelector) {
+    const selectedValue = typeof currentValue === 'string' ? currentValue : ''
+    const disabled = isReceivingInput || integrationLoading
+
+    return (
+      <div className="space-y-2">
+        <select
+          value={selectedValue}
+          onChange={(event) => {
+            autoSelectedConnectionRef.current = true
+            const nextValue = event.target.value
+            console.log('Selected GitHub connection ID:', nextValue)
+            if (nextValue === '') {
+              onChange(undefined)
+              if (isRemoveGithubComponent) {
+                onUpdateParameter?.('authMode', 'manual')
+              }
+            } else {
+              onChange(nextValue)
+              if (isRemoveGithubComponent) {
+                onUpdateParameter?.('authMode', 'connection')
+                onUpdateParameter?.('clientId', undefined)
+                onUpdateParameter?.('clientSecret', undefined)
+              }
+            }
+          }}
+          className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+          disabled={disabled}
+        >
+          <option value="">Select a GitHub connection…</option>
+          {githubConnections.map((connection) => (
+            <option key={connection.id} value={connection.id}>
+              {connection.providerName} · {connection.userId}
+            </option>
+          ))}
+        </select>
+
+        {integrationLoading && (
+          <p className="text-xs text-muted-foreground">Loading connections…</p>
+        )}
+
+        {integrationError && (
+          <p className="text-xs text-destructive">{integrationError}</p>
+        )}
+
+        {!integrationLoading && githubConnections.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            No active GitHub connections yet. Connect GitHub from the Connections manager.
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => navigate('/integrations')}
+            disabled={isReceivingInput}
+          >
+            Manage connections
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void handleRefreshConnections()
+            }}
+            disabled={integrationLoading || isReceivingInput}
+          >
+            {integrationLoading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          {selectedValue && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                onChange(undefined)
+                if (isRemoveGithubComponent) {
+                  onUpdateParameter?.('authMode', 'manual')
+                }
+              }}
+              disabled={isReceivingInput}
+            >
+              Clear selection
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   switch (parameter.type) {
-    case 'text':
-      return (
+    case 'text': {
+      const disableForGitHubConnection =
+        isRemoveGithubComponent && parameter.id === 'clientId' && isGithubConnectionMode
+
+      const inputElement = (
         <Input
           id={parameter.id}
           type="text"
@@ -133,8 +334,23 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
           value={currentValue || ''}
           onChange={(e) => onChange(e.target.value)}
           className="text-sm"
+          disabled={isReceivingInput || disableForGitHubConnection}
         />
       )
+
+      if (disableForGitHubConnection) {
+        return (
+          <div className="space-y-2">
+            {inputElement}
+            <p className="text-xs text-muted-foreground">
+              Using a stored GitHub connection, so the client ID is managed automatically.
+            </p>
+          </div>
+        )
+      }
+
+      return inputElement
+    }
 
     case 'textarea':
       return (
@@ -186,13 +402,23 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
         </div>
       )
 
-    case 'select':
+    case 'select': {
+      const isAuthModeField = isRemoveGithubComponent && parameter.id === 'authMode'
+
       return (
         <select
           id={parameter.id}
           value={currentValue || ''}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            const nextValue = e.target.value
+            onChange(nextValue)
+
+            if (isAuthModeField && nextValue === 'manual') {
+              onUpdateParameter?.('connectionId', undefined)
+            }
+          }}
           className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+          disabled={isReceivingInput && !isAuthModeField}
         >
           {!parameter.required && !parameter.default && (
             <option value="">Select an option...</option>
@@ -204,6 +430,7 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
           ))}
         </select>
       )
+    }
 
     case 'multi-select':
       const selectedValues = Array.isArray(currentValue) ? currentValue : []
@@ -282,6 +509,8 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
         typeof currentValue === 'string' && !secrets.some((secret) => secret.id === currentValue)
           ? currentValue
           : ''
+      const disableForGithubConnection =
+        isRemoveGithubComponent && parameter.id === 'clientSecret' && isGithubConnectionMode
 
       const connectionLabel =
         connectedInput?.source && connectedInput?.output
@@ -289,6 +518,9 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
           : connectedInput?.source
 
       const handleModeChange = (mode: 'select' | 'manual') => {
+        if (disableForGithubConnection) {
+          return
+        }
         if (isReceivingInput) {
           return
         }
@@ -318,6 +550,11 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
               {connectionLabel ? ` (${connectionLabel})` : ''}. Disconnect the mapping to edit manually.
             </div>
           )}
+          {disableForGithubConnection && (
+            <p className="text-xs text-muted-foreground">
+              Using a stored GitHub connection, so the OAuth client secret is managed automatically.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -325,7 +562,7 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
               size="sm"
               variant={secretMode === 'select' ? 'default' : 'outline'}
               onClick={() => handleModeChange('select')}
-              disabled={!hasSecrets || isReceivingInput}
+              disabled={!hasSecrets || isReceivingInput || disableForGithubConnection}
             >
               From store
             </Button>
@@ -334,7 +571,7 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
               size="sm"
               variant={secretMode === 'manual' ? 'default' : 'outline'}
               onClick={() => handleModeChange('manual')}
-              disabled={isReceivingInput}
+              disabled={isReceivingInput || disableForGithubConnection}
             >
               Manual ID
             </Button>
@@ -348,7 +585,7 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
                     console.error('Failed to refresh secrets', error)
                   })
                 }}
-                disabled={secretsLoading || isReceivingInput}
+                disabled={secretsLoading || isReceivingInput || disableForGithubConnection}
               >
                 {secretsLoading ? 'Refreshing…' : 'Refresh'}
               </Button>
@@ -357,7 +594,7 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
                 size="sm"
                 variant="outline"
                 onClick={() => navigate('/secrets')}
-                disabled={isReceivingInput}
+                disabled={isReceivingInput || disableForGithubConnection}
               >
                 Manage secrets
               </Button>
@@ -378,7 +615,7 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
                 updateSecretValue(nextValue === '' ? undefined : nextValue)
               }}
               className="w-full px-3 py-2 text-sm border rounded-md bg-background"
-              disabled={isReceivingInput}
+              disabled={isReceivingInput || disableForGithubConnection}
             >
               <option value="">Select a secret…</option>
               {secrets.map((secret) => (
@@ -403,7 +640,7 @@ export function ParameterField({ parameter, value, onChange, connectedInput }: P
               value={manualValue}
               onChange={(e) => updateSecretValue(e.target.value)}
               className="text-sm"
-              disabled={isReceivingInput}
+              disabled={isReceivingInput || disableForGithubConnection}
             />
           )}
 
@@ -474,6 +711,9 @@ interface ParameterFieldWrapperProps {
   value: any
   onChange: (value: any) => void
   connectedInput?: InputMapping
+  componentSlug?: string
+  parameters?: Record<string, unknown> | undefined
+  onUpdateParameter?: (paramId: string, value: any) => void
 }
 
 /**
@@ -484,6 +724,9 @@ export function ParameterFieldWrapper({
   value,
   onChange,
   connectedInput,
+  componentSlug,
+  parameters,
+  onUpdateParameter,
 }: ParameterFieldWrapperProps) {
   // Special case: Runtime Inputs Editor for Manual Trigger
   if (parameter.id === 'runtimeInputs') {
@@ -529,6 +772,9 @@ export function ParameterFieldWrapper({
         value={value}
         onChange={onChange}
         connectedInput={connectedInput}
+        componentSlug={componentSlug}
+        parameters={parameters}
+        onUpdateParameter={onUpdateParameter}
       />
 
       {parameter.helpText && (

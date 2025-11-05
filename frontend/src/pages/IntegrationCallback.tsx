@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Loader2, CheckCircle, XCircle } from 'lucide-react'
@@ -17,6 +17,7 @@ export function IntegrationCallback() {
 
   const [status, setStatus] = useState<CallbackStatus>('pending')
   const [message, setMessage] = useState('Exchanging authorization code…')
+  const exchangeStartedRef = useRef(false)
 
   useEffect(() => {
     if (!provider) {
@@ -42,6 +43,11 @@ export function IntegrationCallback() {
       setMessage('Unable to complete OAuth without an authorization code and state.')
       return
     }
+
+    if (exchangeStartedRef.current) {
+      return
+    }
+    exchangeStartedRef.current = true
 
     const authCode = code
     const authState = state

@@ -32,6 +32,7 @@ import './security/shuffledns-massdns';
 import './security/atlassian-offboarding';
 
 // GitHub components
+import './github/connection-provider';
 import './github/remove-org-membership';
 
 // IT Automation components
