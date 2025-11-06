@@ -94,7 +94,7 @@ describe('WorkflowList delete workflow flow', () => {
   })
 
   it('opens confirmation dialog with workflow details when delete is clicked', async () => {
-    const workflow = makeWorkflow('11111111-1111-1111-1111-111111111111', 'Alpha Workflow')
+    const workflow = makeWorkflow('11111111-1111-4111-8111-111111111111', 'Alpha Workflow')
     listMock.mockResolvedValue([workflow])
     deleteMock.mockResolvedValue(undefined)
 
@@ -110,7 +110,7 @@ describe('WorkflowList delete workflow flow', () => {
   })
 
   it('calls API and removes workflow from list on successful delete', async () => {
-    const workflow = makeWorkflow('22222222-2222-2222-2222-222222222222', 'Beta Workflow')
+    const workflow = makeWorkflow('22222222-2222-4222-8222-222222222222', 'Beta Workflow')
     listMock.mockResolvedValue([workflow])
     deleteMock.mockResolvedValue(undefined)
 
@@ -132,7 +132,7 @@ describe('WorkflowList delete workflow flow', () => {
   })
 
   it('shows error in dialog when delete fails', async () => {
-    const workflow = makeWorkflow('33333333-3333-3333-3333-333333333333', 'Gamma Workflow')
+    const workflow = makeWorkflow('33333333-3333-4333-8333-333333333333', 'Gamma Workflow')
     listMock.mockResolvedValue([workflow])
     deleteMock.mockRejectedValue(new Error('Delete failed'))
 
