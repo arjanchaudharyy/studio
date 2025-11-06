@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/health": {
+    "/api/v1/health": {
         parameters: {
             query?: never;
             header?: never;
@@ -20,7 +20,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows": {
+    "/api/v1/service/studio/workflows/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PlatformController_linkWorkflow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/service/studio/workflows/link/{platformAgentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlatformController_getLink"];
+        put?: never;
+        post?: never;
+        delete: operations["PlatformController_unlink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflows": {
         parameters: {
             query?: never;
             header?: never;
@@ -36,7 +68,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/{id}": {
+    "/api/v1/workflows/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -52,7 +84,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/runs": {
+    "/api/v1/workflows/runs": {
         parameters: {
             query?: never;
             header?: never;
@@ -68,7 +100,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/{id}/commit": {
+    "/api/v1/workflows/{id}/commit": {
         parameters: {
             query?: never;
             header?: never;
@@ -84,7 +116,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/{id}/run": {
+    "/api/v1/workflows/{id}/run": {
         parameters: {
             query?: never;
             header?: never;
@@ -100,7 +132,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/runs/{runId}/status": {
+    "/api/v1/workflows/runs/{runId}/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -116,7 +148,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/runs/{runId}/result": {
+    "/api/v1/workflows/runs/{runId}/result": {
         parameters: {
             query?: never;
             header?: never;
@@ -132,7 +164,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/runs/{runId}/cancel": {
+    "/api/v1/workflows/runs/{runId}/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -148,7 +180,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/runs/{runId}/trace": {
+    "/api/v1/workflows/runs/{runId}/trace": {
         parameters: {
             query?: never;
             header?: never;
@@ -164,7 +196,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/runs/{runId}/events": {
+    "/api/v1/workflows/runs/{runId}/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -180,7 +212,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/runs/{runId}/dataflows": {
+    "/api/v1/workflows/runs/{runId}/dataflows": {
         parameters: {
             query?: never;
             header?: never;
@@ -196,7 +228,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/runs/{runId}/stream": {
+    "/api/v1/workflows/runs/{runId}/stream": {
         parameters: {
             query?: never;
             header?: never;
@@ -212,7 +244,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workflows/runs/{runId}/logs": {
+    "/api/v1/workflows/runs/{runId}/logs": {
         parameters: {
             query?: never;
             header?: never;
@@ -228,7 +260,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/components": {
+    "/api/v1/components": {
         parameters: {
             query?: never;
             header?: never;
@@ -244,7 +276,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/components/{id}": {
+    "/api/v1/components/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -260,7 +292,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/files/upload": {
+    "/api/v1/files/upload": {
         parameters: {
             query?: never;
             header?: never;
@@ -276,7 +308,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/files": {
+    "/api/v1/files": {
         parameters: {
             query?: never;
             header?: never;
@@ -292,7 +324,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/files/{id}": {
+    "/api/v1/files/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -308,7 +340,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/files/{id}/download": {
+    "/api/v1/files/{id}/download": {
         parameters: {
             query?: never;
             header?: never;
@@ -324,7 +356,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/secrets": {
+    "/api/v1/secrets": {
         parameters: {
             query?: never;
             header?: never;
@@ -340,7 +372,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/secrets/{id}": {
+    "/api/v1/secrets/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -356,7 +388,7 @@ export interface paths {
         patch: operations["SecretsController_updateSecret"];
         trace?: never;
     };
-    "/secrets/{id}/value": {
+    "/api/v1/secrets/{id}/value": {
         parameters: {
             query?: never;
             header?: never;
@@ -372,7 +404,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/secrets/{id}/rotate": {
+    "/api/v1/secrets/{id}/rotate": {
         parameters: {
             query?: never;
             header?: never;
@@ -388,7 +420,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/testing/webhooks": {
+    "/api/v1/testing/webhooks": {
         parameters: {
             query?: never;
             header?: never;
@@ -404,7 +436,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/testing/webhooks/latest": {
+    "/api/v1/testing/webhooks/latest": {
         parameters: {
             query?: never;
             header?: never;
@@ -420,7 +452,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/testing/webhooks/{id}": {
+    "/api/v1/testing/webhooks/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -508,40 +540,14 @@ export interface components {
                     zoom: number;
                 };
             };
-            nodes: {
-                id: string;
-                type: string;
-                position: {
-                    x: number;
-                    y: number;
-                };
-                data: {
-                    label: string;
-                    /** @default {} */
-                    config: {
-                        [key: string]: unknown;
-                    };
-                };
-            }[];
-            edges: {
-                id: string;
-                source: string;
-                target: string;
-                sourceHandle?: string;
-                targetHandle?: string;
-            }[];
-            viewport: {
-                x: number;
-                y: number;
-                zoom: number;
-            };
-            currentVersionId: string | null;
-            currentVersion: number | null;
             compiledDefinition: unknown;
             lastRun: string | null;
             runCount: number;
             createdAt: string;
             updatedAt: string;
+            /** Format: uuid */
+            currentVersionId: string | null;
+            currentVersion: number | null;
         };
         UpdateWorkflowRequestDto: {
             id?: string;
@@ -579,6 +585,7 @@ export interface components {
             inputs?: {
                 [key: string]: unknown;
             };
+            /** Format: uuid */
             versionId?: string;
             version?: number;
         };
@@ -643,6 +650,61 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlatformController_linkWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlatformController_getLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platformAgentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlatformController_unlink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platformAgentId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -785,8 +847,6 @@ export interface operations {
                         runs?: {
                             id?: string;
                             workflowId?: string;
-                            workflowVersionId?: string | null;
-                            workflowVersion?: number | null;
                             /** @enum {string} */
                             status?: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "TERMINATED" | "CONTINUED_AS_NEW" | "TIMED_OUT" | "UNKNOWN";
                             /** Format: date-time */
@@ -794,6 +854,8 @@ export interface operations {
                             /** Format: date-time */
                             endTime?: string | null;
                             temporalRunId?: string;
+                            workflowVersionId?: string | null;
+                            workflowVersion?: number | null;
                             workflowName?: string;
                             eventCount?: number;
                             nodeCount?: number;
@@ -868,16 +930,16 @@ export interface operations {
                     "application/json": {
                         /** @description Temporal workflow identifier */
                         runId?: string;
-                    /** @description Workflow record id */
-                    workflowId?: string;
-                    /** @description Workflow version identifier used for execution */
-                    workflowVersionId?: string;
-                    /** @description Workflow version number used for execution */
-                    workflowVersion?: number;
-                    /** @description Temporal first execution run id */
-                    temporalRunId?: string;
-                    /** @description Temporal task queue used for execution */
-                    taskQueue?: string;
+                        /** @description Workflow record id */
+                        workflowId?: string;
+                        /** @description Temporal first execution run id */
+                        temporalRunId?: string;
+                        /** @description Temporal task queue used for execution */
+                        taskQueue?: string;
+                        /** @description Workflow version identifier used for execution */
+                        workflowVersionId?: string;
+                        /** @description Workflow version number used for execution */
+                        workflowVersion?: number;
                         /** @enum {string} */
                         status?: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "TERMINATED" | "CONTINUED_AS_NEW" | "TIMED_OUT" | "UNKNOWN";
                     };
@@ -1209,6 +1271,16 @@ export interface operations {
                         type?: string;
                         /** @example input */
                         category?: string;
+                        categoryConfig?: {
+                            /** @example 📥 Input */
+                            label?: string;
+                            /** @example text-blue-600 */
+                            color?: string;
+                            /** @example Data sources, triggers, and credential access */
+                            description?: string;
+                            /** @example 📥 */
+                            emoji?: string;
+                        };
                         /** @example Load files from filesystem */
                         description?: string;
                         documentation?: string | null;
@@ -1237,15 +1309,38 @@ export interface operations {
                         inputs?: {
                             id?: string;
                             label?: string;
-                            type?: ("string" | "array" | "object" | "file" | "secret" | "number") | ("string" | "array" | "object" | "file" | "secret" | "number")[];
+                            dataType?: {
+                                /** @enum {string} */
+                                kind: "primitive" | "list" | "map" | "contract";
+                                name?: string;
+                                element?: Record<string, never>;
+                                value?: Record<string, never>;
+                                coercion?: {
+                                    from?: ("any" | "text" | "secret" | "number" | "boolean" | "file" | "json")[];
+                                };
+                            } & {
+                                [key: string]: unknown;
+                            };
                             required?: boolean;
                             description?: string | null;
+                            /** @enum {string|null} */
+                            valuePriority?: "manual-first" | "connection-first" | null;
                         }[];
                         outputs?: {
                             id?: string;
                             label?: string;
-                            /** @enum {string} */
-                            type?: "string" | "array" | "object" | "file" | "secret" | "number";
+                            dataType?: {
+                                /** @enum {string} */
+                                kind: "primitive" | "list" | "map" | "contract";
+                                name?: string;
+                                element?: Record<string, never>;
+                                value?: Record<string, never>;
+                                coercion?: {
+                                    from?: ("any" | "text" | "secret" | "number" | "boolean" | "file" | "json")[];
+                                };
+                            } & {
+                                [key: string]: unknown;
+                            };
                             description?: string | null;
                         }[];
                         parameters?: {
@@ -1288,7 +1383,75 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        id?: string;
+                        slug?: string;
+                        name?: string;
+                        version?: string;
+                        type?: string;
+                        category?: string;
+                        categoryConfig?: {
+                            label?: string;
+                            color?: string;
+                            description?: string;
+                            emoji?: string;
+                        };
+                        description?: string | null;
+                        documentation?: string | null;
+                        documentationUrl?: string | null;
+                        icon?: string | null;
+                        logo?: string | null;
+                        author?: {
+                            name?: string;
+                            type?: string;
+                            url?: string | null;
+                        } | null;
+                        runner?: Record<string, never>;
+                        inputs?: {
+                            id?: string;
+                            label?: string;
+                            dataType?: {
+                                /** @enum {string} */
+                                kind: "primitive" | "list" | "map" | "contract";
+                                name?: string;
+                                element?: Record<string, never>;
+                                value?: Record<string, never>;
+                                coercion?: {
+                                    from?: ("any" | "text" | "secret" | "number" | "boolean" | "file" | "json")[];
+                                };
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            required?: boolean;
+                            description?: string | null;
+                            /** @enum {string|null} */
+                            valuePriority?: "manual-first" | "connection-first" | null;
+                        }[];
+                        outputs?: {
+                            id?: string;
+                            label?: string;
+                            dataType?: {
+                                /** @enum {string} */
+                                kind: "primitive" | "list" | "map" | "contract";
+                                name?: string;
+                                element?: Record<string, never>;
+                                value?: Record<string, never>;
+                                coercion?: {
+                                    from?: ("any" | "text" | "secret" | "number" | "boolean" | "file" | "json")[];
+                                };
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            description?: string | null;
+                        }[];
+                        parameters?: unknown[];
+                        examples?: unknown[];
+                        isLatest?: boolean | null;
+                        deprecated?: boolean | null;
+                        example?: string | null;
+                    };
+                };
             };
         };
     };

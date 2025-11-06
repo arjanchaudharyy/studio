@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/health": {
+    "/api/v1/health": {
       "get": {
         "operationId": "AppController_health",
         "parameters": [],
@@ -15,7 +15,65 @@
         ]
       }
     },
-    "/workflows": {
+    "/api/v1/service/studio/workflows/link": {
+      "post": {
+        "operationId": "PlatformController_linkWorkflow",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
+    "/api/v1/service/studio/workflows/link/{platformAgentId}": {
+      "get": {
+        "operationId": "PlatformController_getLink",
+        "parameters": [
+          {
+            "name": "platformAgentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Platform"
+        ]
+      },
+      "delete": {
+        "operationId": "PlatformController_unlink",
+        "parameters": [
+          {
+            "name": "platformAgentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
+    "/api/v1/workflows": {
       "post": {
         "operationId": "WorkflowsController_create",
         "parameters": [],
@@ -68,7 +126,7 @@
         ]
       }
     },
-    "/workflows/{id}": {
+    "/api/v1/workflows/{id}": {
       "put": {
         "operationId": "WorkflowsController_update",
         "parameters": [
@@ -157,7 +215,7 @@
         ]
       }
     },
-    "/workflows/runs": {
+    "/api/v1/workflows/runs": {
       "get": {
         "operationId": "WorkflowsController_listRuns",
         "parameters": [
@@ -209,14 +267,6 @@
                           "workflowId": {
                             "type": "string"
                           },
-                          "workflowVersionId": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "workflowVersion": {
-                            "type": "number",
-                            "nullable": true
-                          },
                           "status": {
                             "type": "string",
                             "enum": [
@@ -241,6 +291,14 @@
                           },
                           "temporalRunId": {
                             "type": "string"
+                          },
+                          "workflowVersionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "workflowVersion": {
+                            "type": "number",
+                            "nullable": true
                           },
                           "workflowName": {
                             "type": "string"
@@ -268,7 +326,7 @@
         ]
       }
     },
-    "/workflows/{id}/commit": {
+    "/api/v1/workflows/{id}/commit": {
       "post": {
         "operationId": "WorkflowsController_commit",
         "parameters": [
@@ -350,7 +408,7 @@
         ]
       }
     },
-    "/workflows/{id}/run": {
+    "/api/v1/workflows/{id}/run": {
       "post": {
         "operationId": "WorkflowsController_run",
         "parameters": [
@@ -389,14 +447,6 @@
                       "type": "string",
                       "description": "Workflow record id"
                     },
-                    "workflowVersionId": {
-                      "type": "string",
-                      "description": "Workflow version identifier used for execution"
-                    },
-                    "workflowVersion": {
-                      "type": "integer",
-                      "description": "Workflow version number used for execution"
-                    },
                     "temporalRunId": {
                       "type": "string",
                       "description": "Temporal first execution run id"
@@ -404,6 +454,14 @@
                     "taskQueue": {
                       "type": "string",
                       "description": "Temporal task queue used for execution"
+                    },
+                    "workflowVersionId": {
+                      "type": "string",
+                      "description": "Workflow version identifier used for execution"
+                    },
+                    "workflowVersion": {
+                      "type": "integer",
+                      "description": "Workflow version number used for execution"
                     },
                     "status": {
                       "type": "string",
@@ -429,7 +487,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/status": {
+    "/api/v1/workflows/runs/{runId}/status": {
       "get": {
         "operationId": "WorkflowsController_status",
         "parameters": [
@@ -461,7 +519,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/result": {
+    "/api/v1/workflows/runs/{runId}/result": {
       "get": {
         "operationId": "WorkflowsController_result",
         "parameters": [
@@ -493,7 +551,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/cancel": {
+    "/api/v1/workflows/runs/{runId}/cancel": {
       "post": {
         "operationId": "WorkflowsController_cancel",
         "parameters": [
@@ -525,7 +583,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/trace": {
+    "/api/v1/workflows/runs/{runId}/trace": {
       "get": {
         "operationId": "WorkflowsController_trace",
         "parameters": [
@@ -718,7 +776,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/events": {
+    "/api/v1/workflows/runs/{runId}/events": {
       "get": {
         "operationId": "WorkflowsController_events",
         "parameters": [
@@ -911,7 +969,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/dataflows": {
+    "/api/v1/workflows/runs/{runId}/dataflows": {
       "get": {
         "operationId": "WorkflowsController_dataflows",
         "parameters": [
@@ -995,7 +1053,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/stream": {
+    "/api/v1/workflows/runs/{runId}/stream": {
       "get": {
         "operationId": "WorkflowsController_stream",
         "parameters": [
@@ -1036,7 +1094,7 @@
         ]
       }
     },
-    "/workflows/runs/{runId}/logs": {
+    "/api/v1/workflows/runs/{runId}/logs": {
       "get": {
         "operationId": "WorkflowsController_logs",
         "parameters": [
@@ -1087,7 +1145,7 @@
         ]
       }
     },
-    "/components": {
+    "/api/v1/components": {
       "get": {
         "operationId": "ComponentsController_listComponents",
         "parameters": [],
@@ -1124,6 +1182,27 @@
                       "category": {
                         "type": "string",
                         "example": "input"
+                      },
+                      "categoryConfig": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string",
+                            "example": "📥 Input"
+                          },
+                          "color": {
+                            "type": "string",
+                            "example": "text-blue-600"
+                          },
+                          "description": {
+                            "type": "string",
+                            "example": "Data sources, triggers, and credential access"
+                          },
+                          "emoji": {
+                            "type": "string",
+                            "example": "📥"
+                          }
+                        }
                       },
                       "description": {
                         "type": "string",
@@ -1213,41 +1292,66 @@
                             "label": {
                               "type": "string"
                             },
-                            "type": {
-                              "oneOf": [
-                                {
+                            "dataType": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
                                   "type": "string",
                                   "enum": [
-                                    "string",
-                                    "array",
-                                    "object",
-                                    "file",
-                                    "secret",
-                                    "number"
+                                    "primitive",
+                                    "list",
+                                    "map",
+                                    "contract"
                                   ]
                                 },
-                                {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string",
-                                    "enum": [
-                                      "string",
-                                      "array",
-                                      "object",
-                                      "file",
-                                      "secret",
-                                      "number"
-                                    ]
-                                  },
-                                  "minItems": 1
+                                "name": {
+                                  "type": "string"
+                                },
+                                "element": {
+                                  "type": "object"
+                                },
+                                "value": {
+                                  "type": "object"
+                                },
+                                "coercion": {
+                                  "type": "object",
+                                  "properties": {
+                                    "from": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "any",
+                                          "text",
+                                          "secret",
+                                          "number",
+                                          "boolean",
+                                          "file",
+                                          "json"
+                                        ]
+                                      }
+                                    }
+                                  }
                                 }
-                              ]
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "additionalProperties": true
                             },
                             "required": {
                               "type": "boolean"
                             },
                             "description": {
                               "type": "string",
+                              "nullable": true
+                            },
+                            "valuePriority": {
+                              "type": "string",
+                              "enum": [
+                                "manual-first",
+                                "connection-first"
+                              ],
                               "nullable": true
                             }
                           }
@@ -1264,16 +1368,52 @@
                             "label": {
                               "type": "string"
                             },
-                            "type": {
-                              "type": "string",
-                              "enum": [
-                                "string",
-                                "array",
-                                "object",
-                                "file",
-                                "secret",
-                                "number"
-                              ]
+                            "dataType": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "primitive",
+                                    "list",
+                                    "map",
+                                    "contract"
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "element": {
+                                  "type": "object"
+                                },
+                                "value": {
+                                  "type": "object"
+                                },
+                                "coercion": {
+                                  "type": "object",
+                                  "properties": {
+                                    "from": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "any",
+                                          "text",
+                                          "secret",
+                                          "number",
+                                          "boolean",
+                                          "file",
+                                          "json"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "additionalProperties": true
                             },
                             "description": {
                               "type": "string",
@@ -1370,7 +1510,7 @@
         ]
       }
     },
-    "/components/{id}": {
+    "/api/v1/components/{id}": {
       "get": {
         "operationId": "ComponentsController_getComponent",
         "parameters": [
@@ -1385,7 +1525,249 @@
         ],
         "responses": {
           "200": {
-            "description": "Get a specific component by ID"
+            "description": "Get a specific component by ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "categoryConfig": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "emoji": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentation": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentationUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "icon": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "logo": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "author": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "runner": {
+                      "type": "object"
+                    },
+                    "inputs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "dataType": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "primitive",
+                                  "list",
+                                  "map",
+                                  "contract"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "element": {
+                                "type": "object"
+                              },
+                              "value": {
+                                "type": "object"
+                              },
+                              "coercion": {
+                                "type": "object",
+                                "properties": {
+                                  "from": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "any",
+                                        "text",
+                                        "secret",
+                                        "number",
+                                        "boolean",
+                                        "file",
+                                        "json"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind"
+                            ],
+                            "additionalProperties": true
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "valuePriority": {
+                            "type": "string",
+                            "enum": [
+                              "manual-first",
+                              "connection-first"
+                            ],
+                            "nullable": true
+                          }
+                        }
+                      }
+                    },
+                    "outputs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "dataType": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "primitive",
+                                  "list",
+                                  "map",
+                                  "contract"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "element": {
+                                "type": "object"
+                              },
+                              "value": {
+                                "type": "object"
+                              },
+                              "coercion": {
+                                "type": "object",
+                                "properties": {
+                                  "from": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "any",
+                                        "text",
+                                        "secret",
+                                        "number",
+                                        "boolean",
+                                        "file",
+                                        "json"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind"
+                            ],
+                            "additionalProperties": true
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    },
+                    "parameters": {
+                      "type": "array"
+                    },
+                    "examples": {
+                      "type": "array"
+                    },
+                    "isLatest": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "deprecated": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "example": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1393,7 +1775,7 @@
         ]
       }
     },
-    "/files/upload": {
+    "/api/v1/files/upload": {
       "post": {
         "operationId": "FilesController_uploadFile",
         "parameters": [],
@@ -1453,7 +1835,7 @@
         ]
       }
     },
-    "/files": {
+    "/api/v1/files": {
       "get": {
         "operationId": "FilesController_listFiles",
         "parameters": [
@@ -1508,7 +1890,7 @@
         ]
       }
     },
-    "/files/{id}": {
+    "/api/v1/files/{id}": {
       "get": {
         "operationId": "FilesController_getFile",
         "parameters": [
@@ -1517,6 +1899,8 @@
             "required": true,
             "in": "path",
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -1538,6 +1922,8 @@
             "required": true,
             "in": "path",
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -1552,7 +1938,7 @@
         ]
       }
     },
-    "/files/{id}/download": {
+    "/api/v1/files/{id}/download": {
       "get": {
         "operationId": "FilesController_downloadFile",
         "parameters": [
@@ -1561,6 +1947,8 @@
             "required": true,
             "in": "path",
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -1583,7 +1971,7 @@
         ]
       }
     },
-    "/secrets": {
+    "/api/v1/secrets": {
       "get": {
         "operationId": "SecretsController_listSecrets",
         "parameters": [],
@@ -1636,7 +2024,7 @@
         ]
       }
     },
-    "/secrets/{id}": {
+    "/api/v1/secrets/{id}": {
       "get": {
         "operationId": "SecretsController_getSecret",
         "parameters": [
@@ -1725,7 +2113,7 @@
         ]
       }
     },
-    "/secrets/{id}/value": {
+    "/api/v1/secrets/{id}/value": {
       "get": {
         "operationId": "SecretsController_getSecretValue",
         "parameters": [
@@ -1764,7 +2152,7 @@
         ]
       }
     },
-    "/secrets/{id}/rotate": {
+    "/api/v1/secrets/{id}/rotate": {
       "put": {
         "operationId": "SecretsController_rotateSecret",
         "parameters": [
@@ -1804,7 +2192,7 @@
         ]
       }
     },
-    "/testing/webhooks": {
+    "/api/v1/testing/webhooks": {
       "post": {
         "operationId": "TestingWebhookController_acceptWebhook",
         "parameters": [
@@ -1863,7 +2251,7 @@
         ]
       }
     },
-    "/testing/webhooks/latest": {
+    "/api/v1/testing/webhooks/latest": {
       "get": {
         "operationId": "TestingWebhookController_latestRecord",
         "parameters": [],
@@ -1877,7 +2265,7 @@
         ]
       }
     },
-    "/testing/webhooks/{id}": {
+    "/api/v1/testing/webhooks/{id}": {
       "get": {
         "operationId": "TestingWebhookController_getRecord",
         "parameters": [
@@ -1908,7 +2296,12 @@
     "contact": {}
   },
   "tags": [],
-  "servers": [],
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "API v1"
+    }
+  ],
   "components": {
     "schemas": {
       "CreateWorkflowRequestDto": {
@@ -2168,118 +2561,6 @@
               "viewport"
             ]
           },
-          "nodes": {
-            "minItems": 1,
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "type": {
-                  "type": "string"
-                },
-                "position": {
-                  "type": "object",
-                  "properties": {
-                    "x": {
-                      "type": "number"
-                    },
-                    "y": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "x",
-                    "y"
-                  ]
-                },
-                "data": {
-                  "type": "object",
-                  "properties": {
-                    "label": {
-                      "type": "string"
-                    },
-                    "config": {
-                      "default": {},
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {}
-                    }
-                  },
-                  "required": [
-                    "label"
-                  ]
-                }
-              },
-              "required": [
-                "id",
-                "type",
-                "position",
-                "data"
-              ]
-            }
-          },
-          "edges": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "source": {
-                  "type": "string"
-                },
-                "target": {
-                  "type": "string"
-                },
-                "sourceHandle": {
-                  "type": "string"
-                },
-                "targetHandle": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "source",
-                "target"
-              ]
-            }
-          },
-          "viewport": {
-            "type": "object",
-            "properties": {
-              "x": {
-                "type": "number"
-              },
-              "y": {
-                "type": "number"
-              },
-              "zoom": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "x",
-              "y",
-              "zoom"
-            ]
-          },
-          "currentVersionId": {
-            "format": "uuid",
-            "type": "string",
-            "nullable": true
-          },
-          "currentVersion": {
-            "type": "integer",
-            "nullable": true,
-            "minimum": 1
-          },
           "compiledDefinition": {
             "nullable": true
           },
@@ -2297,20 +2578,31 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "currentVersionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "nullable": true
+          },
+          "currentVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "nullable": true
           }
         },
         "required": [
           "id",
           "name",
           "graph",
-          "nodes",
-          "edges",
-          "viewport",
           "compiledDefinition",
           "lastRun",
           "runCount",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "currentVersionId",
+          "currentVersion"
         ]
       },
       "UpdateWorkflowRequestDto": {
@@ -2446,10 +2738,14 @@
             "additionalProperties": {}
           },
           "versionId": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "version": {
-            "type": "number"
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
           }
         }
       },

@@ -9,10 +9,10 @@ import { sql } from 'drizzle-orm';
 import { Client as MinioClient } from 'minio';
 import { randomUUID } from 'node:crypto';
 import { 
-  WorkflowGraph, 
+  WorkflowGraphDto, 
   WorkflowGraphSchema,
-  WorkflowResponse,
-  WorkflowNode
+  WorkflowResponseDto,
+  WorkflowNodeDto
 } from '../workflows/dto/workflow-graph.dto';
 import { WorkflowDefinition } from '../dsl/types';
 import { UploadedFile } from '../storage/storage.service';
@@ -25,7 +25,7 @@ const baseUrl =
 
 const api = (path: string) => `${baseUrl}${path}`;
 
-const normalizeNode = (override: Partial<WorkflowNode> = {}): WorkflowNode => ({
+const normalizeNode = (override: Partial<WorkflowNodeDto> = {}): WorkflowNodeDto => ({
   id: override.id ?? 'node-1',
   type: override.type ?? 'core.trigger.manual',
   position: override.position ?? { x: 0, y: 0 },
@@ -35,12 +35,12 @@ const normalizeNode = (override: Partial<WorkflowNode> = {}): WorkflowNode => ({
   },
 });
 
-type WorkflowGraphOverrides = Partial<Omit<WorkflowGraph, 'nodes'>> & {
-  nodes?: Array<Partial<WorkflowNode>>;
+type WorkflowGraphOverrides = Partial<Omit<WorkflowGraphDto, 'nodes'>> & {
+  nodes?: Array<Partial<WorkflowNodeDto>>;
 };
 
-const buildWorkflowGraph = (overrides: WorkflowGraphOverrides = {}): WorkflowGraph => {
-  const baseGraph: WorkflowGraph = {
+const buildWorkflowGraph = (overrides: WorkflowGraphOverrides = {}): WorkflowGraphDto => {
+  const baseGraph: WorkflowGraphDto = {
     name: overrides.name ?? `Test Workflow ${randomUUID().slice(0, 8)}`,
     description: overrides.description ?? 'Integration test workflow',
     nodes: (overrides.nodes ?? [normalizeNode()]).map((node) => normalizeNode(node)),
@@ -172,7 +172,7 @@ interface Component {
     it('should list workflows (basic connectivity test)', async () => {
       const response = await fetch(api('/workflows'));
       expect(response.ok).toBe(true);
-      const data = await readJson<WorkflowGraph[]>(response);
+      const data = await readJson<WorkflowGraphDto[]>(response);
       expect(Array.isArray(data)).toBe(true);
     });
   });
@@ -188,7 +188,7 @@ interface Component {
       });
 
       expect(response.ok).toBe(true);
-      const workflow: WorkflowResponse = await readJson(response);
+      const workflow: WorkflowResponseDto = await readJson(response);
       expect(workflow).toHaveProperty('id');
       expect(workflow.name).toBe(workflowData.name);
       expect(workflow.description).toBe(workflowData.description);
@@ -210,7 +210,7 @@ interface Component {
 
       const response = await fetch(api('/workflows'));
       expect(response.ok).toBe(true);
-      const workflows: WorkflowResponse[] = await readJson(response);
+      const workflows: WorkflowResponseDto[] = await readJson(response);
       expect(Array.isArray(workflows)).toBe(true);
       expect(workflows.length).toBeGreaterThanOrEqual(2);
       workflows.forEach((w) => {
@@ -226,12 +226,12 @@ interface Component {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildWorkflowGraph({ name: 'Test Workflow' })),
       });
-      const created: WorkflowResponse = await readJson(createResponse);
+      const created: WorkflowResponseDto = await readJson(createResponse);
 
       // Get the workflow
       const response = await fetch(api(`/workflows/${created.id}`));
       expect(response.ok).toBe(true);
-      const workflow: WorkflowResponse = await readJson(response);
+      const workflow: WorkflowResponseDto = await readJson(response);
       expect(workflow.id).toBe(created.id);
       expect(workflow.name).toBe('Test Workflow');
       expect(workflow.graph.nodes[0].data.label).toBe('Manual Trigger');
@@ -248,7 +248,7 @@ interface Component {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(originalGraph),
       });
-      const created: WorkflowResponse = await readJson(createResponse);
+      const created: WorkflowResponseDto = await readJson(createResponse);
 
       // Verify the workflow was created
       expect(created).toHaveProperty('id');
@@ -274,7 +274,7 @@ interface Component {
       });
 
       expect(updateResponse.ok).toBe(true);
-      const updated: WorkflowResponse = await readJson(updateResponse);
+      const updated: WorkflowResponseDto = await readJson(updateResponse);
       expect(updated.name).toBe('Updated Title');
       expect(updated.description).toBe('Updated description');
       expect(updated.graph.nodes[0].data.label).toBe('Updated Trigger');
@@ -290,7 +290,7 @@ interface Component {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildWorkflowGraph({ name: 'Commit Workflow' })),
       });
-      const workflow: WorkflowResponse = await readJson(createResponse);
+      const workflow: WorkflowResponseDto = await readJson(createResponse);
 
       const response = await fetch(api(`/workflows/${workflow.id}/commit`), {
         method: 'POST',
@@ -315,7 +315,7 @@ interface Component {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(invalidGraph),
       });
-      const workflow: WorkflowResponse = await readJson(createResponse);
+      const workflow: WorkflowResponseDto = await readJson(createResponse);
 
       const response = await fetch(api(`/workflows/${workflow.id}/commit`), {
         method: 'POST',

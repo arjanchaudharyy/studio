@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 
 import { compileWorkflowGraph } from '../dsl/compiler';
 import { WorkflowDefinition } from '../dsl/types';
@@ -11,13 +11,13 @@ import {
 import {
   WorkflowGraphDto,
   WorkflowGraphSchema,
-  WorkflowResponse,
   ServiceWorkflowResponse,
 } from './dto/workflow-graph.dto';
 import {
   WorkflowRecord,
   WorkflowRepository,
 } from './repository/workflow.repository';
+import { WorkflowRoleRepository } from './repository/workflow-role.repository';
 import { WorkflowRunRepository } from './repository/workflow-run.repository';
 import { WorkflowVersionRepository } from './repository/workflow-version.repository';
 import { TraceRepository } from '../trace/trace.repository';
@@ -28,6 +28,7 @@ import {
   TraceEventPayload,
 } from '@shipsec/shared';
 import type { WorkflowVersionRecord } from '../database/schema';
+import type { AuthContext } from '../auth/types';
 
 export interface WorkflowRunRequest {
   inputs?: Record<string, unknown>;
@@ -82,23 +83,102 @@ export class WorkflowsService {
 
   constructor(
     private readonly repository: WorkflowRepository,
+    private readonly roleRepository: WorkflowRoleRepository,
     private readonly versionRepository: WorkflowVersionRepository,
     private readonly runRepository: WorkflowRunRepository,
     private readonly traceRepository: TraceRepository,
     private readonly temporalService: TemporalService,
   ) {}
 
-  async create(dto: WorkflowGraphDto): Promise<ServiceWorkflowResponse> {
+  private resolveOrganizationId(auth?: AuthContext | null): string | null {
+    return auth?.organizationId ?? null;
+  }
+
+  private requireOrganizationId(auth?: AuthContext | null): string {
+    const organizationId = this.resolveOrganizationId(auth);
+    if (!organizationId) {
+      throw new ForbiddenException('Organization context is required');
+    }
+    return organizationId;
+  }
+
+  private ensureOrganizationAdmin(auth?: AuthContext | null): void {
+    this.logger.debug(
+      `[WORKFLOWS] Checking org admin - Auth: ${auth ? 'present' : 'null'}, Roles: ${auth?.roles ? JSON.stringify(auth.roles) : 'none'}, User: ${auth?.userId || 'none'}, Org: ${auth?.organizationId || 'none'}`
+    );
+    if (!auth?.roles || !auth.roles.includes('ADMIN')) {
+      this.logger.warn(
+        `[WORKFLOWS] Access denied - User: ${auth?.userId || 'none'}, Org: ${auth?.organizationId || 'none'}, Roles: ${auth?.roles ? JSON.stringify(auth.roles) : 'none'}`
+      );
+      throw new ForbiddenException('Administrator role required');
+    }
+    this.logger.debug(`[WORKFLOWS] Org admin check passed for user: ${auth.userId}`);
+  }
+
+  private async requireWorkflowAdmin(
+    workflowId: string,
+    auth?: AuthContext | null,
+  ): Promise<string> {
+    const organizationId = this.requireOrganizationId(auth);
+    if (auth?.roles?.includes('ADMIN')) {
+      return organizationId;
+    }
+
+    if (!auth?.userId) {
+      throw new ForbiddenException('Administrator role required');
+    }
+
+    const hasRole = await this.roleRepository.hasRole({
+      workflowId,
+      userId: auth.userId,
+      role: 'ADMIN',
+      organizationId,
+    });
+
+    if (!hasRole) {
+      throw new ForbiddenException('Administrator role required');
+    }
+
+    return organizationId;
+  }
+
+  private async requireRunAccess(
+    runId: string,
+    auth?: AuthContext | null,
+  ) {
+    const organizationId = this.requireOrganizationId(auth);
+    const run = await this.runRepository.findByRunId(runId, { organizationId });
+    if (!run) {
+      throw new NotFoundException(`Workflow run ${runId} not found`);
+    }
+    return { organizationId, run };
+  }
+
+  async create(
+    dto: WorkflowGraphDto,
+    auth?: AuthContext | null,
+  ): Promise<ServiceWorkflowResponse> {
     const input = this.parse(dto);
-    const record = await this.repository.create(input);
+    this.ensureOrganizationAdmin(auth);
+    const organizationId = this.requireOrganizationId(auth);
+    const record = await this.repository.create(input, { organizationId });
     let version: WorkflowVersionRecord;
     try {
       version = await this.versionRepository.create({
         workflowId: record.id,
         graph: input,
+        organizationId,
       });
+      if (auth?.userId) {
+        await this.roleRepository.upsert({
+          workflowId: record.id,
+          userId: auth.userId,
+          role: 'ADMIN',
+          organizationId,
+        });
+      }
     } catch (error) {
-      await this.repository.delete(record.id);
+      await this.repository.delete(record.id, { organizationId });
       throw error;
     }
     const response = this.buildWorkflowResponse(record, version);
@@ -108,12 +188,18 @@ export class WorkflowsService {
     return response;
   }
 
-  async update(id: string, dto: WorkflowGraphDto): Promise<ServiceWorkflowResponse> {
+  async update(
+    id: string,
+    dto: WorkflowGraphDto,
+    auth?: AuthContext | null,
+  ): Promise<ServiceWorkflowResponse> {
     const input = this.parse(dto);
-    const record = await this.repository.update(id, input);
+    const organizationId = await this.requireWorkflowAdmin(id, auth);
+    const record = await this.repository.update(id, input, { organizationId });
     const version = await this.versionRepository.create({
       workflowId: record.id,
       graph: input,
+      organizationId,
     });
     const response = this.buildWorkflowResponse(record, version);
     this.logger.log(
@@ -122,12 +208,13 @@ export class WorkflowsService {
     return response;
   }
 
-  async findById(id: string): Promise<ServiceWorkflowResponse> {
-    const record = await this.repository.findById(id);
+  async findById(id: string, auth?: AuthContext | null): Promise<ServiceWorkflowResponse> {
+    const organizationId = this.requireOrganizationId(auth);
+    const record = await this.repository.findById(id, { organizationId });
     if (!record) {
       throw new NotFoundException(`Workflow ${id} not found`);
     }
-    const version = await this.versionRepository.findLatestByWorkflowId(id);
+    const version = await this.versionRepository.findLatestByWorkflowId(id, { organizationId });
     return this.buildWorkflowResponse(record, version ?? null);
   }
 
@@ -142,15 +229,19 @@ export class WorkflowsService {
     };
   }
 
-  async delete(id: string): Promise<void> {
-    await this.repository.delete(id);
+  async delete(id: string, auth?: AuthContext | null): Promise<void> {
+    const organizationId = await this.requireWorkflowAdmin(id, auth);
+    await this.repository.delete(id, { organizationId });
     this.logger.log(`Deleted workflow ${id}`);
   }
 
-  async list(): Promise<ServiceWorkflowResponse[]> {
-    const records = await this.repository.list();
+  async list(auth?: AuthContext | null): Promise<ServiceWorkflowResponse[]> {
+    const organizationId = this.requireOrganizationId(auth);
+    const records = await this.repository.list({ organizationId });
     const versions = await Promise.all(
-      records.map((record) => this.versionRepository.findLatestByWorkflowId(record.id)),
+      records.map((record) =>
+        this.versionRepository.findLatestByWorkflowId(record.id, { organizationId }),
+      ),
     );
     const responses = records.map((record, index) =>
       this.buildWorkflowResponse(record, versions[index] ?? null),
@@ -168,28 +259,39 @@ export class WorkflowsService {
     return Math.max(0, endTime - startTime);
   }
 
-  async listRuns(options: {
-    workflowId?: string;
-    status?: ExecutionStatus;
-    limit?: number;
-  } = {}) {
-    const runs = await this.runRepository.list(options);
+  async listRuns(
+    auth?: AuthContext | null,
+    options: {
+      workflowId?: string;
+      status?: ExecutionStatus;
+      limit?: number;
+    } = {},
+  ) {
+    const organizationId = this.requireOrganizationId(auth);
+    const runs = await this.runRepository.list({
+      ...options,
+      organizationId,
+    });
     const enrichedRuns = [];
 
     for (const run of runs) {
       // Get workflow name
-      const workflow = await this.repository.findById(run.workflowId);
+      const workflow = await this.repository.findById(run.workflowId, { organizationId });
       const workflowName = workflow?.name ?? 'Unknown Workflow';
       const version = run.workflowVersionId
-        ? await this.versionRepository.findById(run.workflowVersionId)
+        ? await this.versionRepository.findById(run.workflowVersionId, { organizationId })
         : workflow
-          ? await this.versionRepository.findLatestByWorkflowId(workflow.id)
+          ? await this.versionRepository.findLatestByWorkflowId(workflow.id, { organizationId })
           : undefined;
       const graph = (version?.graph ?? workflow?.graph) as { nodes?: unknown[] } | undefined;
       const nodeCount = Array.isArray(graph?.nodes) ? graph!.nodes!.length : 0;
 
       // Get event count
-      const eventCount = await this.traceRepository.countByType(run.runId, 'NODE_STARTED');
+      const eventCount = await this.traceRepository.countByType(
+        run.runId,
+        'NODE_STARTED',
+        organizationId,
+      );
 
       // Get current status from Temporal
       let currentStatus = 'UNKNOWN';
@@ -226,13 +328,16 @@ export class WorkflowsService {
     return { runs: enrichedRuns };
   }
 
-  async commit(id: string): Promise<WorkflowDefinition> {
-    const workflow = await this.repository.findById(id);
+  async commit(id: string, auth?: AuthContext | null): Promise<WorkflowDefinition> {
+    const organizationId = await this.requireWorkflowAdmin(id, auth);
+    const workflow = await this.repository.findById(id, { organizationId });
     if (!workflow) {
       throw new NotFoundException(`Workflow ${id} not found`);
     }
 
-    const version = await this.versionRepository.findLatestByWorkflowId(id);
+    const version = await this.versionRepository.findLatestByWorkflowId(id, {
+      organizationId,
+    });
     if (!version) {
       throw new NotFoundException(`No versions recorded for workflow ${id}`);
     }
@@ -240,16 +345,23 @@ export class WorkflowsService {
     this.logger.log(`Compiling workflow ${workflow.id} version ${version.version}`);
     const graph = WorkflowGraphSchema.parse(version.graph);
     const definition = compileWorkflowGraph(graph);
-    await this.repository.saveCompiledDefinition(id, definition);
-    await this.versionRepository.setCompiledDefinition(version.id, definition);
+    await this.repository.saveCompiledDefinition(id, definition, { organizationId });
+    await this.versionRepository.setCompiledDefinition(version.id, definition, {
+      organizationId,
+    });
     this.logger.log(
       `Compiled workflow ${workflow.id} version ${version.version} with ${definition.actions.length} action(s); entrypoint=${definition.entrypoint.ref}`,
     );
     return definition;
   }
 
-  async run(id: string, request: WorkflowRunRequest = {}): Promise<WorkflowRunHandle> {
-    const workflow = await this.repository.findById(id);
+  async run(
+    id: string,
+    request: WorkflowRunRequest = {},
+    auth?: AuthContext | null,
+  ): Promise<WorkflowRunHandle> {
+    const organizationId = this.requireOrganizationId(auth);
+    const workflow = await this.repository.findById(id, { organizationId });
     if (!workflow) {
       throw new NotFoundException(`Workflow ${id} not found`);
     }
@@ -258,12 +370,16 @@ export class WorkflowsService {
       `Received run request for workflow ${workflow.id} (inputs=${inputSummary})`,
     );
 
-    const version = await this.resolveWorkflowVersion(workflow.id, request);
-    const compiledDefinition = await this.ensureDefinitionForVersion(workflow, version);
+    const version = await this.resolveWorkflowVersion(workflow.id, request, organizationId);
+    const compiledDefinition = await this.ensureDefinitionForVersion(
+      workflow,
+      version,
+      organizationId,
+    );
     const runId = `shipsec-run-${randomUUID()}`;
 
     // Track execution stats
-    await this.repository.incrementRunCount(id);
+    await this.repository.incrementRunCount(id, { organizationId });
 
     try {
       const temporalRun = await this.temporalService.startWorkflow({
@@ -275,6 +391,7 @@ export class WorkflowsService {
             workflowId: workflow.id,
             definition: compiledDefinition,
             inputs: request.inputs ?? {},
+            organizationId,
           },
         ],
       });
@@ -290,6 +407,7 @@ export class WorkflowsService {
         workflowVersion: version.version,
         temporalRunId: temporalRun.runId,
         totalActions: compiledDefinition.actions.length,
+        organizationId,
       });
 
       return {
@@ -314,9 +432,12 @@ export class WorkflowsService {
   private async resolveWorkflowVersion(
     workflowId: string,
     request: WorkflowRunRequest,
+    organizationId: string | null,
   ): Promise<WorkflowVersionRecord> {
     if (request.versionId) {
-      const version = await this.versionRepository.findById(request.versionId);
+      const version = await this.versionRepository.findById(request.versionId, {
+        organizationId: organizationId ?? undefined,
+      });
       if (!version || version.workflowId !== workflowId) {
         throw new NotFoundException(
           `Workflow ${workflowId} version ${request.versionId} not found`,
@@ -329,6 +450,7 @@ export class WorkflowsService {
       const version = await this.versionRepository.findByWorkflowAndVersion({
         workflowId,
         version: request.version,
+        organizationId,
       });
       if (!version) {
         throw new NotFoundException(
@@ -338,7 +460,9 @@ export class WorkflowsService {
       return version;
     }
 
-    const latest = await this.versionRepository.findLatestByWorkflowId(workflowId);
+    const latest = await this.versionRepository.findLatestByWorkflowId(workflowId, {
+      organizationId: organizationId ?? undefined,
+    });
     if (!latest) {
       throw new NotFoundException(`No versions recorded for workflow ${workflowId}`);
     }
@@ -348,6 +472,7 @@ export class WorkflowsService {
   private async ensureDefinitionForVersion(
     workflow: WorkflowRecord,
     version: WorkflowVersionRecord,
+    organizationId: string | null,
   ): Promise<WorkflowDefinition> {
     if (version.compiledDefinition) {
       return version.compiledDefinition as WorkflowDefinition;
@@ -359,7 +484,9 @@ export class WorkflowsService {
     const graph = WorkflowGraphSchema.parse(version.graph);
     const definition = compileWorkflowGraph(graph);
 
-    await this.versionRepository.setCompiledDefinition(version.id, definition);
+    await this.versionRepository.setCompiledDefinition(version.id, definition, {
+      organizationId: organizationId ?? undefined,
+    });
 
     return definition;
   }
@@ -367,6 +494,7 @@ export class WorkflowsService {
   async getRunStatus(
     runId: string,
     temporalRunId?: string,
+    auth?: AuthContext | null,
   ): Promise<WorkflowRunStatusPayload> {
     this.logger.log(
       `Fetching status for workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
@@ -375,27 +503,33 @@ export class WorkflowsService {
       workflowId: runId,
       runId: temporalRunId,
     });
-    const metadata = await this.runRepository.findByRunId(runId);
+    const { organizationId, run } = await this.requireRunAccess(runId, auth);
 
     let completedActions = 0;
-    if (metadata?.totalActions && metadata.totalActions > 0) {
-      completedActions = await this.traceRepository.countByType(runId, 'NODE_COMPLETED');
+    if (run.totalActions && run.totalActions > 0) {
+      completedActions = await this.traceRepository.countByType(
+        runId,
+        'NODE_COMPLETED',
+        organizationId,
+      );
     }
 
-    return this.mapTemporalStatus(runId, temporalStatus, metadata ?? null, completedActions);
+    return this.mapTemporalStatus(runId, temporalStatus, run, completedActions);
   }
 
-  async getRunResult(runId: string, temporalRunId?: string) {
+  async getRunResult(runId: string, temporalRunId?: string, auth?: AuthContext | null) {
     this.logger.log(
       `Fetching result for workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
     );
+    await this.requireRunAccess(runId, auth);
     return this.temporalService.getWorkflowResult({ workflowId: runId, runId: temporalRunId });
   }
 
-  async cancelRun(runId: string, temporalRunId?: string): Promise<void> {
+  async cancelRun(runId: string, temporalRunId?: string, auth?: AuthContext | null): Promise<void> {
     this.logger.warn(
       `Cancelling workflow run ${runId} (temporalRunId=${temporalRunId ?? 'latest'})`,
     );
+    await this.requireRunAccess(runId, auth);
     await this.temporalService.cancelWorkflow({ workflowId: runId, runId: temporalRunId });
   }
 
@@ -495,21 +629,25 @@ export class WorkflowsService {
       throw new NotFoundException(`Run ${runId} not found`);
     }
 
-    const workflow = await this.repository.findById(run.workflowId);
+    const organizationId = run.organizationId ?? null;
+
+    const workflow = await this.repository.findById(run.workflowId, { organizationId });
     if (!workflow) {
       throw new NotFoundException(`Workflow ${run.workflowId} not found for run ${runId}`);
     }
 
     const version = run.workflowVersionId
-      ? await this.versionRepository.findById(run.workflowVersionId)
-      : await this.versionRepository.findLatestByWorkflowId(run.workflowId);
+      ? await this.versionRepository.findById(run.workflowVersionId, { organizationId })
+      : await this.versionRepository.findLatestByWorkflowId(run.workflowId, {
+          organizationId,
+        });
     if (!version) {
       throw new NotFoundException(
         `Workflow version not found for run ${runId} (workflow=${run.workflowId})`,
       );
     }
 
-    const definition = await this.ensureDefinitionForVersion(workflow, version);
+    const definition = await this.ensureDefinitionForVersion(workflow, version, organizationId);
     const targetsBySource = this.buildTargetsIndex(definition);
 
     const context: FlowContext = {

@@ -37,9 +37,16 @@ export function initializeComponentActivityServices(options: {
   globalLogs = options.logs;
 }
 
-export async function setRunMetadataActivity(input: { runId: string; workflowId: string }): Promise<void> {
+export async function setRunMetadataActivity(input: {
+  runId: string;
+  workflowId: string;
+  organizationId?: string | null;
+}): Promise<void> {
   if (globalTrace instanceof TraceAdapter) {
-    globalTrace.setRunMetadata(input.runId, { workflowId: input.workflowId });
+    globalTrace.setRunMetadata(input.runId, {
+      workflowId: input.workflowId,
+      organizationId: input.organizationId ?? null,
+    });
   }
 }
 
@@ -53,12 +60,33 @@ export async function runComponentActivity(
   input: RunComponentActivityInput,
 ): Promise<RunComponentActivityOutput> {
   const { action, params, warnings = [] } = input;
+  const activityInfo = Context.current().info;
+  console.log(`🎯 ACTIVITY CALLED - runComponentActivity:`, {
+    activityId: activityInfo.activityId,
+    attempt: activityInfo.attempt,
+    workflowId: activityInfo.workflowExecution?.workflowId ?? 'unknown',
+    runId: activityInfo.workflowExecution?.runId ?? 'unknown',
+    componentId: action.componentId,
+    ref: action.ref,
+    timestamp: new Date().toISOString()
+  });
+
+  console.log(`📋 Activity input details:`, {
+    componentId: action.componentId,
+    ref: action.ref,
+    hasParams: !!params,
+    paramKeys: params ? Object.keys(params) : [],
+    warningsCount: warnings.length
+  });
+
   const component = componentRegistry.get(action.componentId);
   if (!component) {
+    console.error(`❌ Component not found: ${action.componentId}`);
     throw new Error(`Component not registered: ${action.componentId}`);
   }
 
-  const activityInfo = Context.current().info;
+  console.log(`✅ Component found: ${action.componentId}`);
+
   const nodeMetadata = input.metadata ?? {};
   const streamId = nodeMetadata.streamId ?? nodeMetadata.groupId ?? action.ref;
   const joinStrategy = nodeMetadata.joinStrategy;
@@ -143,6 +171,7 @@ export async function runComponentActivity(
               message: entry.message,
               timestamp: new Date(entry.timestamp),
               metadata: entry.metadata,
+              organizationId: input.organizationId ?? null,
             })
             .catch((error) => {
               console.error('[Logs] Failed to append log entry', error);

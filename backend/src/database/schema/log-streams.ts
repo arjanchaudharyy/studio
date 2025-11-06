@@ -7,6 +7,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 export const workflowLogStreamsTable = pgTable(
@@ -18,6 +19,7 @@ export const workflowLogStreamsTable = pgTable(
     stream: text('stream')
       .$type<'stdout' | 'stderr' | 'console'>()
       .notNull(),
+    organizationId: varchar('organization_id', { length: 191 }),
     labels: jsonb('labels').notNull(),
     firstTimestamp: timestamp('first_timestamp', { withTimezone: true }).notNull(),
     lastTimestamp: timestamp('last_timestamp', { withTimezone: true }).notNull(),

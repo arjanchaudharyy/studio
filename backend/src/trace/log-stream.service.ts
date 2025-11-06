@@ -1,7 +1,8 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { ForbiddenException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 
 import { LogStreamRepository } from './log-stream.repository';
 import type { WorkflowLogStreamRecord } from '../database/schema';
+import type { AuthContext } from '../auth/types';
 
 interface FetchLogsOptions {
   nodeRef?: string;
@@ -28,17 +29,24 @@ export class LogStreamService {
     this.password = process.env.LOKI_PASSWORD;
   }
 
-  async fetch(runId: string, options: FetchLogsOptions = {}) {
+  async fetch(runId: string, auth: AuthContext | null, options: FetchLogsOptions = {}) {
     if (!this.baseUrl) {
       throw new ServiceUnavailableException('Loki integration is not configured');
     }
+
+    const organizationId = this.requireOrganizationId(auth);
 
     const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 2000) : 500;
     const streamFilter =
       options.stream && ['stdout', 'stderr', 'console'].includes(options.stream)
         ? (options.stream as 'stdout' | 'stderr' | 'console')
         : undefined;
-    const streams = await this.repository.listByRunId(runId, options.nodeRef, streamFilter);
+    const streams = await this.repository.listByRunId(
+      runId,
+      organizationId,
+      options.nodeRef,
+      streamFilter,
+    );
 
     const payload = [] as Array<{
       nodeRef: string;
@@ -162,5 +170,13 @@ export class LogStreamService {
     }
     const millis = Number(parsed / 1000000n);
     return new Date(millis).toISOString();
+  }
+
+  private requireOrganizationId(auth: AuthContext | null): string {
+    const organizationId = auth?.organizationId;
+    if (!organizationId) {
+      throw new ForbiddenException('Organization context is required');
+    }
+    return organizationId;
   }
 }

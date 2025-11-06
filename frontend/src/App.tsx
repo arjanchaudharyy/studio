@@ -5,19 +5,50 @@ import { SecretsManager } from '@/pages/SecretsManager'
 import { ToastProvider } from '@/components/ui/toast-provider'
 import { AppLayout } from '@/components/layout/AppLayout'
 
+// New auth system imports
+import { AuthProvider } from '@/auth/auth-context'
+import { useAuthStoreIntegration } from '@/auth/store-integration'
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+
+// Auth integration component
+function AuthIntegration({ children }: { children: React.ReactNode }) {
+  useAuthStoreIntegration();
+  return <>{children}</>;
+}
+
 function App() {
   return (
-    <ToastProvider>
-      <BrowserRouter>
-        <AppLayout>
-          <Routes>
-            <Route path="/" element={<WorkflowList />} />
-            <Route path="/workflows/:id" element={<WorkflowBuilder />} />
-            <Route path="/secrets" element={<SecretsManager />} />
-          </Routes>
-        </AppLayout>
-      </BrowserRouter>
-    </ToastProvider>
+    <AuthProvider>
+      <AuthIntegration>
+        <ToastProvider>
+          <BrowserRouter>
+            <AppLayout>
+              <ProtectedRoute>
+                <Routes>
+                  <Route path="/" element={<WorkflowList />} />
+                  <Route
+                    path="/workflows/:id"
+                    element={
+                      <ProtectedRoute>
+                        <WorkflowBuilder />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/secrets"
+                    element={
+                      <ProtectedRoute roles={['ADMIN']}>
+                        <SecretsManager />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Routes>
+              </ProtectedRoute>
+            </AppLayout>
+          </BrowserRouter>
+        </ToastProvider>
+      </AuthIntegration>
+    </AuthProvider>
   )
 }
 

@@ -20,16 +20,51 @@ interface ComponentStore extends ComponentStoreState {
 
 /**
  * Normalize components by ID and maintain a slug lookup table.
+ * Backend returns optional fields, so we filter out invalid components
  */
-function buildIndexes(components: ComponentMetadata[]) {
+function buildIndexes(components: any[]) {
   const byId: Record<string, ComponentMetadata> = {}
   const slugIndex: Record<string, string> = {}
 
   components.forEach((component) => {
-    byId[component.id] = component
-    if (component.slug) {
-      slugIndex[component.slug] = component.id
+    // Filter out components missing required fields
+    if (!component?.id || !component?.slug || !component?.name) {
+      return
     }
+    
+    // Convert backend format to ComponentMetadata format
+    // Backend has optional fields, ComponentMetadata has required fields
+    const metadata: ComponentMetadata = {
+      id: component.id,
+      slug: component.slug,
+      name: component.name,
+      version: component.version || '1.0.0',
+      type: component.type || 'process',
+      category: component.category || 'transform',
+      categoryConfig: component.categoryConfig || {
+        label: component.category || 'Other',
+        color: '#666',
+        description: '',
+        emoji: '📦',
+      },
+      description: component.description || '',
+      documentation: component.documentation || null,
+      documentationUrl: component.documentationUrl || null,
+      icon: component.icon || null,
+      logo: component.logo || null,
+      author: component.author || null,
+      isLatest: component.isLatest ?? true,
+      deprecated: component.deprecated ?? false,
+      example: component.example || null,
+      runner: component.runner || { kind: 'inline' },
+      inputs: component.inputs || [],
+      outputs: component.outputs || [],
+      parameters: component.parameters || [],
+      examples: component.examples || [],
+    }
+    
+    byId[metadata.id] = metadata
+    slugIndex[metadata.slug] = metadata.id
   })
 
   return { byId, slugIndex }

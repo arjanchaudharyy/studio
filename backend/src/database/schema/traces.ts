@@ -1,4 +1,4 @@
-import { bigserial, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigserial, index, integer, jsonb, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 
 import type { TraceEventType } from '../../trace/types';
 
@@ -8,6 +8,7 @@ export const workflowTracesTable = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     runId: text('run_id').notNull(),
     workflowId: text('workflow_id'),
+    organizationId: varchar('organization_id', { length: 191 }),
     type: text('type').$type<TraceEventType>().notNull(),
     nodeRef: text('node_ref').notNull(),
     timestamp: timestamp('timestamp', { withTimezone: true }).notNull(),

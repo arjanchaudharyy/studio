@@ -14,10 +14,14 @@ async function generateOpenApi() {
     logger: false,
   });
 
+  // Set global prefix to match production
+  app.setGlobalPrefix('api/v1');
+
   const config = new DocumentBuilder()
     .setTitle('ShipSec Studio API')
     .setDescription('ShipSec backend API specification')
     .setVersion('0.1.0')
+    .addServer('/api/v1', 'API v1')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

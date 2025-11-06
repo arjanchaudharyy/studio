@@ -34,13 +34,17 @@ export async function runWorkflowActivity(
 
   try {
     if (globalTrace instanceof TraceAdapter) {
-      globalTrace.setRunMetadata(input.runId, { workflowId: input.workflowId });
+      globalTrace.setRunMetadata(input.runId, {
+        workflowId: input.workflowId,
+        organizationId: input.organizationId ?? null,
+      });
     }
 
     const result = await executeWorkflow(
       input.definition,
       {
         inputs: input.inputs,
+        organizationId: input.organizationId ?? null,
       },
       {
         runId: input.runId,
@@ -48,6 +52,7 @@ export async function runWorkflowActivity(
         secrets: globalSecrets,
         trace: globalTrace,
         logs: globalLogs,
+        organizationId: input.organizationId ?? null,
       },
     );
 

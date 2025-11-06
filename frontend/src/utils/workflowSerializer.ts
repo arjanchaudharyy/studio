@@ -1,8 +1,12 @@
 import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow'
 import type { NodeData } from '@/schemas/node'
-import type { Node, Edge } from '@/schemas'
-import { NodeSchema, EdgeSchema } from '@/schemas'
-import { CreateWorkflowSchema, UpdateWorkflowSchema } from '@/schemas/workflow'
+import type { components } from '@shipsec/backend-client'
+
+// Backend types
+type BackendNode = components['schemas']['WorkflowResponseDto']['graph']['nodes'][number]
+type BackendEdge = components['schemas']['WorkflowResponseDto']['graph']['edges'][number]
+type CreateWorkflowRequestDto = components['schemas']['CreateWorkflowRequestDto']
+type UpdateWorkflowRequestDto = components['schemas']['UpdateWorkflowRequestDto']
 
 /**
  * Serialize React Flow nodes to API format
@@ -12,14 +16,15 @@ import { CreateWorkflowSchema, UpdateWorkflowSchema } from '@/schemas/workflow'
  */
 import type { FrontendNodeData } from '@/schemas/node';
 
-export function serializeNodes(reactFlowNodes: ReactFlowNode<FrontendNodeData>[]): Node[] {
+export function serializeNodes(reactFlowNodes: ReactFlowNode<FrontendNodeData>[]): BackendNode[] {
   return reactFlowNodes.map((node) => {
     const componentId =
       node.data.componentId ||
       node.data.componentSlug ||
-      node.type
+      node.type ||
+      'unknown'
 
-    const cleanNode = {
+    return {
       id: node.id,
       type: componentId,
       position: node.position,
@@ -28,9 +33,6 @@ export function serializeNodes(reactFlowNodes: ReactFlowNode<FrontendNodeData>[]
         config: node.data.parameters || node.data.config || {},
       },
     }
-
-    // Validate with schema
-    return NodeSchema.parse(cleanNode)
   })
 }
 
@@ -38,21 +40,17 @@ export function serializeNodes(reactFlowNodes: ReactFlowNode<FrontendNodeData>[]
  * Serialize React Flow edges to API format
  * Strips React Flow metadata
  */
-export function serializeEdges(reactFlowEdges: ReactFlowEdge[]): Edge[] {
+export function serializeEdges(reactFlowEdges: ReactFlowEdge[]): BackendEdge[] {
   return reactFlowEdges.map((edge) => {
-    const cleanEdge = {
+    // Backend only needs these fields, ReactFlow-specific fields are ignored
+    // ReactFlow can return null, but backend expects undefined or string
+    return {
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      sourceHandle: edge.sourceHandle,
-      targetHandle: edge.targetHandle,
-      type: edge.type || 'default',
-      animated: edge.animated,
-      label: edge.label,
+      sourceHandle: edge.sourceHandle ?? undefined,
+      targetHandle: edge.targetHandle ?? undefined,
     }
-
-    // Validate with schema
-    return EdgeSchema.parse(cleanEdge)
   })
 }
 
@@ -65,19 +63,17 @@ export function serializeWorkflowForCreate(
   description: string | undefined,
   nodes: ReactFlowNode<FrontendNodeData>[],
   edges: ReactFlowEdge[]
-) {
+): CreateWorkflowRequestDto {
   const serializedNodes = serializeNodes(nodes)
   const serializedEdges = serializeEdges(edges)
-  
-  const payload = {
+
+  return {
     name,
     description: description || '',
     nodes: serializedNodes,
     edges: serializedEdges,
+    viewport: { x: 0, y: 0, zoom: 1 },
   }
-
-  // Validate with schema
-  return CreateWorkflowSchema.parse(payload)
 }
 
 /**
@@ -90,25 +86,26 @@ export function serializeWorkflowForUpdate(
   description: string | undefined,
   nodes: ReactFlowNode<NodeData>[],
   edges: ReactFlowEdge[]
-) {
-  const payload = {
+): UpdateWorkflowRequestDto {
+  return {
     id,
     name,
     description: description || '',
     nodes: serializeNodes(nodes),
     edges: serializeEdges(edges),
+    viewport: { x: 0, y: 0, zoom: 1 },
   }
-
-  // Validate with schema
-  return UpdateWorkflowSchema.parse(payload)
 }
 
 /**
  * Deserialize workflow nodes from API to React Flow format
- * Backend sends: { id, type: componentId, position, data: { label, config } }
+ * Backend sends: { graph: { nodes: [...], edges: [...] } }
  * Frontend needs: { id, type: 'workflow', position, data: { componentId, componentSlug, label, parameters, status, config } }
  */
-export function deserializeNodes(nodes: Node[], edges?: Edge[]): ReactFlowNode<NodeData>[] {
+export function deserializeNodes(workflow: { graph: { nodes: BackendNode[], edges?: BackendEdge[] } }): ReactFlowNode<NodeData>[] {
+  const nodes = workflow.graph.nodes
+  const edges = workflow.graph.edges || []
+
   const inputMappingsByNode = new Map<string, Record<string, { source: string; output: string }>>()
 
   if (Array.isArray(edges)) {
@@ -148,16 +145,17 @@ export function deserializeNodes(nodes: Node[], edges?: Edge[]): ReactFlowNode<N
 
 /**
  * Deserialize workflow edges from API to React Flow format
+ * Backend edges don't have type/animated/label, so we add defaults for ReactFlow
  */
-export function deserializeEdges(edges: Edge[]): ReactFlowEdge[] {
+export function deserializeEdges(workflow: { graph: { edges: BackendEdge[] } }): ReactFlowEdge[] {
+  const edges = workflow.graph.edges
   return edges.map((edge) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
     sourceHandle: edge.sourceHandle,
     targetHandle: edge.targetHandle,
-    type: edge.type || 'smoothstep',
-    animated: edge.animated || false,
-    label: edge.label,
+    type: 'smoothstep' as const, // Default for ReactFlow, backend doesn't store this
+    animated: false, // Default for ReactFlow, backend doesn't store this
   }))
 }

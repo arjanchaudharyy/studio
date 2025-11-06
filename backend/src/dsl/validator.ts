@@ -2,7 +2,7 @@ import { ZodError, ZodIssue } from 'zod';
 
 import { componentRegistry, type ComponentPortMetadata } from '@shipsec/component-sdk';
 
-import type { WorkflowGraph } from '../workflows/dto/workflow-graph.dto';
+import type { WorkflowGraphDto } from '../workflows/dto/workflow-graph.dto';
 import type { WorkflowAction, WorkflowDefinition } from './types';
 import {
   ActionPortSnapshot,
@@ -29,7 +29,7 @@ export interface ValidationResult {
  * Comprehensive DSL validation for workflow graphs
  */
 export function validateWorkflowGraph(
-  graph: WorkflowGraph,
+  graph: WorkflowGraphDto,
   compiledDefinition: WorkflowDefinition,
 ): ValidationResult {
   const errors: ValidationError[] = [];
@@ -45,7 +45,12 @@ export function validateWorkflowGraph(
         field: 'type',
         message: `Unknown component type: ${node.type}`,
         severity: 'error',
-        suggestion: 'Available components: ' + componentRegistry.list().map(c => c.id).join(', '),
+        suggestion:
+          'Available components: ' +
+          componentRegistry
+            .list()
+            .map((entry) => entry.id)
+            .join(', '),
       });
     }
   }
@@ -125,26 +130,22 @@ function isPlaceholderIssue(issue: ZodIssue, placeholderFields: Set<string>): bo
     return false;
   }
 
-  if (issue.code === 'invalid_type') {
-    return true;
+  switch (issue.code) {
+    case 'invalid_type':
+      return true;
+    case 'invalid_format':
+      return true;
+    case 'invalid_union':
+      if ('unionErrors' in issue) {
+        const unionIssue = issue as ZodIssue & { unionErrors: ZodError[] };
+        return unionIssue.unionErrors.every((variant: ZodError) =>
+          variant.issues.every((inner) => inner.code === 'invalid_type'),
+        );
+      }
+      return false;
+    default:
+      return false;
   }
-
-  if (
-    issue.code === 'invalid_key' ||
-    (issue as { code?: string }).code === 'invalid_format' ||
-    issue.code === 'invalid_value' ||
-    issue.code === 'unrecognized_keys'
-  ) {
-    return true;
-  }
-
-  if (issue.code === 'invalid_union') {
-    return issue.errors.every((variant) =>
-      variant.every((inner) => inner.code === 'invalid_type'),
-    );
-  }
-
-  return false;
 }
 
 /**
@@ -207,7 +208,7 @@ function validateSecretParameters(
  * Validate input mappings between nodes
  */
 function validateInputMappings(
-  graph: WorkflowGraph,
+  graph: WorkflowGraphDto,
   compiledDefinition: WorkflowDefinition,
   actionPorts: Map<string, ActionPortSnapshot>,
   errors: ValidationError[],
@@ -347,7 +348,7 @@ function validateEdgeCompatibility(
  * Validate manual trigger runtime inputs configuration
  */
 function validateManualTriggerConfiguration(
-  _graph: WorkflowGraph,
+  _graph: WorkflowGraphDto,
   compiledDefinition: WorkflowDefinition,
   errors: ValidationError[],
   warnings: ValidationError[],
@@ -439,5 +440,3 @@ function resolveActionPortSnapshot(
 
   return { inputs, outputs };
 }
-
-

@@ -1,4 +1,4 @@
-import { WorkflowGraph } from '../workflows/dto/workflow-graph.dto';
+import { WorkflowGraphDto, WorkflowNodeDto } from '../workflows/dto/workflow-graph.dto';
 // Ensure all worker components are registered before accessing the registry
 import '../../../worker/src/components';
 import { componentRegistry } from '@shipsec/component-sdk';
@@ -53,8 +53,8 @@ function topoSort(nodes: string[], edges: Array<{ source: string; target: string
   return result;
 }
 
-export function compileWorkflowGraph(graph: WorkflowGraph): WorkflowDefinition {
-  const nodeIds = graph.nodes.map((node) => node.id);
+export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinition {
+  const nodeIds = graph.nodes.map((node: WorkflowNodeDto) => node.id);
 
   // Ensure all nodes reference registered components.
   for (const node of graph.nodes) {
@@ -103,7 +103,7 @@ export function compileWorkflowGraph(graph: WorkflowGraph): WorkflowDefinition {
   }
 
   const actions: WorkflowAction[] = orderedIds.map((id) => {
-    const node = graph.nodes.find((n) => n.id === id)!;
+    const node = graph.nodes.find((n: WorkflowNodeDto) => n.id === id)!;
     const config = (node.data?.config ?? {}) as Record<string, unknown>;
     const {
       joinStrategy: _joinStrategy,

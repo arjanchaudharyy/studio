@@ -4,6 +4,11 @@ import { AppTopBar } from '@/components/layout/AppTopBar'
 import { Button } from '@/components/ui/button'
 import { Workflow, KeyRound, Plus } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
+import { useAuthStore } from '@/store/authStore'
+import { hasAdminRole } from '@/utils/auth'
+import { UserButton } from '@/components/auth/UserButton'
+import { AuthSettingsButton } from '@/components/auth/AuthSettingsButton'
+import { useAuth, useAuthProvider } from '@/auth/auth-context'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -28,6 +33,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const location = useLocation()
   const navigate = useNavigate()
+  const roles = useAuthStore((state) => state.roles)
+  const canManageWorkflows = hasAdminRole(roles)
+  const { isAuthenticated } = useAuth()
+  const authProvider = useAuthProvider()
+  const showUserButton = isAuthenticated || authProvider.name === 'clerk'
 
   // Auto-collapse sidebar when opening workflow builder, expand for other routes
   useEffect(() => {
@@ -50,7 +60,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       name: 'Secrets',
       href: '/secrets',
       icon: KeyRound,
-    }
+    },
   ]
 
   const isActive = (path: string) => {
@@ -64,7 +74,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   const getPageActions = () => {
     if (location.pathname === '/') {
       return (
-        <Button onClick={() => navigate('/workflows/new')} className="gap-2">
+        <Button
+          onClick={() => {
+            if (!canManageWorkflows) return
+            navigate('/workflows/new')
+          }}
+          className="gap-2"
+          disabled={!canManageWorkflows}
+          aria-disabled={!canManageWorkflows}
+        >
           <Plus className="h-4 w-4" />
           New Workflow
         </Button>
@@ -155,9 +173,28 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         </SidebarContent>
 
-        <SidebarFooter className={`transition-all duration-300 ${sidebarOpen ? 'block' : 'hidden md:block'}`}>
-          <div className="text-xs text-muted-foreground px-4 py-2">
-            {sidebarOpen ? 'ShipSec Studio v1.0' : 'v1.0'}
+        <SidebarFooter className="border-t">
+          <div className="flex flex-col gap-2 p-2">
+            {/* Auth components - UserButton includes organization switching */}
+            {showUserButton ? (
+              <div className={`flex ${sidebarOpen ? 'justify-start' : 'justify-center'}`}>
+                <UserButton 
+                  className={sidebarOpen ? 'w-full' : 'w-auto'}
+                  sidebarCollapsed={!sidebarOpen}
+                />
+              </div>
+            ) : (
+              <div className={`flex ${sidebarOpen ? 'justify-start' : 'justify-center'}`}>
+                <AuthSettingsButton />
+              </div>
+            )}
+            
+            {/* Version info */}
+            <div className={`text-xs text-muted-foreground pt-2 border-t px-2 text-center transition-all duration-300 ${
+              sidebarOpen ? 'opacity-100' : 'opacity-0'
+            }`}>
+              ShipSec Studio v1.0
+            </div>
           </div>
         </SidebarFooter>
       </Sidebar>

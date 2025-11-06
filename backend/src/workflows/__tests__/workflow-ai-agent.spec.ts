@@ -7,9 +7,18 @@ import { compileWorkflowGraph } from '../../dsl/compiler';
 import type { WorkflowDefinition } from '../../dsl/types';
 import { WorkflowsService } from '../workflows.service';
 import type { WorkflowRepository } from '../repository/workflow.repository';
+import type { AuthContext } from '../../auth/types';
 
 const workflowId = 'd177b3c0-644e-40f0-8aa2-7b4f2c13a3af';
 const now = new Date();
+
+const authContext: AuthContext = {
+  userId: 'agent-user',
+  organizationId: 'agent-org',
+  roles: ['ADMIN'],
+  isAuthenticated: true,
+  provider: 'test',
+};
 
 const workflowGraph = WorkflowGraphSchema.parse({
   id: workflowId,
@@ -259,15 +268,25 @@ describe('Workflow d177b3c0-644e-40f0-8aa2-7b4f2c13a3af', () => {
       },
     };
 
+    const workflowRoleRepositoryMock = {
+      async upsert() {
+        return;
+      },
+      async hasRole() {
+        return false;
+      },
+    };
+
     const service = new WorkflowsService(
       repositoryMock as WorkflowRepository,
+      workflowRoleRepositoryMock as any,
       versionRepositoryMock as any,
       runRepositoryMock as any,
       traceRepositoryMock as any,
       {} as any,
     );
 
-    const definition = await service.commit(workflowId);
+    const definition = await service.commit(workflowId, authContext);
 
     expect(savedDefinition).not.toBeNull();
     expect(savedDefinition!.actions.length).toBe(4);

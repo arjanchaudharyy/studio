@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dialog'
 import type { SecretSummary } from '@/schemas/secret'
 import { useSecretStore } from '@/store/secretStore'
+import { useAuthStore } from '@/store/authStore'
+import { hasAdminRole } from '@/utils/auth'
 
 interface FormState {
   name: string
@@ -86,7 +88,9 @@ function formatDate(iso: string) {
 }
 
 export function SecretsManager() {
-
+  const roles = useAuthStore((state) => state.roles)
+  const canManageSecrets = hasAdminRole(roles)
+  const isReadOnly = !canManageSecrets
   const secrets = useSecretStore((state) => state.secrets)
   const loading = useSecretStore((state) => state.loading)
   const error = useSecretStore((state) => state.error)
@@ -101,6 +105,7 @@ export function SecretsManager() {
   const [formError, setFormError] = useState<string | null>(null)
   const [formSuccess, setFormSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const disableCreate = isReadOnly || isSubmitting
 
   const [listSuccess, setListSuccess] = useState<string | null>(null)
 
@@ -109,11 +114,13 @@ export function SecretsManager() {
   const [editFormState, setEditFormState] = useState<EditFormState>(INITIAL_EDIT_FORM)
   const [editError, setEditError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const disableEditing = isReadOnly || isEditing
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<SecretSummary | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const disableDeleting = isReadOnly || isDeleting
 
   useEffect(() => {
     fetchSecrets().catch((err) => {
@@ -156,6 +163,11 @@ export function SecretsManager() {
     setFormError(null)
     setFormSuccess(null)
     setListSuccess(null)
+
+    if (!canManageSecrets) {
+      setFormError('Only workspace administrators can create or update secrets.')
+      return
+    }
 
     if (!isFormValid) {
       setFormError('Name and secret value are required.')
@@ -206,6 +218,11 @@ export function SecretsManager() {
   const handleEditSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!editingSecret) {
+      return
+    }
+
+    if (!canManageSecrets) {
+      setEditError('Only workspace administrators can modify secrets.')
       return
     }
 
@@ -277,6 +294,11 @@ export function SecretsManager() {
       return
     }
 
+    if (!canManageSecrets) {
+      setDeleteError('Only workspace administrators can delete secrets.')
+      return
+    }
+
     setDeleteError(null)
     setListSuccess(null)
     setIsDeleting(true)
@@ -298,6 +320,13 @@ export function SecretsManager() {
   return (
     <div className="flex-1 bg-background">
       <div className="container mx-auto py-8 px-4">
+        {isReadOnly && (
+          <div className="mb-6 rounded-md border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            You have read-only access. Viewing secrets metadata is allowed, but only administrators
+            can create, rotate, or delete secrets.
+          </div>
+        )}
+
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-2">Secret Manager</h2>
           <p className="text-muted-foreground">
@@ -324,6 +353,7 @@ export function SecretsManager() {
                   placeholder="ex: shodan-api-key"
                   value={formState.name}
                   onChange={handleChange('name')}
+                  disabled={disableCreate}
                   required
                 />
               </div>
@@ -338,6 +368,7 @@ export function SecretsManager() {
                   placeholder="Describe how this secret is used"
                   value={formState.description}
                   onChange={handleChange('description')}
+                  disabled={disableCreate}
                 />
               </div>
 
@@ -351,6 +382,7 @@ export function SecretsManager() {
                   placeholder="prod, security, reconnaissance"
                   value={formState.tags}
                   onChange={handleChange('tags')}
+                  disabled={disableCreate}
                 />
               </div>
 
@@ -363,6 +395,7 @@ export function SecretsManager() {
                   placeholder="Paste the secret value"
                   value={formState.value}
                   onChange={handleChange('value')}
+                  disabled={disableCreate}
                   rows={4}
                   required
                 />
@@ -375,7 +408,7 @@ export function SecretsManager() {
 
               {formSuccess && <p className="text-sm text-green-600">{formSuccess}</p>}
 
-              <Button type="submit" disabled={!isFormValid || isSubmitting}>
+              <Button type="submit" disabled={!isFormValid || disableCreate}>
                 {isSubmitting ? 'Saving…' : 'Create secret'}
               </Button>
             </form>
@@ -475,6 +508,8 @@ export function SecretsManager() {
                               variant="outline"
                               size="sm"
                               onClick={() => openEditDialog(secret)}
+                              disabled={isReadOnly}
+                              aria-disabled={isReadOnly}
                             >
                               Edit
                             </Button>
@@ -482,6 +517,8 @@ export function SecretsManager() {
                               variant="destructive"
                               size="sm"
                               onClick={() => openDeleteDialog(secret)}
+                              disabled={isReadOnly}
+                              aria-disabled={isReadOnly}
                             >
                               Delete
                             </Button>
@@ -514,6 +551,7 @@ export function SecretsManager() {
                 id="edit-secret-name"
                 value={editFormState.name}
                 onChange={handleEditChange('name')}
+                disabled={disableEditing}
                 required
               />
             </div>
@@ -527,6 +565,7 @@ export function SecretsManager() {
                 id="edit-secret-description"
                 value={editFormState.description}
                 onChange={handleEditChange('description')}
+                disabled={disableEditing}
               />
             </div>
 
@@ -539,6 +578,7 @@ export function SecretsManager() {
                 id="edit-secret-tags"
                 value={editFormState.tags}
                 onChange={handleEditChange('tags')}
+                disabled={disableEditing}
               />
             </div>
 
@@ -550,6 +590,7 @@ export function SecretsManager() {
                 id="edit-secret-value"
                 value={editFormState.value}
                 onChange={handleEditChange('value')}
+                disabled={disableEditing}
                 rows={4}
                 placeholder="Provide only if you want to rotate the secret"
               />
@@ -569,7 +610,7 @@ export function SecretsManager() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={!isEditValid || isEditing}>
+              <Button type="submit" disabled={!isEditValid || disableEditing}>
                 {isEditing ? 'Saving…' : 'Save changes'}
               </Button>
             </DialogFooter>
@@ -604,7 +645,7 @@ export function SecretsManager() {
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={disableDeleting}>
               {isDeleting ? 'Deleting…' : 'Delete secret'}
             </Button>
           </DialogFooter>

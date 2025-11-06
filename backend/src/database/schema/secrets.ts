@@ -14,6 +14,7 @@ export const secrets = pgTable('secrets', {
   name: varchar('name', { length: 191 }).notNull().unique(),
   description: text('description'),
   tags: jsonb('tags').$type<string[] | null>().default(null),
+  organizationId: varchar('organization_id', { length: 191 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -30,6 +31,7 @@ export const secretVersions = pgTable('secret_versions', {
   encryptionKeyId: varchar('encryption_key_id', { length: 128 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   createdBy: varchar('created_by', { length: 191 }),
+  organizationId: varchar('organization_id', { length: 191 }),
   isActive: boolean('is_active').notNull().default(false),
 });
 

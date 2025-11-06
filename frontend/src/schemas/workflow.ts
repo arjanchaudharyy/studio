@@ -1,55 +1,36 @@
-import { z } from 'zod'
-import { NodeSchema } from './node'
-import { EdgeSchema } from './edge'
+import type { components } from '@shipsec/backend-client'
 
 /**
- * Workflow metadata schema (for list endpoint)
- * Matches backend structure exactly
+ * Workflow types from backend API client
+ * These types are auto-generated from the OpenAPI specification
  */
-export const WorkflowMetadataSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1, 'Workflow name is required'),
-  description: z.string().nullable().optional(),
-  nodes: z.array(NodeSchema),
-  edges: z.array(EdgeSchema),
-  lastRun: z.string().datetime().nullable().optional(),
-  runCount: z.number().int().min(0).optional(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-  currentVersionId: z.string().uuid().nullable().optional(),
-  currentVersion: z.number().int().positive().nullable().optional(),
-})
 
-export type WorkflowMetadata = z.infer<typeof WorkflowMetadataSchema>
+// Extract workflow types from backend client
+type WorkflowResponseDto = components['schemas']['WorkflowResponseDto']
+type CreateWorkflowRequestDto = components['schemas']['CreateWorkflowRequestDto']
+type UpdateWorkflowRequestDto = components['schemas']['UpdateWorkflowRequestDto']
 
 /**
- * Complete workflow schema (for detail endpoint)
- * Contains full nodes and edges data
+ * Workflow metadata (for list endpoint)
+ * Uses WorkflowResponseDto from backend API
  */
-export const WorkflowSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1, 'Workflow name is required'),
-  description: z.string().optional(),
-  nodes: z.array(NodeSchema),
-  edges: z.array(EdgeSchema),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-  currentVersionId: z.string().uuid().nullable().optional(),
-  currentVersion: z.number().int().positive().nullable().optional(),
-})
+export type WorkflowMetadata = WorkflowResponseDto
 
-export type Workflow = z.infer<typeof WorkflowSchema>
+/**
+ * Complete workflow (for detail endpoint)
+ * Uses WorkflowResponseDto from backend API
+ */
+export type Workflow = WorkflowResponseDto
 
-export const CreateWorkflowSchema = WorkflowSchema.omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-})
+/**
+ * Create workflow request
+ * Uses CreateWorkflowRequestDto from backend API
+ */
+export type CreateWorkflow = CreateWorkflowRequestDto
 
-export type CreateWorkflow = z.infer<typeof CreateWorkflowSchema>
-
-export const UpdateWorkflowSchema = WorkflowSchema.partial().required({
-  id: true,
-})
-
-export type UpdateWorkflow = z.infer<typeof UpdateWorkflowSchema>
+/**
+ * Update workflow request
+ * Uses UpdateWorkflowRequestDto from backend API
+ * Note: The backend type requires name, but we make it optional for partial updates
+ */
+export type UpdateWorkflow = UpdateWorkflowRequestDto

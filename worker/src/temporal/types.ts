@@ -64,6 +64,7 @@ export interface WorkflowDefinition {
 export interface RunComponentActivityInput {
   runId: string;
   workflowId: string;
+  organizationId?: string | null;
   action: {
     ref: string;
     componentId: string;
@@ -89,6 +90,7 @@ export interface RunComponentActivityOutput {
 
 export interface WorkflowRunRequest {
   inputs?: Record<string, unknown>;
+  organizationId?: string | null;
 }
 
 export interface WorkflowRunResult {
@@ -107,6 +109,7 @@ export interface RunWorkflowActivityInput {
   workflowId: string;
   definition: WorkflowDefinition;
   inputs: Record<string, unknown>;
+  organizationId?: string | null;
 }
 
 export interface RunWorkflowActivityOutput {
@@ -135,6 +138,7 @@ export interface WorkflowLogEntry {
   level?: 'debug' | 'info' | 'warn' | 'error';
   timestamp?: Date;
   metadata?: WorkflowLogMetadata;
+  organizationId?: string | null;
 }
 
 export interface WorkflowLogSink {

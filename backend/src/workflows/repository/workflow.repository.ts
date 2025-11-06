@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { z } from 'zod';
 
@@ -12,6 +12,10 @@ export type WorkflowRecord = typeof workflowsTable.$inferSelect;
 
 type WorkflowGraph = z.infer<typeof WorkflowGraphSchema>;
 
+export interface WorkflowRepositoryOptions {
+  organizationId?: string | null;
+}
+
 @Injectable()
 export class WorkflowRepository {
   constructor(
@@ -19,7 +23,10 @@ export class WorkflowRepository {
     private readonly db: NodePgDatabase,
   ) {}
 
-  async create(input: WorkflowGraph): Promise<WorkflowRecord> {
+  async create(
+    input: WorkflowGraph,
+    options: WorkflowRepositoryOptions = {},
+  ): Promise<WorkflowRecord> {
     const [record] = await this.db
       .insert(workflowsTable)
       .values({
@@ -27,13 +34,18 @@ export class WorkflowRepository {
         description: input.description ?? null,
         graph: input,
         compiledDefinition: null,
+        organizationId: options.organizationId ?? null,
       })
       .returning();
 
     return record;
   }
 
-  async update(id: string, input: WorkflowGraph): Promise<WorkflowRecord> {
+  async update(
+    id: string,
+    input: WorkflowGraph,
+    options: WorkflowRepositoryOptions = {},
+  ): Promise<WorkflowRecord> {
     const [record] = await this.db
       .update(workflowsTable)
       .set({
@@ -42,7 +54,7 @@ export class WorkflowRepository {
         graph: input,
         updatedAt: new Date(),
       })
-      .where(eq(workflowsTable.id, id))
+      .where(this.buildIdFilter(id, options.organizationId))
       .returning();
 
     if (!record) {
@@ -55,6 +67,7 @@ export class WorkflowRepository {
   async saveCompiledDefinition(
     id: string,
     definition: WorkflowDefinition,
+    options: WorkflowRepositoryOptions = {},
   ): Promise<WorkflowRecord> {
     const [record] = await this.db
       .update(workflowsTable)
@@ -62,7 +75,7 @@ export class WorkflowRepository {
         compiledDefinition: definition,
         updatedAt: new Date(),
       })
-      .where(eq(workflowsTable.id, id))
+      .where(this.buildIdFilter(id, options.organizationId))
       .returning();
 
     if (!record) {
@@ -72,24 +85,38 @@ export class WorkflowRepository {
     return record;
   }
 
-  async findById(id: string): Promise<WorkflowRecord | undefined> {
+  async findById(
+    id: string,
+    options: WorkflowRepositoryOptions = {},
+  ): Promise<WorkflowRecord | undefined> {
     const [record] = await this.db
       .select()
       .from(workflowsTable)
-      .where(eq(workflowsTable.id, id))
+      .where(this.buildIdFilter(id, options.organizationId))
       .limit(1);
     return record;
   }
 
-  async delete(id: string): Promise<void> {
-    await this.db.delete(workflowsTable).where(eq(workflowsTable.id, id));
+  async delete(id: string, options: WorkflowRepositoryOptions = {}): Promise<void> {
+    await this.db
+      .delete(workflowsTable)
+      .where(this.buildIdFilter(id, options.organizationId));
   }
 
-  async list(): Promise<WorkflowRecord[]> {
+  async list(options: WorkflowRepositoryOptions = {}): Promise<WorkflowRecord[]> {
+    if (options.organizationId) {
+      return this.db
+        .select()
+        .from(workflowsTable)
+        .where(eq(workflowsTable.organizationId, options.organizationId));
+    }
     return this.db.select().from(workflowsTable);
   }
 
-  async incrementRunCount(id: string): Promise<WorkflowRecord> {
+  async incrementRunCount(
+    id: string,
+    options: WorkflowRepositoryOptions = {},
+  ): Promise<WorkflowRecord> {
     const [record] = await this.db
       .update(workflowsTable)
       .set({
@@ -97,7 +124,7 @@ export class WorkflowRepository {
         runCount: sql`${workflowsTable.runCount} + 1`,
         updatedAt: new Date(),
       })
-      .where(eq(workflowsTable.id, id))
+      .where(this.buildIdFilter(id, options.organizationId))
       .returning();
 
     if (!record) {
@@ -105,5 +132,13 @@ export class WorkflowRepository {
     }
 
     return record;
+  }
+
+  private buildIdFilter(id: string, organizationId?: string | null) {
+    const idFilter = eq(workflowsTable.id, id);
+    if (!organizationId) {
+      return idFilter;
+    }
+    return and(idFilter, eq(workflowsTable.organizationId, organizationId));
   }
 }

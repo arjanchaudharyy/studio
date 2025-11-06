@@ -28,12 +28,16 @@ import {
   deserializeEdges,
 } from '@/utils/workflowSerializer'
 import type { NodeData } from '@/schemas/node'
+import { useAuthStore } from '@/store/authStore'
+import { hasAdminRole } from '@/utils/auth'
 
 function WorkflowBuilderContent() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const isNewWorkflow = id === 'new'
   const { metadata, setMetadata, setWorkflowId, markClean, resetWorkflow } = useWorkflowStore()
+  const roles = useAuthStore((state) => state.roles)
+  const canManageWorkflows = hasAdminRole(roles)
   const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const { getComponent } = useComponentStore()
@@ -87,8 +91,8 @@ function WorkflowBuilderContent() {
         })
 
         // Deserialize and set nodes/edges
-        const workflowEdges = deserializeEdges(workflow.edges)
-        const workflowNodes = deserializeNodes(workflow.nodes, workflow.edges)
+        const workflowEdges = deserializeEdges(workflow)
+        const workflowNodes = deserializeNodes(workflow)
 
         setNodes(workflowNodes)
         setEdges(workflowEdges)
@@ -126,6 +130,15 @@ function WorkflowBuilderContent() {
   }, [id, isNewWorkflow, navigate, setMetadata, setNodes, setEdges, resetWorkflow, markClean])
 
   const handleRun = async () => {
+    if (!canManageWorkflows) {
+      toast({
+        variant: 'destructive',
+        title: 'Insufficient permissions',
+        description: 'Only administrators can run workflows.',
+      })
+      return
+    }
+
     if (nodes.length === 0) {
       toast({
         variant: 'destructive',
@@ -185,6 +198,15 @@ function WorkflowBuilderContent() {
   }
 
   const executeWorkflow = async (runtimeData?: Record<string, unknown>) => {
+    if (!canManageWorkflows) {
+      toast({
+        variant: 'destructive',
+        title: 'Insufficient permissions',
+        description: 'Only administrators can run workflows.',
+      })
+      return
+    }
+
     const workflowId = metadata.id
     if (!workflowId) return
 
@@ -237,12 +259,31 @@ function WorkflowBuilderContent() {
   }
 
   const handleSave = async () => {
+    if (!canManageWorkflows) {
+      toast({
+        variant: 'destructive',
+        title: 'Insufficient permissions',
+        description: 'Only administrators can save workflow changes.',
+      })
+      return
+    }
+
     try {
-      if (nodes.length === 0) {
+      // Defensive check for undefined nodes/edges
+      if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
         toast({
           variant: 'destructive',
           title: 'Cannot save workflow',
           description: 'Add at least one component before saving.',
+        })
+        return
+      }
+
+      if (!edges || !Array.isArray(edges)) {
+        toast({
+          variant: 'destructive',
+          title: 'Cannot save workflow',
+          description: 'Invalid workflow edges data.',
         })
         return
       }

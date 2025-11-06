@@ -11,6 +11,16 @@ import type {
 } from '../../temporal/temporal.service';
 import { WorkflowRepository } from '../repository/workflow.repository';
 import { WorkflowsService } from '../workflows.service';
+import type { AuthContext } from '../../auth/types';
+
+const TEST_ORG = 'test-org';
+const authContext: AuthContext = {
+  userId: 'service-user',
+  organizationId: TEST_ORG,
+  roles: ['ADMIN'],
+  isAuthenticated: true,
+  provider: 'test',
+};
 
 const sampleGraph = WorkflowGraphSchema.parse({
   name: 'Sample workflow',
@@ -35,7 +45,7 @@ const sampleGraph = WorkflowGraphSchema.parse({
       data: {
         label: 'Loader',
         config: {
-          fileId: '00000000-0000-4000-8000-000000000001',
+          fileId: '11111111-1111-4111-8111-111111111111',
         },
       },
     },
@@ -71,6 +81,7 @@ describe('WorkflowsService', () => {
     graph: typeof sampleGraph;
     compiledDefinition: WorkflowDefinition | null;
     createdAt: Date;
+    organizationId: string | null;
   };
 
   let workflowVersionSeq = 0;
@@ -86,6 +97,7 @@ describe('WorkflowsService', () => {
   const createWorkflowVersionRecord = (
     workflowId: string,
     graph: typeof sampleGraph = sampleGraph,
+    organizationId: string | null = TEST_ORG,
   ): MockWorkflowVersion => {
     workflowVersionSeq += 1;
     const record: MockWorkflowVersion = {
@@ -95,6 +107,7 @@ describe('WorkflowsService', () => {
       graph,
       compiledDefinition: null,
       createdAt: new Date(now),
+      organizationId,
     };
     workflowVersionStore.set(record.id, record);
     const list = workflowVersionsByWorkflow.get(workflowId) ?? [];
@@ -113,6 +126,7 @@ describe('WorkflowsService', () => {
         description: sampleGraph.description ?? null,
         graph: sampleGraph,
         compiledDefinition: null,
+        organizationId: TEST_ORG,
       };
     },
     async update() {
@@ -124,6 +138,7 @@ describe('WorkflowsService', () => {
         description: sampleGraph.description ?? null,
         graph: sampleGraph,
         compiledDefinition: null,
+        organizationId: TEST_ORG,
       };
     },
     async findById() {
@@ -135,6 +150,7 @@ describe('WorkflowsService', () => {
         description: sampleGraph.description ?? null,
         graph: sampleGraph,
         compiledDefinition: null,
+        organizationId: TEST_ORG,
       };
     },
     async delete() {
@@ -153,6 +169,7 @@ describe('WorkflowsService', () => {
         description: sampleGraph.description ?? null,
         graph: sampleGraph,
         compiledDefinition: definition,
+        organizationId: TEST_ORG,
       };
     },
     async incrementRunCount() {
@@ -161,23 +178,54 @@ describe('WorkflowsService', () => {
   } as unknown as WorkflowRepository;
 
   const versionRepositoryMock = {
-    async create(input: { workflowId: string; graph: typeof sampleGraph }) {
-      return createWorkflowVersionRecord(input.workflowId, input.graph);
+    async create(
+      input: { workflowId: string; graph: typeof sampleGraph },
+      options: { organizationId?: string | null } = {},
+    ) {
+      return createWorkflowVersionRecord(
+        input.workflowId,
+        input.graph,
+        options.organizationId ?? TEST_ORG,
+      );
     },
-    async findLatestByWorkflowId(workflowId: string) {
-      const list = workflowVersionsByWorkflow.get(workflowId);
-      return list ? list[list.length - 1] : undefined;
+    async findLatestByWorkflowId(
+      workflowId: string,
+      options: { organizationId?: string | null } = {},
+    ) {
+      const list = workflowVersionsByWorkflow.get(workflowId) ?? [];
+      const filtered = options.organizationId
+        ? list.filter((record) => record.organizationId === options.organizationId)
+        : list;
+      return filtered.length > 0 ? filtered[filtered.length - 1] : undefined;
     },
-    async findById(id: string) {
-      return workflowVersionStore.get(id);
+    async findById(id: string, options: { organizationId?: string | null } = {}) {
+      const record = workflowVersionStore.get(id);
+      if (!record) return undefined;
+      if (options.organizationId && record.organizationId !== options.organizationId) {
+        return undefined;
+      }
+      return record;
     },
-    async findByWorkflowAndVersion(input: { workflowId: string; version: number }) {
-      const list = workflowVersionsByWorkflow.get(input.workflowId);
-      return list?.find((record) => record.version === input.version);
+    async findByWorkflowAndVersion(
+      input: { workflowId: string; version: number; organizationId?: string | null },
+    ) {
+      const list = workflowVersionsByWorkflow.get(input.workflowId) ?? [];
+      return list.find(
+        (record) =>
+          record.version === input.version &&
+          (!input.organizationId || record.organizationId === input.organizationId),
+      );
     },
-    async setCompiledDefinition(id: string, definition: WorkflowDefinition) {
+    async setCompiledDefinition(
+      id: string,
+      definition: WorkflowDefinition,
+      options: { organizationId?: string | null } = {},
+    ) {
       const record = workflowVersionStore.get(id);
       if (!record) {
+        return undefined;
+      }
+      if (options.organizationId && record.organizationId !== options.organizationId) {
         return undefined;
       }
       record.compiledDefinition = definition;
@@ -193,6 +241,7 @@ describe('WorkflowsService', () => {
       workflowVersion: number;
       temporalRunId: string;
       totalActions: number;
+      organizationId?: string | null;
     }) {
       storedRunMeta = {
         runId: data.runId,
@@ -203,11 +252,15 @@ describe('WorkflowsService', () => {
         totalActions: data.totalActions,
         createdAt: new Date(now),
         updatedAt: new Date(now),
+        organizationId: data.organizationId ?? TEST_ORG,
       };
       return storedRunMeta;
     },
-    async findByRunId(runId: string) {
+    async findByRunId(runId: string, options: { organizationId?: string | null } = {}) {
       if (storedRunMeta && storedRunMeta.runId === runId) {
+        if (options.organizationId && storedRunMeta.organizationId !== options.organizationId) {
+          return undefined;
+        }
         return storedRunMeta;
       }
       return undefined;
@@ -220,6 +273,15 @@ describe('WorkflowsService', () => {
         return completedCount;
       }
       return 0;
+    },
+  };
+
+  const workflowRoleRepositoryMock = {
+    async upsert() {
+      return;
+    },
+    async hasRole() {
+      return false;
     },
   };
 
@@ -277,6 +339,7 @@ describe('WorkflowsService', () => {
     const temporalService = buildTemporalStub();
     service = new WorkflowsService(
       repositoryMock,
+      workflowRoleRepositoryMock as any,
       versionRepositoryMock as any,
       runRepositoryMock as any,
       traceRepositoryMock as any,
@@ -285,7 +348,7 @@ describe('WorkflowsService', () => {
   });
 
   it('creates a workflow using the repository', async () => {
-    const created = await service.create(sampleGraph);
+    const created = await service.create(sampleGraph, authContext);
     expect(created.id).toBe('workflow-id');
     expect(createCalls).toBe(1);
     expect(created.currentVersion).toBe(1);
@@ -293,8 +356,8 @@ describe('WorkflowsService', () => {
   });
 
   it('commits a workflow definition', async () => {
-    await service.create(sampleGraph);
-    const definition = await service.commit('workflow-id');
+    await service.create(sampleGraph, authContext);
+    const definition = await service.commit('workflow-id', authContext);
     expect(definition.actions.length).toBeGreaterThan(0);
     expect(savedDefinition).toEqual(definition);
     const latestVersion = versionRepositoryMock.findLatestByWorkflowId
@@ -304,7 +367,7 @@ describe('WorkflowsService', () => {
   });
 
   it('runs a workflow definition via the Temporal service', async () => {
-    const created = await service.create(sampleGraph);
+    const created = await service.create(sampleGraph, authContext);
     const definition = compileWorkflowGraph(sampleGraph);
     repositoryMock.findById = async () => ({
       id: 'workflow-id',
@@ -316,9 +379,10 @@ describe('WorkflowsService', () => {
       compiledDefinition: definition,
       lastRun: null,
       runCount: 0,
+      organizationId: TEST_ORG,
     });
 
-    const run = await service.run('workflow-id', { inputs: { message: 'hi' } });
+    const run = await service.run('workflow-id', { inputs: { message: 'hi' } }, authContext);
 
     expect(run.runId).toMatch(/^shipsec-run-/);
     expect(run.workflowId).toBe('workflow-id');
@@ -330,30 +394,38 @@ describe('WorkflowsService', () => {
       runId: run.runId,
       workflowId: 'workflow-id',
       inputs: { message: 'hi' },
+      organizationId: TEST_ORG,
     });
     expect(storedRunMeta).toMatchObject({
       runId: run.runId,
       workflowId: 'workflow-id',
       totalActions: definition.actions.length,
+      organizationId: TEST_ORG,
     });
-    expect(run.workflowVersionId).toEqual(created.currentVersionId!);
-    expect(run.workflowVersion).toEqual(created.currentVersion!);
+    if (created.currentVersionId === null || created.currentVersion === null) {
+      throw new Error('Expected workflow version to be assigned');
+    }
+    const currentVersionId = created.currentVersionId;
+    const currentVersionNumber = created.currentVersion;
+    expect(run.workflowVersionId).toEqual(currentVersionId);
+    expect(run.workflowVersion).toEqual(currentVersionNumber);
     expect(storedRunMeta).toMatchObject({
       runId: run.runId,
       workflowId: 'workflow-id',
-      workflowVersionId: created.currentVersionId,
-      workflowVersion: created.currentVersion,
+      workflowVersionId: currentVersionId,
+      workflowVersion: currentVersionNumber,
       totalActions: definition.actions.length,
+      organizationId: TEST_ORG,
     });
   });
 
   it('delegates status, result, and cancel operations to the Temporal service', async () => {
-    await service.create(sampleGraph);
-    const run = await service.run('workflow-id');
+    await service.create(sampleGraph, authContext);
+    const run = await service.run('workflow-id', {}, authContext);
     completedCount = 1;
-    const status = await service.getRunStatus(run.runId, run.temporalRunId);
-    const result = await service.getRunResult(run.runId, run.temporalRunId);
-    await service.cancelRun(run.runId, run.temporalRunId);
+    const status = await service.getRunStatus(run.runId, run.temporalRunId, authContext);
+    const result = await service.getRunResult(run.runId, run.temporalRunId, authContext);
+    await service.cancelRun(run.runId, run.temporalRunId, authContext);
 
     expect(status.runId).toBe(run.runId);
     expect(status.workflowId).toBe('workflow-id');
@@ -389,6 +461,7 @@ describe('WorkflowsService', () => {
 
     service = new WorkflowsService(
       repositoryMock,
+      workflowRoleRepositoryMock as any,
       versionRepositoryMock as any,
       runRepositoryMock as any,
       traceRepositoryMock as any,
@@ -406,9 +479,10 @@ describe('WorkflowsService', () => {
       totalActions: 2,
       createdAt: new Date(now),
       updatedAt: new Date(now),
+      organizationId: TEST_ORG,
     };
 
-    const status = await service.getRunStatus('shipsec-run-fail');
+    const status = await service.getRunStatus('shipsec-run-fail', undefined, authContext);
     expect(status.status).toBe('FAILED');
     expect(status.failure).toEqual({
       reason: 'Component crashed',

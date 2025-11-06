@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DRIZZLE_TOKEN } from '../../database/database.module';
@@ -16,6 +16,7 @@ interface CreateWorkflowRunInput {
   workflowVersion: number;
   temporalRunId: string;
   totalActions: number;
+  organizationId?: string | null;
 }
 
 @Injectable()
@@ -34,6 +35,7 @@ export class WorkflowRunRepository {
       temporalRunId: input.temporalRunId,
       totalActions: input.totalActions,
       updatedAt: new Date(),
+      organizationId: input.organizationId ?? null,
     };
 
     const [record] = await this.db
@@ -48,6 +50,7 @@ export class WorkflowRunRepository {
           temporalRunId: input.temporalRunId,
           totalActions: input.totalActions,
           updatedAt: new Date(),
+          organizationId: input.organizationId ?? null,
         },
       })
       .returning();
@@ -55,11 +58,14 @@ export class WorkflowRunRepository {
     return record;
   }
 
-  async findByRunId(runId: string): Promise<WorkflowRunRecord | undefined> {
+  async findByRunId(
+    runId: string,
+    options: { organizationId?: string | null } = {},
+  ): Promise<WorkflowRunRecord | undefined> {
     const [record] = await this.db
       .select()
       .from(workflowRunsTable)
-      .where(eq(workflowRunsTable.runId, runId))
+      .where(this.buildRunFilter(runId, options.organizationId))
       .limit(1);
     return record;
   }
@@ -68,14 +74,33 @@ export class WorkflowRunRepository {
     workflowId?: string;
     status?: string;
     limit?: number;
+    organizationId?: string | null;
   } = {}): Promise<WorkflowRunRecord[]> {
+    const conditions: any[] = [];
+    if (options.workflowId) {
+      conditions.push(eq(workflowRunsTable.workflowId, options.workflowId));
+    }
+    if (options.organizationId) {
+      conditions.push(eq(workflowRunsTable.organizationId, options.organizationId));
+    }
+
     const baseQuery = this.db.select().from(workflowRunsTable);
-    const filteredQuery = options.workflowId
-      ? baseQuery.where(eq(workflowRunsTable.workflowId, options.workflowId))
+    const query = conditions.length > 0
+      ? baseQuery.where(
+          conditions.length === 1 ? conditions[0] : and(...(conditions as [any, any, ...any[]])),
+        )
       : baseQuery;
 
-    return await filteredQuery
+    return await query
       .orderBy(workflowRunsTable.createdAt)
       .limit(options.limit ?? 50);
+  }
+
+  private buildRunFilter(runId: string, organizationId?: string | null) {
+    const base = eq(workflowRunsTable.runId, runId);
+    if (!organizationId) {
+      return base;
+    }
+    return and(base, eq(workflowRunsTable.organizationId, organizationId));
   }
 }

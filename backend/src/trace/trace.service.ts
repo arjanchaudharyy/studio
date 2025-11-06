@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 
 import { TraceRepository } from './trace.repository';
 import type { TraceEventType as PersistedTraceEventType } from './types';
@@ -9,13 +9,18 @@ import {
   TraceEventPayload,
   TraceEventType,
 } from '@shipsec/shared';
+import type { AuthContext } from '../auth/types';
 
 @Injectable()
 export class TraceService {
   constructor(private readonly repository: TraceRepository) {}
 
-  async list(runId: string): Promise<{ events: TraceEventPayload[]; cursor?: string }> {
-    const records = await this.repository.listByRunId(runId);
+  async list(
+    runId: string,
+    auth?: AuthContext | null,
+  ): Promise<{ events: TraceEventPayload[]; cursor?: string }> {
+    const organizationId = this.requireOrganizationId(auth);
+    const records = await this.repository.listByRunId(runId, organizationId);
     const events = records.map((record) => this.mapRecordToEvent(record));
     const cursor = events.length > 0 ? events[events.length - 1].id : undefined;
     return { events, cursor };
@@ -24,15 +29,25 @@ export class TraceService {
   async listSince(
     runId: string,
     afterSequence?: number,
+    auth?: AuthContext | null,
   ): Promise<{ events: TraceEventPayload[]; cursor?: string }> {
     if (!afterSequence || afterSequence <= 0) {
-      return this.list(runId);
+      return this.list(runId, auth);
     }
 
-    const records = await this.repository.listAfterSequence(runId, afterSequence);
+    const organizationId = this.requireOrganizationId(auth);
+    const records = await this.repository.listAfterSequence(runId, afterSequence, organizationId);
     const events = records.map((record) => this.mapRecordToEvent(record));
     const cursor = events.length > 0 ? events[events.length - 1].id : undefined;
     return { events, cursor };
+  }
+
+  private requireOrganizationId(auth?: AuthContext | null): string {
+    const organizationId = auth?.organizationId;
+    if (!organizationId) {
+      throw new ForbiddenException('Organization context is required');
+    }
+    return organizationId;
   }
 
   private mapRecordToEvent(record: {

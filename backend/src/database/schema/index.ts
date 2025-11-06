@@ -5,3 +5,5 @@ export * from './traces';
 export * from './workflow-runs';
 export * from './log-streams';
 export * from './secrets';
+export * from './platform-workflow-links';
+export * from './workflow-roles';

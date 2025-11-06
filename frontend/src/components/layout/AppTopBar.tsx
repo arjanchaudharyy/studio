@@ -1,9 +1,6 @@
 import { useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import {
-  PanelLeftClose,
-  PanelLeftOpen
-} from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
 interface AppTopBarProps {
   title?: string
@@ -103,11 +100,9 @@ export function AppTopBar({
       <div className="flex-1" />
 
       {/* Action buttons */}
-      {actions && (
-        <div className="flex items-center gap-3">
-          {actions}
-        </div>
-      )}
+      <div className="flex items-center gap-3">
+        {actions}
+      </div>
     </div>
   )
 }

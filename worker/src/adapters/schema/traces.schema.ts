@@ -1,4 +1,4 @@
-import { bigserial, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigserial, index, integer, jsonb, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 
 export const workflowTraces = pgTable(
   'workflow_traces',
@@ -6,6 +6,7 @@ export const workflowTraces = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     runId: text('run_id').notNull(),
     workflowId: text('workflow_id'),
+    organizationId: varchar('organization_id', { length: 191 }),
     type: text('type')
       .$type<'NODE_STARTED' | 'NODE_COMPLETED' | 'NODE_FAILED' | 'NODE_PROGRESS'>()
       .notNull(),

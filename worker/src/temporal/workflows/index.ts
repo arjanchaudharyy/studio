@@ -15,7 +15,7 @@ const {
   finalizeRunActivity,
 } = proxyActivities<{
   runComponentActivity(input: RunComponentActivityInput): Promise<RunComponentActivityOutput>;
-  setRunMetadataActivity(input: { runId: string; workflowId: string }): Promise<void>;
+  setRunMetadataActivity(input: { runId: string; workflowId: string; organizationId?: string | null }): Promise<void>;
   finalizeRunActivity(input: { runId: string }): Promise<void>;
 }>({
   startToCloseTimeout: '10 minutes',
@@ -31,7 +31,11 @@ export async function shipsecWorkflowRun(
 
   console.log(`[Workflow] Starting shipsec workflow run: ${input.runId}`);
 
-  await setRunMetadataActivity({ runId: input.runId, workflowId: input.workflowId });
+  await setRunMetadataActivity({
+    runId: input.runId,
+    workflowId: input.workflowId,
+    organizationId: input.organizationId ?? null,
+  });
 
   try {
     await runWorkflowWithScheduler(input.definition, {
@@ -60,6 +64,7 @@ export async function shipsecWorkflowRun(
         const activityInput: RunComponentActivityInput = {
           runId: input.runId,
           workflowId: input.workflowId,
+          organizationId: input.organizationId ?? null,
           action: {
             ref: action.ref,
             componentId: action.componentId,

@@ -1,4 +1,4 @@
-import { integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { integer, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { WorkflowDefinition } from '../../dsl/types';
@@ -11,6 +11,7 @@ export const workflowsTable = pgTable('workflows', {
   name: text('name').notNull(),
   description: text('description'),
   graph: jsonb('graph').$type<WorkflowGraph>().notNull(),
+  organizationId: varchar('organization_id', { length: 191 }),
   compiledDefinition: jsonb('compiled_definition')
     .$type<WorkflowDefinition | null>()
     .default(null),

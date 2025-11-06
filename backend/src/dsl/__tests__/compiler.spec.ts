@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 
 import '@shipsec/studio-worker/components'; // Register components
-import { WorkflowGraph } from '../../workflows/dto/workflow-graph.dto';
+import { WorkflowGraphDto } from '../../workflows/dto/workflow-graph.dto';
 import { componentRegistry } from '@shipsec/component-sdk';
 import { compileWorkflowGraph } from '../compiler';
 
 describe('compileWorkflowGraph', () => {
   it('builds a workflow definition with actions in topological order', () => {
-    const graph: WorkflowGraph = {
+    const graph: WorkflowGraphDto = {
       name: 'Sample workflow',
       description: 'valid dag',
       nodes: [
@@ -31,7 +31,7 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'File loader',
             config: {
-              fileId: '00000000-0000-4000-8000-000000000001',
+              fileId: '11111111-1111-4111-8111-111111111111',
             },
           },
         },
@@ -95,7 +95,7 @@ describe('compileWorkflowGraph', () => {
   });
 
   it('throws when referencing an unknown component', () => {
-    const graph: WorkflowGraph = {
+    const graph: WorkflowGraphDto = {
       name: 'invalid workflow',
       nodes: [
         {
@@ -123,7 +123,7 @@ describe('compileWorkflowGraph', () => {
       throw new Error('Default components must be registered for tests');
     }
 
-    const graph: WorkflowGraph = {
+    const graph: WorkflowGraphDto = {
       name: 'cyclic workflow',
       nodes: [
         {
@@ -166,7 +166,7 @@ describe('compileWorkflowGraph', () => {
   });
 
   it('tracks dependency counts and metadata for converging branches', () => {
-    const graph: WorkflowGraph = {
+    const graph: WorkflowGraphDto = {
       name: 'Diamond workflow',
       nodes: [
         {

@@ -17,12 +17,17 @@ export class LogStreamRepository {
 
   async listByRunId(
     runId: string,
+    organizationId?: string | null,
     nodeRef?: string,
     stream?: 'stdout' | 'stderr' | 'console',
   ): Promise<WorkflowLogStreamRecord[]> {
     const conditions: Array<ReturnType<typeof eq>> = [
       eq(workflowLogStreamsTable.runId, runId),
     ];
+
+    if (organizationId) {
+      conditions.push(eq(workflowLogStreamsTable.organizationId, organizationId));
+    }
 
     if (nodeRef) {
       conditions.push(eq(workflowLogStreamsTable.nodeRef, nodeRef));

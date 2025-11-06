@@ -14,6 +14,10 @@ import {
 import { WorkflowRecord, WorkflowRepository } from '../repository/workflow.repository';
 import { WorkflowsService } from '../workflows.service';
 import { WorkflowsController } from '../workflows.controller';
+import type { AuthContext } from '../../auth/types';
+
+const TEST_ORG = 'test-org';
+type RepositoryOptions = { organizationId?: string | null };
 
 const baseGraph: WorkflowGraphDto = WorkflowGraphSchema.parse({
   name: 'Controller workflow',
@@ -39,7 +43,7 @@ const baseGraph: WorkflowGraphDto = WorkflowGraphSchema.parse({
       data: {
         label: 'Loader',
         config: {
-          fileId: '00000000-0000-4000-8000-000000000001',
+          fileId: '11111111-1111-4111-8111-111111111111',
         },
       },
     },
@@ -60,11 +64,19 @@ describe('WorkflowsController', () => {
     graph: WorkflowGraphDto;
     compiledDefinition: WorkflowDefinition | null;
     createdAt: Date;
+    organizationId: string | null;
   };
 
   let versionSeq = 0;
   let versionStore: Map<string, MockWorkflowVersion>;
   const versionsByWorkflow = new Map<string, MockWorkflowVersion[]>();
+  const authContext: AuthContext = {
+    userId: 'user-1',
+    organizationId: TEST_ORG,
+    roles: ['ADMIN'],
+    isAuthenticated: true,
+    provider: 'test',
+  };
 
   const resetVersions = () => {
     versionSeq = 0;
@@ -72,7 +84,11 @@ describe('WorkflowsController', () => {
     versionsByWorkflow.clear();
   };
 
-  const createVersionRecord = (workflowId: string, graph: WorkflowGraphDto): MockWorkflowVersion => {
+  const createVersionRecord = (
+    workflowId: string,
+    graph: WorkflowGraphDto,
+    organizationId: string | null = TEST_ORG,
+  ): MockWorkflowVersion => {
     versionSeq += 1;
     const record: MockWorkflowVersion = {
       id: `wf-version-${versionSeq}`,
@@ -81,6 +97,7 @@ describe('WorkflowsController', () => {
       graph,
       compiledDefinition: null,
       createdAt: new Date(),
+      organizationId,
     };
     versionStore.set(record.id, record);
     const list = versionsByWorkflow.get(workflowId) ?? [];
@@ -89,23 +106,50 @@ describe('WorkflowsController', () => {
   };
 
   const versionRepositoryStub = {
-    async create(input: { workflowId: string; graph: WorkflowGraphDto }) {
-      return createVersionRecord(input.workflowId, input.graph);
+    async create(
+      input: { workflowId: string; graph: WorkflowGraphDto },
+      options: { organizationId?: string | null } = {},
+    ) {
+      return createVersionRecord(input.workflowId, input.graph, options.organizationId ?? TEST_ORG);
     },
-    async findLatestByWorkflowId(workflowId: string) {
-      const list = versionsByWorkflow.get(workflowId);
-      return list ? list[list.length - 1] : undefined;
+    async findLatestByWorkflowId(
+      workflowId: string,
+      options: { organizationId?: string | null } = {},
+    ) {
+      const list = versionsByWorkflow.get(workflowId) ?? [];
+      const filtered = options.organizationId
+        ? list.filter((record) => record.organizationId === options.organizationId)
+        : list;
+      return filtered.length > 0 ? filtered[filtered.length - 1] : undefined;
     },
-    async findById(id: string) {
-      return versionStore.get(id);
+    async findById(id: string, options: { organizationId?: string | null } = {}) {
+      const record = versionStore.get(id);
+      if (!record) return undefined;
+      if (options.organizationId && record.organizationId !== options.organizationId) {
+        return undefined;
+      }
+      return record;
     },
-    async findByWorkflowAndVersion(input: { workflowId: string; version: number }) {
-      const list = versionsByWorkflow.get(input.workflowId);
-      return list?.find((record) => record.version === input.version);
+    async findByWorkflowAndVersion(
+      input: { workflowId: string; version: number; organizationId?: string | null },
+    ) {
+      const list = versionsByWorkflow.get(input.workflowId) ?? [];
+      return list.find(
+        (record) =>
+          record.version === input.version &&
+          (!input.organizationId || record.organizationId === input.organizationId),
+      );
     },
-    async setCompiledDefinition(id: string, definition: WorkflowDefinition) {
+    async setCompiledDefinition(
+      id: string,
+      definition: WorkflowDefinition,
+      options: { organizationId?: string | null } = {},
+    ) {
       const record = versionStore.get(id);
       if (!record) {
+        return undefined;
+      }
+      if (options.organizationId && record.organizationId !== options.organizationId) {
         return undefined;
       }
       record.compiledDefinition = definition;
@@ -115,7 +159,8 @@ describe('WorkflowsController', () => {
   const now = new Date().toISOString();
 
   const repositoryStub: Partial<WorkflowRepository> = {
-    async create(input) {
+    async create(input, options: RepositoryOptions = {}) {
+      const { organizationId = TEST_ORG } = options;
       const id = `wf-${repositoryStore.size + 1}`;
       const record: WorkflowRecord = {
         id,
@@ -127,14 +172,18 @@ describe('WorkflowsController', () => {
         runCount: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
+        organizationId,
       };
       repositoryStore.set(id, record);
       return record;
     },
-    async update(id, input) {
+    async update(id, input, options: RepositoryOptions = {}) {
       const existing = repositoryStore.get(id);
       if (!existing) {
         throw new Error(`Workflow ${id} not found`);
+      }
+      if (options.organizationId && existing.organizationId !== options.organizationId) {
+        throw new Error('Forbidden');
       }
       const updated: WorkflowRecord = {
         ...existing,
@@ -147,19 +196,36 @@ describe('WorkflowsController', () => {
       repositoryStore.set(id, updated);
       return updated;
     },
-    async findById(id) {
-      return repositoryStore.get(id);
+    async findById(id, options: RepositoryOptions = {}) {
+      const record = repositoryStore.get(id);
+      if (!record) return undefined;
+      if (options.organizationId && record.organizationId !== options.organizationId) {
+        return undefined;
+      }
+      return record;
     },
-    async delete(id) {
+    async delete(id, options: RepositoryOptions = {}) {
+      const record = repositoryStore.get(id);
+      if (!record) return;
+      if (options.organizationId && record.organizationId !== options.organizationId) {
+        return;
+      }
       repositoryStore.delete(id);
     },
-    async list() {
-      return Array.from(repositoryStore.values());
+    async list(options: RepositoryOptions = {}) {
+      const list = Array.from(repositoryStore.values());
+      if (options.organizationId) {
+        return list.filter((record) => record.organizationId === options.organizationId);
+      }
+      return list;
     },
-    async saveCompiledDefinition(id, definition) {
+    async saveCompiledDefinition(id, definition, options: RepositoryOptions = {}) {
       const existing = repositoryStore.get(id);
       if (!existing) {
         throw new Error(`Workflow ${id} not found`);
+      }
+      if (options.organizationId && existing.organizationId !== options.organizationId) {
+        throw new Error('Forbidden');
       }
       const updated: WorkflowRecord = {
         ...existing,
@@ -169,10 +235,13 @@ describe('WorkflowsController', () => {
       repositoryStore.set(id, updated);
       return updated;
     },
-    async incrementRunCount(id) {
+    async incrementRunCount(id, options: RepositoryOptions = {}) {
       const existing = repositoryStore.get(id);
       if (!existing) {
         throw new Error(`Workflow ${id} not found`);
+      }
+      if (options.organizationId && existing.organizationId !== options.organizationId) {
+        throw new Error('Forbidden');
       }
       const updated: WorkflowRecord = {
         ...existing,
@@ -198,6 +267,7 @@ describe('WorkflowsController', () => {
         workflowVersion: number;
         temporalRunId: string;
         totalActions: number;
+        organizationId?: string | null;
       }) {
         const record = {
           runId: data.runId,
@@ -208,18 +278,35 @@ describe('WorkflowsController', () => {
           totalActions: data.totalActions,
           createdAt: new Date(now),
           updatedAt: new Date(now),
+          organizationId: data.organizationId ?? TEST_ORG,
         };
         runStore.set(data.runId, record);
         return record;
       },
-      async findByRunId(runId: string) {
-        return runStore.get(runId);
+      async findByRunId(runId: string, options: { organizationId?: string | null } = {}) {
+        const record = runStore.get(runId);
+        if (!record) {
+          return undefined;
+        }
+        if (options.organizationId && record.organizationId !== options.organizationId) {
+          return undefined;
+        }
+        return record;
       },
     };
 
     const traceRepositoryStub = {
       async countByType() {
         return 1;
+      },
+    };
+
+    const workflowRoleRepositoryStub = {
+      async upsert() {
+        return;
+      },
+      async hasRole() {
+        return false;
       },
     };
 
@@ -260,6 +347,7 @@ describe('WorkflowsController', () => {
 
     const workflowsService = new WorkflowsService(
       repositoryStub as WorkflowRepository,
+      workflowRoleRepositoryStub as any,
       versionRepositoryStub as any,
       runRepositoryStub as any,
       traceRepositoryStub as any,
@@ -279,38 +367,38 @@ describe('WorkflowsController', () => {
   });
 
   it('creates, lists, updates, and retrieves workflows', async () => {
-    const created = await controller.create(baseGraph);
+    const created = await controller.create(authContext, baseGraph);
     expect(created.id).toBeDefined();
     expect(created.name).toBe('Controller workflow');
      expect(created.currentVersion).toBe(1);
      expect(created.currentVersionId).toBeDefined();
 
-    const list = await controller.findAll();
+    const list = await controller.findAll(authContext);
     expect(list).toHaveLength(1);
     expect(list[0].currentVersion).toBe(1);
 
-    const updated = await controller.update(created.id, {
+    const updated = await controller.update(authContext, created.id, {
       ...baseGraph,
       name: 'Updated workflow',
     });
     expect(updated.name).toBe('Updated workflow');
     expect(updated.currentVersion).toBeGreaterThanOrEqual(2);
 
-    const fetched = await controller.findOne(created.id);
+    const fetched = await controller.findOne(authContext, created.id);
     expect(fetched.id).toBe(created.id);
     expect(fetched.currentVersion).toBe(updated.currentVersion);
 
-    const response = await controller.remove(created.id);
+    const response = await controller.remove(authContext, created.id);
     expect(response).toEqual({ status: 'deleted', id: created.id });
   });
 
   it('commits, starts, and inspects workflow runs', async () => {
-    const created = await controller.create(baseGraph);
+    const created = await controller.create(authContext, baseGraph);
 
-    const definition = await controller.commit(created.id);
+    const definition = await controller.commit(created.id, authContext);
     expect(definition.actions).toHaveLength(2);
 
-    const run = await controller.run(created.id, {
+    const run = await controller.run(authContext, created.id, {
       inputs: { payload: { note: 'hello' } },
     });
     expect(run.runId).toMatch(/^shipsec-run-/);
@@ -320,26 +408,26 @@ describe('WorkflowsController', () => {
     expect(run.workflowVersion).toBeDefined();
     expect(run.workflowVersionId).toBeDefined();
 
-    const status = await controller.status(run.runId, { temporalRunId: run.temporalRunId });
+    const status = await controller.status(run.runId, { temporalRunId: run.temporalRunId }, authContext);
     expect(status.runId).toBe(run.runId);
     expect(status.workflowId).toBe(created.id);
     expect(status.status).toBe('RUNNING');
     expect(status.progress).toEqual({ completedActions: 1, totalActions: 2 });
 
-    const result = await controller.result(run.runId, { temporalRunId: run.temporalRunId });
+    const result = await controller.result(run.runId, { temporalRunId: run.temporalRunId }, authContext);
     expect(result).toEqual({
       runId: run.runId,
       result: { workflowId: run.runId, success: true },
     });
 
-    const cancelResponse = await controller.cancel(run.runId, { temporalRunId: run.temporalRunId });
+    const cancelResponse = await controller.cancel(run.runId, { temporalRunId: run.temporalRunId }, authContext);
     expect(cancelResponse).toEqual({ status: 'cancelled', runId: run.runId });
     expect(lastCancelledRun).toEqual({
       workflowId: run.runId,
       runId: run.temporalRunId,
     });
 
-    const trace = await controller.trace(run.runId);
+    const trace = await controller.trace(run.runId, authContext);
     expect(trace.runId).toBe(run.runId);
     expect(trace.events).toHaveLength(0);
     expect(trace.cursor).toBeUndefined();

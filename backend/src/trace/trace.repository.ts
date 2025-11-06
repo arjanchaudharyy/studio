@@ -14,6 +14,7 @@ import { Pool } from 'pg';
 export interface PersistedTraceEvent {
   runId: string;
   workflowId?: string;
+  organizationId?: string | null;
   type: TraceEventType;
   nodeRef: string;
   timestamp: string;
@@ -109,34 +110,44 @@ export class TraceRepository implements OnModuleDestroy {
       .values(events.map((event) => this.mapToInsert(event)));
   }
 
-  async listByRunId(runId: string): Promise<WorkflowTraceRecord[]> {
+  async listByRunId(runId: string, organizationId?: string | null): Promise<WorkflowTraceRecord[]> {
     return this.db
       .select()
       .from(workflowTracesTable)
-      .where(eq(workflowTracesTable.runId, runId))
+      .where(this.buildRunFilter(runId, organizationId))
       .orderBy(workflowTracesTable.sequence);
   }
 
-  async listAfterSequence(runId: string, sequence: number): Promise<WorkflowTraceRecord[]> {
+  async listAfterSequence(
+    runId: string,
+    sequence: number,
+    organizationId?: string | null,
+  ): Promise<WorkflowTraceRecord[]> {
+    const runFilter = this.buildRunFilter(runId, organizationId);
     return this.db
       .select()
       .from(workflowTracesTable)
       .where(
         and(
-          eq(workflowTracesTable.runId, runId),
+          runFilter,
           gt(workflowTracesTable.sequence, sequence),
         ),
       )
       .orderBy(workflowTracesTable.sequence);
   }
 
-  async countByType(runId: string, type: TraceEventType): Promise<number> {
+  async countByType(
+    runId: string,
+    type: TraceEventType,
+    organizationId?: string | null,
+  ): Promise<number> {
+    const runFilter = this.buildRunFilter(runId, organizationId);
     const [result] = await this.db
       .select({ value: sql<number>`count(*)` })
       .from(workflowTracesTable)
       .where(
         and(
-          eq(workflowTracesTable.runId, runId),
+          runFilter,
           eq(workflowTracesTable.type, type),
         ),
       );
@@ -148,6 +159,7 @@ export class TraceRepository implements OnModuleDestroy {
     return {
       runId: event.runId,
       workflowId: event.workflowId ?? null,
+      organizationId: event.organizationId ?? null,
       type: event.type,
       nodeRef: event.nodeRef,
       timestamp: new Date(event.timestamp),
@@ -158,5 +170,13 @@ export class TraceRepository implements OnModuleDestroy {
       data: event.data ?? null,
       sequence: event.sequence,
     };
+  }
+
+  private buildRunFilter(runId: string, organizationId?: string | null) {
+    const base = eq(workflowTracesTable.runId, runId);
+    if (!organizationId) {
+      return base;
+    }
+    return and(base, eq(workflowTracesTable.organizationId, organizationId));
   }
 }

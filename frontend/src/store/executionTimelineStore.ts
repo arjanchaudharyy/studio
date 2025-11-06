@@ -203,30 +203,34 @@ const normalizeDataPackets = (
     return []
   }
 
-  return rawPackets.map((packet) => {
-    const packetTimestamp = new Date(packet.timestamp).getTime()
-    const baseStart = timelineStartTime ?? packetTimestamp
-    const computedTotal = totalDuration > 0 ? totalDuration : Math.max(packetTimestamp - baseStart, 1)
+  return rawPackets
+    .filter((packet): packet is RawDataPacket & { id: string; sourceNode: string; targetNode: string; timestamp: string } => {
+      return Boolean(packet.id && packet.sourceNode && packet.targetNode && packet.timestamp)
+    })
+    .map((packet) => {
+      const packetTimestamp = new Date(packet.timestamp).getTime()
+      const baseStart = timelineStartTime ?? packetTimestamp
+      const computedTotal = totalDuration > 0 ? totalDuration : Math.max(packetTimestamp - baseStart, 1)
 
-    const visualTime =
-      typeof packet.visualTime === 'number'
-        ? packet.visualTime
-        : computedTotal > 0
-          ? Math.max(0, Math.min(1, (packetTimestamp - baseStart) / computedTotal))
-          : 0
+      const visualTime =
+        typeof packet.visualTime === 'number'
+          ? packet.visualTime
+          : computedTotal > 0
+            ? Math.max(0, Math.min(1, (packetTimestamp - baseStart) / computedTotal))
+            : 0
 
-    return {
-      id: packet.id,
-      sourceNode: packet.sourceNode,
-      targetNode: packet.targetNode,
-      inputKey: packet.inputKey,
-      payload: packet.payload,
-      timestamp: packetTimestamp,
-      size: typeof packet.size === 'number' ? packet.size : Number(packet.size ?? 0),
-      type: (packet.type as DataPacket['type']) ?? 'json',
-      visualTime,
-    }
-  })
+      return {
+        id: packet.id,
+        sourceNode: packet.sourceNode,
+        targetNode: packet.targetNode,
+        inputKey: packet.inputKey,
+        payload: packet.payload,
+        timestamp: packetTimestamp,
+        size: typeof packet.size === 'number' ? packet.size : Number(packet.size ?? 0),
+        type: (packet.type as DataPacket['type']) ?? 'json',
+        visualTime,
+      }
+    })
 }
 
 const calculateNodeStates = (
@@ -434,6 +438,11 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
       try {
         const response = await api.executions.listRuns({ limit: 50 })
 
+        if (!response.runs) {
+          set({ availableRuns: [] })
+          return
+        }
+
         const runs: ExecutionRun[] = response.runs.map((run: any) => ({
           id: run.id,
           workflowId: run.workflowId,
@@ -481,9 +490,34 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
           api.executions.getDataFlows(runId)
         ])
 
-        const { events, totalDuration, timelineStartTime } = prepareTimelineEvents(eventsResponse.events)
+        const eventsList = (eventsResponse.events ?? []).filter(
+          (event): event is ExecutionLog => 
+            Boolean(event.id && event.runId && event.nodeId && event.timestamp && event.type && event.level)
+        )
+        const { events, totalDuration, timelineStartTime } = prepareTimelineEvents(eventsList)
+        const packetsList = (dataFlowResponse.packets ?? []).map(packet => {
+          let timestamp: string
+          if (typeof packet.timestamp === 'number') {
+            timestamp = new Date(packet.timestamp).toISOString()
+          } else if (typeof packet.timestamp === 'string') {
+            timestamp = packet.timestamp
+          } else {
+            timestamp = new Date().toISOString()
+          }
+          return {
+            id: packet.id ?? '',
+            sourceNode: packet.sourceNode ?? '',
+            targetNode: packet.targetNode ?? '',
+            timestamp,
+            inputKey: packet.inputKey ?? undefined,
+            payload: packet.payload ?? undefined,
+            size: packet.size,
+            type: packet.type,
+            visualTime: packet.visualTime,
+          }
+        })
         const dataFlows = normalizeDataPackets(
-          dataFlowResponse.packets ?? [],
+          packetsList,
           timelineStartTime,
           totalDuration,
         )

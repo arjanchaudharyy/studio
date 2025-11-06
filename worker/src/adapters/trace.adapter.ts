@@ -12,7 +12,10 @@ export class TraceAdapter implements ITraceService {
   private readonly bufferEnabled: boolean;
   private readonly eventsByRun: Map<string, TraceEvent[]> | undefined;
   private readonly sequenceByRun = new Map<string, number>();
-  private readonly metadataByRun = new Map<string, { workflowId?: string }>();
+  private readonly metadataByRun = new Map<
+    string,
+    { workflowId?: string; organizationId?: string | null }
+  >();
   private readonly logger: Pick<Console, 'log' | 'error'>;
 
   constructor(
@@ -63,7 +66,10 @@ export class TraceAdapter implements ITraceService {
     this.metadataByRun.clear();
   }
 
-  setRunMetadata(runId: string, metadata: { workflowId?: string }): void {
+  setRunMetadata(
+    runId: string,
+    metadata: { workflowId?: string; organizationId?: string | null },
+  ): void {
     this.metadataByRun.set(runId, metadata);
   }
 
@@ -92,6 +98,7 @@ export class TraceAdapter implements ITraceService {
     await this.db.insert(workflowTraces).values({
       runId: event.runId,
       workflowId: this.metadataByRun.get(event.runId)?.workflowId ?? null,
+      organizationId: this.metadataByRun.get(event.runId)?.organizationId ?? null,
       type: event.type,
       nodeRef: event.nodeRef,
       timestamp: new Date(event.timestamp),

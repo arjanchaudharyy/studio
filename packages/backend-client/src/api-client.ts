@@ -4,6 +4,7 @@ import type { paths } from './client';
 export interface ClientConfig {
   baseUrl?: string;
   headers?: Record<string, string>;
+  middleware?: Middleware | Middleware[];
 }
 
 /**
@@ -25,6 +26,15 @@ export class ShipSecApiClient {
         ...config.headers,
       },
     });
+
+    if (config.middleware) {
+      const middlewares = Array.isArray(config.middleware)
+        ? config.middleware
+        : [config.middleware];
+      for (const mw of middlewares) {
+        this.client.use(mw);
+      }
+    }
   }
 
   /**
@@ -37,51 +47,51 @@ export class ShipSecApiClient {
   // ===== Health =====
   
   async health() {
-    return this.client.GET('/health');
+    return this.client.GET('/api/v1/health');
   }
 
   // ===== Workflows =====
   
   async listWorkflows() {
-    return this.client.GET('/workflows');
+    return this.client.GET('/api/v1/workflows');
   }
 
   async getWorkflow(id: string) {
-    return this.client.GET('/workflows/{id}', {
+    return this.client.GET('/api/v1/workflows/{id}', {
       params: { path: { id } },
     });
   }
 
-  async createWorkflow(workflow: paths['/workflows']['post']['requestBody']['content']['application/json']) {
-    return this.client.POST('/workflows', {
+  async createWorkflow(workflow: paths['/api/v1/workflows']['post']['requestBody']['content']['application/json']) {
+    return this.client.POST('/api/v1/workflows', {
       body: workflow,
     });
   }
 
   async updateWorkflow(
     id: string,
-    workflow: paths['/workflows/{id}']['put']['requestBody']['content']['application/json'],
+    workflow: paths['/api/v1/workflows/{id}']['put']['requestBody']['content']['application/json'],
   ) {
-    return this.client.PUT('/workflows/{id}', {
+    return this.client.PUT('/api/v1/workflows/{id}', {
       params: { path: { id } },
       body: workflow,
     });
   }
 
   async deleteWorkflow(id: string) {
-    return this.client.DELETE('/workflows/{id}', {
+    return this.client.DELETE('/api/v1/workflows/{id}', {
       params: { path: { id } },
     });
   }
 
   async commitWorkflow(id: string) {
-    return this.client.POST('/workflows/{id}/commit', {
+    return this.client.POST('/api/v1/workflows/{id}/commit', {
       params: { path: { id } },
     });
   }
 
-  async runWorkflow(id: string, body: paths['/workflows/{id}/run']['post']['requestBody']['content']['application/json'] = { inputs: {} }) {
-    return this.client.POST('/workflows/{id}/run', {
+  async runWorkflow(id: string, body: paths['/api/v1/workflows/{id}/run']['post']['requestBody']['content']['application/json'] = { inputs: {} }) {
+    return this.client.POST('/api/v1/workflows/{id}/run', {
       params: { path: { id } },
       body,
     });
@@ -90,7 +100,7 @@ export class ShipSecApiClient {
   // ===== Workflow Runs =====
   
   async getWorkflowRunStatus(runId: string, temporalRunId?: string) {
-    return this.client.GET('/workflows/runs/{runId}/status', {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/status', {
       params: { 
         path: { runId },
         query: temporalRunId ? { temporalRunId } : {},
@@ -99,7 +109,7 @@ export class ShipSecApiClient {
   }
 
   async getWorkflowRunResult(runId: string, temporalRunId?: string) {
-    return this.client.GET('/workflows/runs/{runId}/result', {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/result', {
       params: {
         path: { runId },
         query: temporalRunId ? { temporalRunId } : {},
@@ -108,13 +118,13 @@ export class ShipSecApiClient {
   }
 
   async getWorkflowRunTrace(runId: string) {
-    return this.client.GET('/workflows/runs/{runId}/trace', {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/trace', {
       params: { path: { runId } },
     });
   }
 
   async cancelWorkflowRun(runId: string, temporalRunId?: string) {
-    return this.client.POST('/workflows/runs/{runId}/cancel', {
+    return this.client.POST('/api/v1/workflows/runs/{runId}/cancel', {
       params: { 
         path: { runId },
         query: { temporalRunId: temporalRunId || '' } as any,
@@ -122,10 +132,38 @@ export class ShipSecApiClient {
     });
   }
 
+  async listWorkflowRuns(options?: {
+    workflowId?: string;
+    status?: string;
+    limit?: number;
+  }) {
+    return this.client.GET('/api/v1/workflows/runs', {
+      params: {
+        query: {
+          workflowId: options?.workflowId,
+          status: options?.status,
+          limit: options?.limit,
+        },
+      },
+    });
+  }
+
+  async getWorkflowRunEvents(runId: string) {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/events', {
+      params: { path: { runId } },
+    });
+  }
+
+  async getWorkflowRunDataFlows(runId: string) {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/dataflows', {
+      params: { path: { runId } },
+    });
+  }
+
   // ===== Files =====
   
   async listFiles(limit: number = 100) {
-    return this.client.GET('/files', {
+    return this.client.GET('/api/v1/files', {
       params: {
         query: { limit },
       },
@@ -136,36 +174,38 @@ export class ShipSecApiClient {
     const formData = new FormData();
     formData.append('file', file);
     
-    // Use fetch directly for multipart/form-data uploads
-    const response = await fetch(`${this.baseUrl}/files/upload`, {
-      method: 'POST',
-      body: formData,
+    // Use the typed client - it will automatically apply middleware (including auth headers)
+    // For multipart/form-data, openapi-fetch accepts FormData directly
+    return this.client.POST('/api/v1/files/upload', {
+      body: formData as any, // Type assertion needed as generated types expect { file?: string } but FormData works at runtime
+      // openapi-fetch will automatically set Content-Type for FormData
     });
-    
-    if (!response.ok) {
-      return { error: new Error(`Upload failed: ${response.statusText}`), data: undefined };
-    }
-    
-    const data = await response.json();
-    return { data, error: undefined };
   }
 
   async getFileMetadata(id: string) {
-    return this.client.GET('/files/{id}', {
+    return this.client.GET('/api/v1/files/{id}', {
       params: { path: { id } },
     });
   }
 
   async downloadFile(id: string): Promise<Blob> {
-    const response = await fetch(`${this.baseUrl}/files/${id}/download`);
-    if (!response.ok) {
-      throw new Error(`Failed to download file: ${response.statusText}`);
+    // Use the typed client - it will automatically apply middleware (including auth headers)
+    // For blob responses, openapi-fetch returns the blob directly or in a response object
+    const response = await this.client.GET('/api/v1/files/{id}/download', {
+      params: { path: { id } },
+      parseAs: 'blob', // Request blob response for binary data
+    }) as any; // Type assertion needed as parseAs: 'blob' changes the response type
+    
+    // Handle both response.data and direct blob response
+    if (response?.error) {
+      throw new Error(`Failed to download file: ${String(response.error)}`);
     }
-    return response.blob();
+    
+    return (response?.data ?? response) as Blob;
   }
 
   async deleteFile(id: string) {
-    return this.client.DELETE('/files/{id}', {
+    return this.client.DELETE('/api/v1/files/{id}', {
       params: { path: { id } },
     });
   }
@@ -173,11 +213,11 @@ export class ShipSecApiClient {
   // ===== Components =====
   
   async listComponents() {
-    return this.client.GET('/components');
+    return this.client.GET('/api/v1/components');
   }
 
   async getComponent(id: string) {
-    return this.client.GET('/components/{id}', {
+    return this.client.GET('/api/v1/components/{id}', {
       params: { path: { id } },
     });
   }
@@ -185,17 +225,17 @@ export class ShipSecApiClient {
   // ===== Secrets =====
 
   async listSecrets() {
-    return this.client.GET('/secrets');
+    return this.client.GET('/api/v1/secrets');
   }
 
   async getSecret(id: string) {
-    return this.client.GET('/secrets/{id}', {
+    return this.client.GET('/api/v1/secrets/{id}', {
       params: { path: { id } },
     });
   }
 
   async getSecretValue(id: string, version?: number) {
-    return this.client.GET('/secrets/{id}/value', {
+    return this.client.GET('/api/v1/secrets/{id}/value', {
       params: {
         path: { id },
         query: version !== undefined ? { version } : undefined,
@@ -204,18 +244,18 @@ export class ShipSecApiClient {
   }
 
   async createSecret(
-    secret: paths['/secrets']['post']['requestBody']['content']['application/json'],
+    secret: paths['/api/v1/secrets']['post']['requestBody']['content']['application/json'],
   ) {
-    return this.client.POST('/secrets', {
+    return this.client.POST('/api/v1/secrets', {
       body: secret,
     });
   }
 
   async rotateSecret(
     id: string,
-    payload: paths['/secrets/{id}/rotate']['put']['requestBody']['content']['application/json'],
+    payload: paths['/api/v1/secrets/{id}/rotate']['put']['requestBody']['content']['application/json'],
   ) {
-    return this.client.PUT('/secrets/{id}/rotate', {
+    return this.client.PUT('/api/v1/secrets/{id}/rotate', {
       params: { path: { id } },
       body: payload,
     });
@@ -223,16 +263,16 @@ export class ShipSecApiClient {
 
   async updateSecret(
     id: string,
-    payload: paths['/secrets/{id}']['patch']['requestBody']['content']['application/json'],
+    payload: paths['/api/v1/secrets/{id}']['patch']['requestBody']['content']['application/json'],
   ) {
-    return this.client.PATCH('/secrets/{id}', {
+    return this.client.PATCH('/api/v1/secrets/{id}', {
       params: { path: { id } },
       body: payload,
     });
   }
 
   async deleteSecret(id: string) {
-    return this.client.DELETE('/secrets/{id}', {
+    return this.client.DELETE('/api/v1/secrets/{id}', {
       params: { path: { id } },
     });
   }

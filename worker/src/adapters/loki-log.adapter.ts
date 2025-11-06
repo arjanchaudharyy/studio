@@ -110,6 +110,7 @@ export class LokiLogAdapter implements WorkflowLogSink {
         labels,
         lineCount,
         timestamp,
+        organizationId: entry.organizationId ?? null,
       });
     }
   }
@@ -170,6 +171,7 @@ export class LokiLogAdapter implements WorkflowLogSink {
     labels: Record<string, string>;
     lineCount: number;
     timestamp: Date;
+    organizationId?: string | null;
   }): Promise<void> {
     if (!this.db) {
       return;
@@ -182,6 +184,7 @@ export class LokiLogAdapter implements WorkflowLogSink {
       nodeRef: input.nodeRef,
       stream: input.stream,
       labels: input.labels,
+      organizationId: input.organizationId ?? null,
       firstTimestamp: input.timestamp,
       lastTimestamp: input.timestamp,
       lineCount: input.lineCount,

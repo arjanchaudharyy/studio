@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
+import { webcrypto } from 'node:crypto';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'minio';
@@ -21,6 +22,15 @@ import * as schema from '../../adapters/schema';
 // Load environment variables from .env file
 config({ path: join(dirname(fileURLToPath(import.meta.url)), '../../..', '.env') });
 
+if (typeof globalThis.crypto === 'undefined') {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: webcrypto,
+    configurable: false,
+    enumerable: false,
+    writable: false,
+  });
+}
+
 async function main() {
   const address = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
   const taskQueue = process.env.TEMPORAL_TASK_QUEUE ?? 'shipsec-default';
@@ -28,13 +38,20 @@ async function main() {
   const workflowsPath = join(dirname(fileURLToPath(import.meta.url)), '../workflows');
 
   console.log(`🔌 Connecting to Temporal at ${address}...`);
+  console.log(`📋 Worker Configuration:`);
+  console.log(`   - Address: ${address}`);
+  console.log(`   - Namespace: ${namespace}`);
+  console.log(`   - Task Queue: ${taskQueue}`);
+  console.log(`   - Workflows Path: ${workflowsPath}`);
+  console.log(`   - Node ENV: ${process.env.NODE_ENV}`);
 
   // Create connection first
+  console.log(`🔗 Establishing connection to Temporal...`);
   const connection = await NativeConnection.connect({
     address,
   });
 
-  console.log(`✅ Connected to Temporal`);
+  console.log(`✅ Connected to Temporal at ${address}`);
 
   await ensureTemporalNamespace(connection, namespace);
 
@@ -99,6 +116,15 @@ async function main() {
 
   console.log(`✅ Service adapters initialized`);
 
+  console.log(`🏗️ Creating Temporal worker...`);
+  console.log(`   - Activities: ${Object.keys({ runComponentActivity, setRunMetadataActivity, finalizeRunActivity }).join(', ')}`);
+
+  console.log(`🔍 Worker Configuration Details:`);
+  console.log(`   - Workflows Path: ${workflowsPath}`);
+  console.log(`   - Activities Count: ${Object.keys({ runComponentActivity, setRunMetadataActivity, finalizeRunActivity }).length}`);
+  console.log(`   - Task Queue: ${taskQueue}`);
+  console.log(`   - Namespace: ${namespace}`);
+
   const worker = await Worker.create({
     connection,
     namespace,
@@ -144,18 +170,55 @@ async function main() {
         return config;
       },
     },
+    // Add worker options to ensure proper task handling
+    maxConcurrentWorkflowTaskExecutions: 10,
+    maxConcurrentActivityTaskExecutions: 10,
+    maxConcurrentLocalActivityExecutions: 10,
+    stickyQueueScheduleToStartTimeout: '10m',
   });
 
   console.log(
     `🚛 Temporal worker ready (namespace=${namespace}, taskQueue=${taskQueue}, workflowsPath=${workflowsPath})`,
   );
-  console.log(`📡 Polling for tasks on queue: ${taskQueue}`);
 
+  // Log worker capabilities
+  console.log(`📋 Worker Capabilities:`);
+  console.log(`   - Workflow Tasks: Enabled`);
+  console.log(`   - Activity Tasks: Enabled`);
+  console.log(`   - Max Concurrent Workflow Tasks: 10`);
+  console.log(`   - Max Concurrent Activity Tasks: 10`);
+  console.log(`📡 Starting to poll for tasks on queue: ${taskQueue}`);
+
+  // Worker is now ready to receive tasks
+  console.log(`📊 Worker successfully created and configured for task processing`);
+  console.log(`🎯 Worker will now listen for workflow tasks on queue: ${taskQueue}`);
+
+  console.log(`⏳ Worker is now running and waiting for tasks...`);
+
+  // Set up periodic status logging
+  setInterval(() => {
+    console.log(`💓 Worker heartbeat - Still polling on queue: ${taskQueue} (${new Date().toISOString()})`);
+
+    // Log worker stats to see if we're receiving any tasks
+    console.log(`📊 Worker stats check:`, {
+      taskQueue,
+      namespace,
+      timestamp: new Date().toISOString(),
+      workerBuildId: worker.options.buildId || 'default'
+    });
+  }, 15000); // Log every 15 seconds for better debugging
+
+  console.log(`🚀 Starting worker.run() - this will block and listen for tasks...`);
   await worker.run();
 }
 
 main().catch((error) => {
-  console.error('Temporal worker failed', error);
+  console.error('💥 Temporal worker failed to start:', {
+    error: error.message,
+    stack: error.stack,
+    code: error.code,
+    details: error.details
+  });
   process.exit(1);
 });
 

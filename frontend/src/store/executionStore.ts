@@ -184,13 +184,30 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         api.executions.getTrace(runId),
       ])
 
+      if (!statusPayload || !traceEnvelope) {
+        throw new Error('Failed to fetch execution data')
+      }
+
+      // Filter events to ensure they match ExecutionLog type (required fields)
+      const rawEvents = (traceEnvelope.events || []) as any[]
+      const validEvents = rawEvents.filter(
+        (e): e is ExecutionLog =>
+          typeof e === 'object' &&
+          e !== null &&
+          typeof e.id === 'string' &&
+          typeof e.runId === 'string' &&
+          typeof e.nodeId === 'string' &&
+          typeof e.timestamp === 'string'
+      )
+
       set((state) => {
-        const mergedLogs = mergeLogs(state.logs, traceEnvelope.events)
+        const mergedLogs = mergeLogs(state.logs, validEvents)
         const nodeStates = deriveNodeStates(mergedLogs)
-        const lifecycle = mapStatusToLifecycle(statusPayload.status)
+        const status = (statusPayload as any)?.status as ExecutionStatus | undefined
+        const lifecycle = mapStatusToLifecycle(status)
 
         return {
-          runStatus: statusPayload,
+          runStatus: statusPayload as ExecutionStatusResponse,
           status: lifecycle,
           logs: mergedLogs,
           nodeStates,
@@ -198,7 +215,8 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         }
       })
 
-      if (TERMINAL_STATUSES.includes(statusPayload.status)) {
+      const status = (statusPayload as any)?.status as ExecutionStatus | undefined
+      if (status && TERMINAL_STATUSES.includes(status)) {
         get().stopPolling()
       }
     } catch (error) {
@@ -224,7 +242,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     set({ ...INITIAL_STATE, streamingMode: 'none' })
   },
 
-  connectStream: (runId: string) => {
+  connectStream: async (runId: string) => {
     if (typeof EventSource === 'undefined') {
       return
     }
@@ -233,7 +251,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     get().disconnectStream()
 
     try {
-      const source = api.executions.stream(runId, cursor ? { cursor } : undefined)
+      const source = await api.executions.stream(runId, cursor ? { cursor } : undefined)
 
       source.addEventListener('trace', (event) => {
         try {

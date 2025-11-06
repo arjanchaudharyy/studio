@@ -30,6 +30,7 @@ export interface ExecuteWorkflowOptions {
   artifacts?: IArtifactService;
   trace?: ITraceService;
   logs?: WorkflowLogSink;
+  organizationId?: string | null;
 }
 
 /**

@@ -29,7 +29,8 @@ function setFetchResponse(path: string, payload: unknown) {
   fetchResponses.set(path.replace(/^\//, ''), payload);
 }
 
-vi.stubGlobal('fetch', fetchMock);
+// Store original fetch
+const originalFetch = globalThis.fetch;
 
 describe('supabase misconfiguration component', () => {
   beforeAll(async () => {
@@ -37,6 +38,9 @@ describe('supabase misconfiguration component', () => {
   });
 
   beforeEach(() => {
+    // Mock global fetch
+    globalThis.fetch = fetchMock as typeof fetch;
+    
     queryMock.mockImplementation(async (sql: string) => {
       if (sql.includes('relrowsecurity = false')) {
         return { rows: [] };
@@ -96,6 +100,8 @@ describe('supabase misconfiguration component', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    // Restore original fetch
+    globalThis.fetch = originalFetch;
   });
 
   it('registers the component with metadata', () => {

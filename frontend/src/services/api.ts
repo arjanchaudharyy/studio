@@ -1,34 +1,16 @@
-import { createShipSecClient } from '@shipsec/backend-client'
-import {
-  WorkflowMetadataSchema,
-  WorkflowSchema,
-  type WorkflowMetadata,
-  type Workflow
-} from '@/schemas/workflow'
-import { type Node } from '@/schemas/node'
-import { type Edge } from '@/schemas/edge'
-import {
-  ComponentMetadataSchema,
-  type ComponentMetadata,
-} from '@/schemas/component'
-import {
-  SecretSummarySchema,
-  SecretValueSchema,
-  CreateSecretInputSchema,
-  RotateSecretInputSchema,
-  UpdateSecretInputSchema,
-  type SecretSummary,
-  type SecretValue,
-  type CreateSecretInput,
-  type RotateSecretInput,
-  type UpdateSecretInput,
-} from '@/schemas/secret'
-import {
-  ExecutionStatusResponseSchema,
-  TraceStreamEnvelopeSchema,
-  type ExecutionStatusResponse,
-  type ExecutionTraceStream,
-} from '@/schemas/execution'
+import { createShipSecClient, type components } from '@shipsec/backend-client'
+import { useAuthStore } from '@/store/authStore'
+import { getFreshClerkToken } from '@/utils/clerk-token'
+
+// Direct type imports from backend client
+type WorkflowResponseDto = components['schemas']['WorkflowResponseDto']
+type CreateWorkflowRequestDto = components['schemas']['CreateWorkflowRequestDto']
+type UpdateWorkflowRequestDto = components['schemas']['UpdateWorkflowRequestDto']
+type SecretSummaryResponse = components['schemas']['SecretSummaryResponse']
+type SecretValueResponse = components['schemas']['SecretValueResponse']
+type CreateSecretDto = components['schemas']['CreateSecretDto']
+type RotateSecretDto = components['schemas']['RotateSecretDto']
+type UpdateSecretDto = components['schemas']['UpdateSecretDto']
 
 /**
  * API Client Configuration
@@ -55,123 +37,109 @@ function resolveApiBaseUrl() {
 
 export const API_BASE_URL = resolveApiBaseUrl()
 
+// Helper function to get auth headers (reused by middleware and file operations)
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const storeState = useAuthStore.getState()
+  let token = storeState.token
+  const organizationId = storeState.organizationId
+
+  // For Clerk auth, always fetch a fresh token on-demand to prevent expiration issues
+  // This ensures we never use a stale/expired token
+  if (storeState.provider === 'clerk') {
+    try {
+      const freshToken = await getFreshClerkToken()
+      if (freshToken) {
+        token = freshToken
+        // Update store with fresh token so it's available for next time
+        storeState.setToken(freshToken)
+      } else {
+        // If we can't get a fresh token, fall back to store token
+        console.warn('[API] Failed to get fresh Clerk token, using store token');
+      }
+    } catch (error) {
+      console.error('[API] Error fetching fresh Clerk token:', error);
+      // Fall back to store token if fresh token fetch fails
+    }
+  }
+
+  const headers: Record<string, string> = {}
+
+  if (token && token.trim().length > 0) {
+    const headerValue = token.startsWith('Bearer ') ? token : `Bearer ${token}`
+    headers['Authorization'] = headerValue
+  } else {
+    console.warn('[API] No token available for request');
+  }
+
+  if (organizationId && organizationId.trim().length > 0) {
+    headers['X-Organization-Id'] = organizationId
+  }
+
+  return headers
+}
+
 // Create type-safe API client
 const apiClient = createShipSecClient({
   baseUrl: API_BASE_URL,
+  middleware: {
+    async onRequest({ request }) {
+      const headers = await getAuthHeaders()
+
+      // Apply auth headers to the request
+      if (headers['Authorization']) {
+        request.headers.set('Authorization', headers['Authorization'])
+      }
+      if (headers['X-Organization-Id']) {
+        request.headers.set('X-Organization-Id', headers['X-Organization-Id'])
+      }
+
+      if (!request.headers.has('Content-Type')) {
+        request.headers.set('Content-Type', 'application/json')
+      }
+
+      return request
+    },
+  },
 })
 
 /**
  * API Service
- * Centralized API client for all backend communication
- *
- * All responses are validated with Zod schemas for type safety
+ * Simple wrapper around the backend API client
  */
 export const api = {
-  /**
-   * Workflow endpoints
-   */
   workflows: {
-    /**
-     * Get all workflows (metadata only)
-     */
-    list: async (): Promise<WorkflowMetadata[]> => {
+    list: async (): Promise<WorkflowResponseDto[]> => {
       const response = await apiClient.listWorkflows()
       if (response.error) throw new Error('Failed to fetch workflows')
-      const workflows = response.data as unknown as any[]
-      if (!workflows || !Array.isArray(workflows)) return []
-      return workflows.map((w: unknown) => WorkflowMetadataSchema.parse(w))
+      return response.data || []
     },
 
-    /**
-     * Get specific workflow
-     */
-    get: async (id: string): Promise<Workflow> => {
+    get: async (id: string): Promise<WorkflowResponseDto> => {
       const response = await apiClient.getWorkflow(id)
       if (response.error) throw new Error('Failed to fetch workflow')
-      return WorkflowSchema.parse(response.data)
+      if (!response.data) throw new Error('Workflow not found')
+      return response.data
     },
 
-    /**
-     * Create new workflow
-     */
-    create: async (workflow: {
-      name: string
-      description?: string
-      nodes: Node[]
-      edges: Edge[]
-      viewport?: { x: number; y: number; zoom: number }
-    }): Promise<Workflow> => {
-      // Transform frontend Node format to backend API format
-      const backendNodes = workflow.nodes.map((node) => {
-        const nodeData: any = node.data
-        const componentRef = nodeData?.componentId || nodeData?.componentSlug || node.type
-
-        return {
-          id: node.id,
-          type: componentRef as string,
-          position: node.position,
-          data: {
-            label: node.data.label || '',
-            config: nodeData?.parameters || node.data.config || {},
-          },
-        }
-      })
-
-      const payload = {
-        name: workflow.name,
-        description: workflow.description,
-        nodes: backendNodes,
-        edges: workflow.edges,
-        viewport: workflow.viewport || { x: 0, y: 0, zoom: 1 },
-      }
-      
-      const response = await apiClient.createWorkflow(payload)
+    create: async (workflow: CreateWorkflowRequestDto): Promise<WorkflowResponseDto> => {
+      const response = await apiClient.createWorkflow(workflow)
       if (response.error) throw new Error('Failed to create workflow')
-      return WorkflowSchema.parse(response.data)
+      if (!response.data) throw new Error('Workflow creation failed')
+      return response.data
     },
 
-    /**
-     * Update workflow
-     */
-    update: async (id: string, workflow: Partial<Workflow>): Promise<Workflow> => {
-      // Transform frontend Node format to backend API format
-      const backendNodes = (workflow.nodes || []).map((node) => {
-        const nodeData: any = node.data
-        const componentRef = nodeData?.componentId || nodeData?.componentSlug || node.type
-
-        return {
-          id: node.id,
-          type: componentRef as string,
-          position: node.position,
-          data: {
-            label: node.data.label || '',
-            config: nodeData?.parameters || node.data.config || {},
-          },
-        }
-      })
-
-      const response = await apiClient.updateWorkflow(id, {
-        name: workflow.name || '',
-        description: workflow.description,
-        nodes: backendNodes,
-        edges: workflow.edges || [],
-        viewport: { x: 0, y: 0, zoom: 1 },
-      })
+    update: async (id: string, workflow: UpdateWorkflowRequestDto): Promise<WorkflowResponseDto> => {
+      const response = await apiClient.updateWorkflow(id, workflow)
       if (response.error) throw new Error('Failed to update workflow')
-      return WorkflowSchema.parse(response.data)
+      if (!response.data) throw new Error('Workflow update failed')
+      return response.data
     },
 
-    /**
-     * Delete workflow
-     */
     delete: async (id: string): Promise<void> => {
       const response = await apiClient.deleteWorkflow(id)
       if (response.error) throw new Error('Failed to delete workflow')
     },
 
-    /**
-     * Commit workflow (compile DSL)
-     */
     commit: async (id: string) => {
       const response: any = await apiClient.commitWorkflow(id)
       if (response.error) {
@@ -181,9 +149,6 @@ export const api = {
       return response.data
     },
 
-    /**
-     * Run workflow
-     */
     run: async (id: string, body?: { inputs?: Record<string, unknown> }) => {
       const response: any = await apiClient.runWorkflow(id, body)
       if (response.error) {
@@ -194,97 +159,62 @@ export const api = {
     },
   },
 
-  /**
-   * Component endpoints
-   */
   components: {
-    /**
-     * Get all available components
-     */
-    list: async (): Promise<ComponentMetadata[]> => {
+    list: async () => {
       const response = await apiClient.listComponents()
       if (response.error) throw new Error('Failed to fetch components')
-      return (response.data as any[]).map((c: unknown) => ComponentMetadataSchema.parse(c))
+      return response.data || []
     },
 
-    /**
-     * Get specific component metadata
-     */
-    get: async (slug: string): Promise<ComponentMetadata> => {
+    get: async (slug: string) => {
       const response = await apiClient.getComponent(slug)
       if (response.error) throw new Error('Failed to fetch component')
-      return ComponentMetadataSchema.parse(response.data)
+      return response.data
     },
   },
 
-  /**
-   * Secrets endpoints
-   */
   secrets: {
-    /**
-     * List all stored secrets (metadata only)
-     */
-    list: async (): Promise<SecretSummary[]> => {
+    list: async (): Promise<SecretSummaryResponse[]> => {
       const response = await apiClient.listSecrets()
       if (response.error) throw new Error('Failed to fetch secrets')
-      return SecretSummarySchema.array().parse(response.data)
+      return response.data || []
     },
 
-    /**
-     * Create a new secret entry
-     */
-    create: async (input: CreateSecretInput): Promise<SecretSummary> => {
-      const payload = CreateSecretInputSchema.parse(input)
-      const response = await apiClient.createSecret(payload)
+    create: async (input: CreateSecretDto): Promise<SecretSummaryResponse> => {
+      const response = await apiClient.createSecret(input)
       if (response.error) throw new Error('Failed to create secret')
-      return SecretSummarySchema.parse(response.data)
+      if (!response.data) throw new Error('Secret creation failed')
+      return response.data
     },
 
-    /**
-     * Update secret metadata
-     */
-    update: async (id: string, input: UpdateSecretInput): Promise<SecretSummary> => {
-      const payload = UpdateSecretInputSchema.parse(input)
-      const response = await apiClient.updateSecret(id, payload)
+    update: async (id: string, input: UpdateSecretDto): Promise<SecretSummaryResponse> => {
+      const response = await apiClient.updateSecret(id, input)
       if (response.error) throw new Error('Failed to update secret')
-      return SecretSummarySchema.parse(response.data)
+      if (!response.data) throw new Error('Secret update failed')
+      return response.data
     },
 
-    /**
-     * Rotate secret value (creates a new active version)
-     */
-    rotate: async (id: string, input: RotateSecretInput): Promise<SecretSummary> => {
-      const payload = RotateSecretInputSchema.parse(input)
-      const response = await apiClient.rotateSecret(id, payload)
+    rotate: async (id: string, input: RotateSecretDto): Promise<SecretSummaryResponse> => {
+      const response = await apiClient.rotateSecret(id, input)
       if (response.error) throw new Error('Failed to rotate secret')
-      return SecretSummarySchema.parse(response.data)
+      if (!response.data) throw new Error('Secret rotation failed')
+      return response.data
     },
 
-    /**
-     * Delete a secret
-     */
     delete: async (id: string): Promise<void> => {
       const response = await apiClient.deleteSecret(id)
       if (response.error) throw new Error('Failed to delete secret')
     },
 
-    /**
-     * Get decrypted secret value (used internally, avoid displaying in UI)
-     */
-    getValue: async (id: string, version?: number): Promise<SecretValue> => {
+    getValue: async (id: string, version?: number): Promise<SecretValueResponse> => {
       const response = await apiClient.getSecretValue(id, version)
       if (response.error) throw new Error('Failed to fetch secret value')
-      return SecretValueSchema.parse(response.data)
+      if (!response.data) throw new Error('Secret value not found')
+      return response.data
     },
   },
 
-  /**
-   * Execution endpoints
-   */
   executions: {
-    /**
-     * Start workflow execution
-     */
     start: async (
       workflowId: string,
       inputs?: Record<string, unknown>
@@ -292,120 +222,115 @@ export const api = {
       const payload = inputs ? { inputs } : undefined
       const response = await apiClient.runWorkflow(workflowId, payload)
       if (response.error) throw new Error('Failed to start execution')
-      return { executionId: (response.data as any).runId }
+      return { executionId: (response.data as any)?.runId || '' }
     },
 
-    /**
-     * Get execution status (for polling)
-     */
-    getStatus: async (executionId: string): Promise<ExecutionStatusResponse> => {
+    getStatus: async (executionId: string) => {
       const response = await apiClient.getWorkflowRunStatus(executionId)
       if (response.error) throw new Error('Failed to fetch execution status')
-      return ExecutionStatusResponseSchema.parse(response.data)
+      return response.data
     },
 
-    /**
-     * Get execution trace events
-     */
-    getTrace: async (executionId: string): Promise<ExecutionTraceStream> => {
+    getTrace: async (executionId: string) => {
       const response = await apiClient.getWorkflowRunTrace(executionId)
       if (response.error) throw new Error('Failed to fetch execution logs')
-      return TraceStreamEnvelopeSchema.parse(response.data)
+      return response.data
     },
 
     getEvents: async (executionId: string) => {
-      const response = await fetch(`${API_BASE_URL}/workflows/runs/${executionId}/events`)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch events: ${response.statusText}`)
-      }
-      const data = await response.json()
-      return data
+      const response = await apiClient.getWorkflowRunEvents(executionId)
+      if (response.error) throw new Error('Failed to fetch events')
+      return response.data || []
     },
 
     getDataFlows: async (executionId: string) => {
-      const response = await fetch(`${API_BASE_URL}/workflows/runs/${executionId}/dataflows`)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch data flows: ${response.statusText}`)
-      }
-      const data = await response.json()
-      return data
+      const response = await apiClient.getWorkflowRunDataFlows(executionId)
+      if (response.error) throw new Error('Failed to fetch data flows')
+      return response.data || []
     },
 
-    stream: (executionId: string, options?: { cursor?: string; temporalRunId?: string }) => {
-      const params = new URLSearchParams()
-      if (options?.cursor) params.set('cursor', options.cursor)
-      if (options?.temporalRunId) params.set('temporalRunId', options.temporalRunId)
-      const query = params.toString()
-      const url = `${API_BASE_URL}/workflows/runs/${executionId}/stream${query ? `?${query}` : ''}`
-      return new EventSource(url)
-    },
+        stream: async (executionId: string, options?: { cursor?: string; temporalRunId?: string }): Promise<EventSource> => {
+          // Use fetch-based SSE client that supports custom headers (including Authorization)
+          const { FetchEventSource } = await import('@/utils/sse-client')
+          
+          const storeState = useAuthStore.getState()
+          let token = storeState.token
+          const organizationId = storeState.organizationId
 
-    /**
-     * Cancel running execution
-     */
-    cancel: async (executionId: string): Promise<{ success: boolean }> => {
+          // For Clerk auth, fetch a fresh token
+          if (storeState.provider === 'clerk') {
+            try {
+              const freshToken = await getFreshClerkToken()
+              if (freshToken) {
+                token = freshToken
+                storeState.setToken(freshToken)
+              }
+            } catch (error) {
+              console.error('[API] Error fetching fresh Clerk token for SSE:', error)
+            }
+          }
+
+          // Build URL with query params
+          const params = new URLSearchParams()
+          if (options?.cursor) params.set('cursor', options.cursor)
+          if (options?.temporalRunId) params.set('temporalRunId', options.temporalRunId)
+          const query = params.toString()
+          const url = `${API_BASE_URL}/api/v1/workflows/runs/${executionId}/stream${query ? `?${query}` : ''}`
+
+          // Build auth headers
+          const headers: Record<string, string> = {}
+          if (token && token.trim().length > 0) {
+            const headerValue = token.startsWith('Bearer ') ? token : `Bearer ${token}`
+            headers['Authorization'] = headerValue
+          }
+          if (organizationId && organizationId.trim().length > 0) {
+            headers['X-Organization-Id'] = organizationId
+          }
+
+          return new FetchEventSource(url, { headers })
+        },
+
+    cancel: async (executionId: string) => {
       const response = await apiClient.cancelWorkflowRun(executionId)
       if (response.error) throw new Error('Failed to cancel execution')
       return { success: true }
     },
 
-    /**
-     * List all workflow runs for timeline
-     */
     listRuns: async (options?: {
       workflowId?: string;
       status?: string;
       limit?: number;
     }) => {
-      const params = new URLSearchParams()
-      if (options?.workflowId) params.set('workflowId', options.workflowId)
-      if (options?.status) params.set('status', options.status)
-      if (options?.limit) params.set('limit', String(options.limit))
-
-      const query = params.toString()
-      const response = await fetch(`${API_BASE_URL}/workflows/runs${query ? `?${query}` : ''}`)
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch runs: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      return data
+      const response = await apiClient.listWorkflowRuns(options)
+      if (response.error) throw new Error('Failed to fetch runs')
+      return response.data || { runs: [] }
     },
   },
 
-  /**
-   * File endpoints
-   */
   files: {
-    /**
-     * List all files
-     */
     list: async () => {
       const response = await apiClient.listFiles()
       if (response.error) throw new Error('Failed to fetch files')
       return response.data
     },
 
-    /**
-     * Upload file
-     */
     upload: async (file: File) => {
-      const response = await apiClient.uploadFile(file)
-      if (response.error) throw new Error('Failed to upload file')
+      const response = await apiClient.uploadFile(file) as any
+      if (response.error) {
+        const errorMessage = response.error instanceof Error 
+          ? response.error.message 
+          : typeof response.error === 'string'
+          ? response.error
+          : 'Failed to upload file'
+        throw new Error(errorMessage)
+      }
       return response.data
     },
 
-    /**
-     * Download file
-     */
     download: async (id: string) => {
       return apiClient.downloadFile(id)
     },
 
-    /**
-     * Delete file
-     */
     delete: async (id: string) => {
       const response = await apiClient.deleteFile(id)
       if (response.error) throw new Error('Failed to delete file')

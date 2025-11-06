@@ -51,6 +51,14 @@ const sampleLogs = {
   ],
 };
 
+const authContext = {
+  userId: 'user-123',
+  organizationId: 'org-123',
+  roles: ['ADMIN'] as const,
+  isAuthenticated: true,
+  provider: 'local',
+};
+
 describe('WorkflowsController contract coverage', () => {
   let controller: WorkflowsController;
   const workflowService = {
@@ -77,25 +85,29 @@ describe('WorkflowsController contract coverage', () => {
   });
 
   it('returns status payload matching the shared contract', async () => {
-    const result = await controller.status('shipsec-run-123', { temporalRunId: undefined });
+    const result = await controller.status('shipsec-run-123', { temporalRunId: undefined }, authContext as any);
     const parsed = WorkflowRunStatusSchema.parse(result);
     expect(parsed.runId).toBe(sampleStatus.runId);
     expect(parsed.workflowId).toBe(sampleStatus.workflowId);
-    expect(workflowService.getRunStatus).toHaveBeenCalledWith('shipsec-run-123', undefined);
+    expect(workflowService.getRunStatus).toHaveBeenCalledWith(
+      'shipsec-run-123',
+      undefined,
+      authContext,
+    );
   });
 
   it('returns trace payload matching the shared contract', async () => {
-    const result = await controller.trace('shipsec-run-123');
+    const result = await controller.trace('shipsec-run-123', authContext as any);
     const parsed = TraceStreamEnvelopeSchema.parse(result);
     expect(parsed.events).toHaveLength(1);
-    expect(traceService.list).toHaveBeenCalledWith('shipsec-run-123');
+    expect(traceService.list).toHaveBeenCalledWith('shipsec-run-123', authContext);
   });
 
   it('retrieves logs with validated query parameters', async () => {
     const query = WorkflowLogsQuerySchema.parse({ nodeRef: 'node-1', stream: 'stdout', limit: 10 });
-    const result = await controller.logs('shipsec-run-123', query);
+    const result = await controller.logs('shipsec-run-123', query, authContext as any);
     expect(result).toEqual(sampleLogs);
-    expect(logStreamService.fetch).toHaveBeenCalledWith('shipsec-run-123', {
+    expect(logStreamService.fetch).toHaveBeenCalledWith('shipsec-run-123', authContext, {
       nodeRef: 'node-1',
       stream: 'stdout',
       limit: 10,

@@ -24,6 +24,8 @@ export const WorkflowNodeSchema = z.object({
   data: WorkflowNodeDataSchema,
 });
 
+export class WorkflowNodeDto extends createZodDto(WorkflowNodeSchema) {}
+
 export const WorkflowEdgeSchema = z.object({
   id: z.string(),
   source: z.string(),
@@ -41,10 +43,8 @@ export const WorkflowGraphSchema = z.object({
   viewport: WorkflowViewportSchema,
 });
 
-export type WorkflowGraph = z.infer<typeof WorkflowGraphSchema>;
-export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>;
-
 export class WorkflowGraphDto extends createZodDto(WorkflowGraphSchema) {}
+export type WorkflowGraph = WorkflowGraphDto;
 export class CreateWorkflowRequestDto extends WorkflowGraphDto {}
 export class UpdateWorkflowRequestDto extends WorkflowGraphDto {}
 
@@ -60,7 +60,6 @@ export const RunWorkflowRequestSchema = z
   );
 
 export class RunWorkflowRequestDto extends createZodDto(RunWorkflowRequestSchema) {}
-export type RunWorkflowRequest = z.infer<typeof RunWorkflowRequestSchema>;
 
 export const ListRunsQuerySchema = z.object({
   workflowId: z
@@ -78,7 +77,6 @@ export const ListRunsQuerySchema = z.object({
 });
 
 export class ListRunsQueryDto extends createZodDto(ListRunsQuerySchema) {}
-export type ListRunsQuery = z.infer<typeof ListRunsQuerySchema>;
 
 export const TemporalRunQuerySchema = z.object({
   temporalRunId: z
@@ -89,7 +87,6 @@ export const TemporalRunQuerySchema = z.object({
 });
 
 export class TemporalRunQueryDto extends createZodDto(TemporalRunQuerySchema) {}
-export type TemporalRunQuery = z.infer<typeof TemporalRunQuerySchema>;
 
 export const StreamRunQuerySchema = TemporalRunQuerySchema.extend({
   cursor: z
@@ -100,7 +97,6 @@ export const StreamRunQuerySchema = TemporalRunQuerySchema.extend({
 });
 
 export class StreamRunQueryDto extends createZodDto(StreamRunQuerySchema) {}
-export type StreamRunQuery = z.infer<typeof StreamRunQuerySchema>;
 
 export const WorkflowLogsQuerySchema = z.object({
   nodeRef: z
@@ -117,7 +113,6 @@ export const WorkflowLogsQuerySchema = z.object({
 });
 
 export class WorkflowLogsQueryDto extends createZodDto(WorkflowLogsQuerySchema) {}
-export type WorkflowLogsQuery = z.infer<typeof WorkflowLogsQuerySchema>;
 
 // API Response DTOs for flattened workflow structures
 // These represent the actual API response format after the service flattens the graph fields
@@ -152,5 +147,4 @@ export const WorkflowResponseSchema = z.object({
   currentVersion: z.number().int().positive().nullable(),
 });
 
-export type WorkflowResponse = z.infer<typeof WorkflowResponseSchema>;
 export class WorkflowResponseDto extends createZodDto(WorkflowResponseSchema) {}

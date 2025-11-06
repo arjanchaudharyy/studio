@@ -18,6 +18,12 @@ import { createShipSecClient } from '@shipsec/backend-client';
 // Create client instance
 const client = createShipSecClient({
   baseUrl: 'http://localhost:3001',
+  middleware: {
+    async onRequest({ request }) {
+      request.headers.set('Authorization', `Bearer ${process.env.API_TOKEN}`);
+      return request;
+    },
+  },
 });
 
 // Make API calls with full type safety
@@ -100,5 +106,4 @@ if (response.error) {
 // TypeScript knows data is available here
 console.log(response.data);
 ```
-
 

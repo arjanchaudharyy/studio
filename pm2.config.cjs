@@ -162,15 +162,75 @@ if (!swcBinaryPath) {
   console.warn('Unable to automatically resolve SWC native binary; Temporal workers will use default resolution.');
 }
 
+// Load frontend .env file and extract VITE_* variables
+function loadFrontendEnv() {
+  const envPath = path.join(__dirname, 'frontend', '.env');
+  const env = { NODE_ENV: 'development' };
+  
+  try {
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf-8');
+      envContent.split('\n').forEach((line) => {
+        const trimmed = line.trim();
+        // Skip comments and empty lines
+        if (!trimmed || trimmed.startsWith('#')) {
+          return;
+        }
+        const match = trimmed.match(/^([^=]+)=(.*)$/);
+        if (match) {
+          const key = match[1].trim();
+          const value = match[2].trim();
+          // Only include VITE_* variables for frontend
+          if (key.startsWith('VITE_')) {
+            env[key] = value;
+          }
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('Failed to load frontend .env file:', err.message);
+  }
+  
+  return env;
+}
+
+const frontendEnv = loadFrontendEnv();
+
+// Determine environment from NODE_ENV or SHIPSEC_ENV
+const environment = process.env.SHIPSEC_ENV || process.env.NODE_ENV || 'development';
+const isProduction = environment === 'production';
+
+// Environment-specific configuration
+const envConfig = {
+  development: {
+    TEMPORAL_TASK_QUEUE: 'shipsec-dev',
+    TEMPORAL_NAMESPACE: 'shipsec-dev',
+    NODE_ENV: 'development',
+  },
+  production: {
+    TEMPORAL_TASK_QUEUE: 'shipsec-prod',
+    TEMPORAL_NAMESPACE: 'shipsec-prod',
+    NODE_ENV: 'production',
+  },
+};
+
+const currentEnvConfig = envConfig[isProduction ? 'production' : 'development'];
+
 module.exports = {
   apps: [
     {
       name: 'shipsec-backend',
       cwd: __dirname + '/backend',
       script: 'bun',
-      args: 'run dev',
+      args: isProduction ? 'src/main.ts' : 'run dev',
       interpreter: 'none',
       env_file: __dirname + '/backend/.env',
+      env: {
+        ...currentEnvConfig,
+      },
+      watch: !isProduction ? ['src'] : false,
+      ignore_watch: ['node_modules', 'dist', '*.log'],
+      max_memory_restart: '500M',
     },
     {
       name: 'shipsec-frontend',
@@ -179,8 +239,11 @@ module.exports = {
       args: 'run dev',
       env_file: __dirname + '/frontend/.env',
       env: {
-        NODE_ENV: 'development',
+        ...frontendEnv,
+        ...currentEnvConfig,
       },
+      watch: !isProduction ? ['src'] : false,
+      ignore_watch: ['node_modules', 'dist', '*.log'],
     },
     {
       name: 'shipsec-worker',
@@ -191,11 +254,14 @@ module.exports = {
       env_file: __dirname + '/worker/.env',
       env: Object.assign(
         {
-          TEMPORAL_TASK_QUEUE: 'shipsec-default',
+          ...currentEnvConfig,
           NAPI_RS_FORCE_WASI: '1',
         },
         swcBinaryPath ? { SWC_BINARY_PATH: swcBinaryPath } : {},
       ),
+      watch: !isProduction ? ['src'] : false,
+      ignore_watch: ['node_modules', 'dist', '*.log'],
+      max_memory_restart: '1G',
     },
     {
       name: 'shipsec-test-worker',
@@ -207,6 +273,8 @@ module.exports = {
       env: Object.assign(
         {
           TEMPORAL_TASK_QUEUE: 'test-worker-integration',
+          TEMPORAL_NAMESPACE: 'shipsec-dev',
+          NODE_ENV: 'development',
           NAPI_RS_FORCE_WASI: '1',
         },
         swcBinaryPath ? { SWC_BINARY_PATH: swcBinaryPath } : {},
