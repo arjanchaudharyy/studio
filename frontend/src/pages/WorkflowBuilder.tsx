@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import {
   ReactFlowProvider,
@@ -10,7 +10,6 @@ import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Canvas } from '@/components/workflow/Canvas'
 import { ExecutionInspector } from '@/components/timeline/ExecutionInspector'
-import { ExecutionRunBanner } from '@/components/timeline/ExecutionRunBanner'
 import { RunWorkflowDialog } from '@/components/workflow/RunWorkflowDialog'
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
@@ -55,6 +54,8 @@ function WorkflowBuilderContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [runDialogOpen, setRunDialogOpen] = useState(false)
   const [runtimeInputs, setRuntimeInputs] = useState<any[]>([])
+  const [prefilledRuntimeValues, setPrefilledRuntimeValues] = useState<Record<string, unknown>>({})
+  const [pendingVersionId, setPendingVersionId] = useState<string | null>(null)
   const mode = useWorkflowUiStore((state) => state.mode)
   const libraryOpen = useWorkflowUiStore((state) => state.libraryOpen)
   const toggleLibrary = useWorkflowUiStore((state) => state.toggleLibrary)
@@ -64,17 +65,33 @@ function WorkflowBuilderContent() {
   const loadRuns = useExecutionTimelineStore((state) => state.loadRuns)
   const selectRun = useExecutionTimelineStore((state) => state.selectRun)
   const switchToLiveMode = useExecutionTimelineStore((state) => state.switchToLiveMode)
+  const availableRuns = useExecutionTimelineStore((state) => state.availableRuns)
   const { toast } = useToast()
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const inspectorResizingRef = useRef(false)
   const isLibraryVisible = libraryOpen && mode === 'design'
   const [showLibraryContent, setShowLibraryContent] = useState(isLibraryVisible)
+  const mostRecentRunId = useMemo(
+    () => (availableRuns.length > 0 ? availableRuns[0].id : null),
+    [availableRuns],
+  )
   // Ensure "New workflow" always opens in design mode
   useEffect(() => {
     if (isNewWorkflow) {
       setMode('design')
     }
   }, [isNewWorkflow, setMode])
+
+  useEffect(() => {
+    loadRuns().catch(() => undefined)
+  }, [loadRuns])
+
+  useEffect(() => {
+    if (!runDialogOpen) {
+      setPrefilledRuntimeValues({})
+      setPendingVersionId(null)
+    }
+  }, [runDialogOpen])
   // Load workflow on mount (if not new)
   useEffect(() => {
     const loadWorkflow = async () => {
@@ -148,6 +165,117 @@ function WorkflowBuilderContent() {
     loadWorkflow()
   }, [id, isNewWorkflow, navigate, setMetadata, setNodes, setEdges, resetWorkflow, markClean])
 
+  const resolveRuntimeInputDefinitions = useCallback(() => {
+    const triggerNode = nodes.find(node => {
+      const nodeData = node.data as any
+      const componentRef = nodeData.componentId ?? nodeData.componentSlug
+      const component = getComponent(componentRef)
+      return component?.slug === 'manual-trigger'
+    })
+
+    if (!triggerNode) {
+      return []
+    }
+
+    const nodeData = triggerNode.data as any
+    const runtimeInputsParam = nodeData.parameters?.runtimeInputs
+
+    if (!runtimeInputsParam) {
+      return []
+    }
+
+    try {
+      const parsedInputs = typeof runtimeInputsParam === 'string'
+        ? JSON.parse(runtimeInputsParam)
+        : runtimeInputsParam
+
+      if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
+        return parsedInputs.map((input: any) => ({
+          ...input,
+          type: input.type === 'string' ? 'text' : input.type,
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to parse runtime inputs:', error)
+    }
+
+    return []
+  }, [getComponent, nodes])
+
+  const executeWorkflow = async (options?: {
+    inputs?: Record<string, unknown>
+    versionId?: string | null
+    version?: number
+  }) => {
+    if (!canManageWorkflows) {
+      toast({
+        variant: 'destructive',
+        title: 'Insufficient permissions',
+        description: 'Only administrators can run workflows.',
+      })
+      return
+    }
+
+    const workflowId = metadata.id
+    if (!workflowId) return
+
+    setIsLoading(true)
+    try {
+      await api.workflows.commit(workflowId)
+
+      const runId = await useExecutionStore.getState().startExecution(
+        workflowId,
+        {
+          inputs: options?.inputs,
+          versionId: options?.versionId ?? pendingVersionId ?? undefined,
+          version: options?.version,
+        }
+      )
+
+      if (runId) {
+        track(Events.WorkflowRunStarted, {
+          workflow_id: workflowId,
+          run_id: runId,
+          node_count: nodes.length,
+        })
+        setMode('execution')
+        await loadRuns().catch(() => undefined)
+        let selected = true
+        try {
+          await selectRun(runId)
+        } catch (error) {
+          selected = false
+        }
+        if (!selected) {
+          useExecutionTimelineStore.setState({ selectedRunId: runId })
+        }
+        switchToLiveMode()
+        toast({
+          variant: 'success',
+          title: 'Workflow started',
+          description: `Execution ID: ${runId}. Check the review tab for live status.`,
+        })
+      } else {
+        toast({
+          variant: 'warning',
+          title: 'Workflow started',
+          description: 'Execution initiated, but no run ID was returned.',
+        })
+      }
+    } catch (error) {
+      console.error('Failed to run workflow:', error)
+      toast({
+        variant: 'destructive',
+        title: 'Failed to run workflow',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    } finally {
+      setIsLoading(false)
+      setPendingVersionId(null)
+      setPrefilledRuntimeValues({})
+    }
+  }
+
   const handleRun = async () => {
     if (!canManageWorkflows) {
       toast({
@@ -178,43 +306,120 @@ function WorkflowBuilderContent() {
       return
     }
 
-    // Check if workflow has a Manual Trigger with runtime inputs
-    const triggerNode = nodes.find(node => {
-      const nodeData = node.data as any
-      const componentRef = nodeData.componentId ?? nodeData.componentSlug
-      const component = getComponent(componentRef)
-      return component?.slug === 'manual-trigger'
-    })
-
-    if (triggerNode) {
-      const nodeData = triggerNode.data as any
-      const runtimeInputsParam = nodeData.parameters?.runtimeInputs
-
-      if (runtimeInputsParam) {
-        try {
-          const parsedInputs = typeof runtimeInputsParam === 'string'
-            ? JSON.parse(runtimeInputsParam)
-            : runtimeInputsParam
-
-          if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
-            const normalizedInputs = parsedInputs.map((input: any) => ({
-              ...input,
-              type: input.type === 'string' ? 'text' : input.type,
-            }))
-            // Show dialog to collect runtime inputs
-            setRuntimeInputs(normalizedInputs)
-            setRunDialogOpen(true)
-            return
-          }
-        } catch (error) {
-          console.error('Failed to parse runtime inputs:', error)
-        }
-      }
+    const runtimeDefinitions = resolveRuntimeInputDefinitions()
+    if (runtimeDefinitions.length > 0) {
+      setRuntimeInputs(runtimeDefinitions)
+      setPrefilledRuntimeValues({})
+      setPendingVersionId(null)
+      setRunDialogOpen(true)
+      return
     }
 
     // No runtime inputs needed, run directly
     await executeWorkflow()
   }
+
+  const handleRerun = useCallback(
+    async (targetRunId?: string | null) => {
+      if (!canManageWorkflows) {
+        toast({
+          variant: 'destructive',
+          title: 'Insufficient permissions',
+          description: 'Only administrators can run workflows.',
+        })
+        return
+      }
+
+      const workflowId = metadata.id
+      if (!workflowId) {
+        toast({
+          variant: 'destructive',
+          title: 'Cannot rerun workflow',
+          description: 'Workflow is not ready yet.',
+        })
+        return
+      }
+
+      let deferredToDialog = false
+      try {
+        setIsLoading(true)
+        const selectedRunId = targetRunId ?? mostRecentRunId
+        if (!selectedRunId) {
+          toast({
+            variant: 'destructive',
+            title: 'No runs available',
+            description: 'Run the workflow at least once before rerunning.',
+          })
+          return
+        }
+
+        const config = await api.executions.getConfig(selectedRunId)
+        if (!config || config.workflowId !== workflowId) {
+          toast({
+            variant: 'destructive',
+            title: 'Cannot rerun workflow',
+            description: 'The selected run belongs to a different workflow.',
+          })
+          return
+        }
+
+        if (
+          config.workflowVersionId &&
+          metadata.currentVersionId &&
+          config.workflowVersionId !== metadata.currentVersionId
+        ) {
+          toast({
+            title: 'Replaying archived version',
+            description: `Original run used workflow version v${config.workflowVersion ?? 'unknown'}.`,
+          })
+        }
+
+        const runtimeDefinitions = resolveRuntimeInputDefinitions()
+        if (runtimeDefinitions.length > 0) {
+          deferredToDialog = true
+          setIsLoading(false)
+          setRuntimeInputs(runtimeDefinitions)
+          setPrefilledRuntimeValues(config.inputs ?? {})
+          setPendingVersionId(config.workflowVersionId ?? null)
+          setRunDialogOpen(true)
+          return
+        }
+
+        setIsLoading(false)
+        await executeWorkflow({
+          inputs: config.inputs ?? {},
+          versionId: config.workflowVersionId ?? null,
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        toast({
+          variant: 'destructive',
+          title: 'Failed to rerun workflow',
+          description: message,
+        })
+      } finally {
+        if (!deferredToDialog) {
+          setIsLoading(false)
+        }
+      }
+    },
+    [
+      canManageWorkflows,
+      executeWorkflow,
+      metadata.currentVersionId,
+      metadata.id,
+      mostRecentRunId,
+      resolveRuntimeInputDefinitions,
+      toast,
+    ],
+  )
+
+  const handleRerunFromTimeline = useCallback(
+    (runId: string) => {
+      void handleRerun(runId)
+    },
+    [handleRerun],
+  )
 
   const handleImportWorkflow = useCallback(
     async (file: File) => {
@@ -357,73 +562,6 @@ function WorkflowBuilderContent() {
       })
     }
   }, [canManageWorkflows, edges, metadata, nodes, toast])
-
-  const executeWorkflow = async (runtimeData?: Record<string, unknown>) => {
-    if (!canManageWorkflows) {
-      toast({
-        variant: 'destructive',
-        title: 'Insufficient permissions',
-        description: 'Only administrators can run workflows.',
-      })
-      return
-    }
-
-    const workflowId = metadata.id
-    if (!workflowId) return
-
-    setIsLoading(true)
-    try {
-      // First, commit the workflow (compile DSL)
-      await api.workflows.commit(workflowId)
-      
-      // Then run it with runtime inputs if provided
-      const runId = await useExecutionStore.getState().startExecution(
-        workflowId,
-        runtimeData
-      )
-
-      if (runId) {
-        // Analytics: run started
-        track(Events.WorkflowRunStarted, {
-          workflow_id: workflowId,
-          run_id: runId,
-          node_count: nodes.length,
-        })
-        setMode('execution')
-        await loadRuns().catch(() => undefined)
-        let selected = true
-        try {
-          await selectRun(runId)
-        } catch (error) {
-          selected = false
-        }
-        if (!selected) {
-          useExecutionTimelineStore.setState({ selectedRunId: runId })
-        }
-        switchToLiveMode()
-        toast({
-          variant: 'success',
-          title: 'Workflow started',
-          description: `Execution ID: ${runId}. Check the review tab for live status.`,
-        })
-      } else {
-        toast({
-          variant: 'warning',
-          title: 'Workflow started',
-          description: 'Execution initiated, but no run ID was returned.',
-        })
-      }
-    } catch (error) {
-      console.error('Failed to run workflow:', error)
-      toast({
-        variant: 'destructive',
-        title: 'Failed to run workflow',
-        description: error instanceof Error ? error.message : 'Unknown error',
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleSave = async () => {
     if (!canManageWorkflows) {
@@ -669,7 +807,6 @@ function WorkflowBuilderContent() {
         </aside>
 
         <main className="flex-1 relative flex">
-          <ExecutionRunBanner />
           <Canvas
             className="flex-1 h-full relative"
             nodes={nodes}
@@ -689,7 +826,7 @@ function WorkflowBuilderContent() {
                 onMouseDown={handleInspectorResizeStart}
               />
               <div className="flex h-full min-h-0 pl-2 overflow-hidden">
-                <ExecutionInspector />
+                <ExecutionInspector onRerunRun={handleRerunFromTimeline} />
               </div>
             </aside>
           )}
@@ -702,7 +839,8 @@ function WorkflowBuilderContent() {
         open={runDialogOpen}
         onOpenChange={setRunDialogOpen}
         runtimeInputs={runtimeInputs}
-        onRun={executeWorkflow}
+        initialValues={prefilledRuntimeValues}
+        onRun={(inputs) => executeWorkflow({ inputs, versionId: pendingVersionId })}
       />
     </div>
   )

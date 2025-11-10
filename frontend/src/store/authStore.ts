@@ -139,7 +139,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'shipsec-auth',
-      version: 2,
+      version: 3,
       migrate: (persistedState, version) => {
         if (!persistedState) {
           return persistedState
@@ -160,6 +160,8 @@ export const useAuthStore = create<AuthState>()(
         organizationId: state.organizationId,
         roles: state.roles,
         provider: state.provider,
+        adminUsername: state.adminUsername,
+        adminPassword: state.adminPassword,
       }),
     },
   ),

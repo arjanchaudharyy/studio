@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { AnsiUp } from 'ansi_up'
 import { RunSelector } from '@/components/timeline/RunSelector'
 import { ExecutionTimeline } from '@/components/timeline/ExecutionTimeline'
-import { EventInspector } from '@/components/timeline/EventInspector'
+import { EventInspector, type EventLayoutVariant } from '@/components/timeline/EventInspector'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { MessageModal } from '@/components/ui/MessageModal'
@@ -49,7 +49,11 @@ const buildLogMessage = (log: ExecutionLog): string => {
   return sections.join('\n\n').trim()
 }
 
-export function ExecutionInspector() {
+interface ExecutionInspectorProps {
+  onRerunRun?: (runId: string) => void
+}
+
+export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {}) {
   const {
     selectedRunId,
     availableRuns,
@@ -70,6 +74,7 @@ export function ExecutionInspector() {
   const selectedRun = useMemo(() => (
     availableRuns.find(run => run.id === selectedRunId)
   ), [availableRuns, selectedRunId])
+  const [eventLayout, setEventLayout] = useState<EventLayoutVariant>('stacked-soft')
 
   const displayLogs = events.length > 0 ? events : logs
   const retrySummary = useMemo(() => {
@@ -130,7 +135,7 @@ export function ExecutionInspector() {
       <aside className="flex h-full min-h-0 w-full min-w-[320px] flex-col overflow-hidden border-l bg-muted/30 backdrop-blur">
         <div className="border-b p-3 space-y-3 bg-background/70">
           <div className="flex items-center justify-between">
-            <RunSelector />
+            <RunSelector onRerun={onRerunRun} />
           </div>
           {selectedRun && (
             <div className="rounded-md border bg-background px-3 py-2 text-xs space-y-1">
@@ -154,6 +159,18 @@ export function ExecutionInspector() {
                       : ''}
                   </span>
                 )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                <span className="font-medium uppercase">Event layout (debug)</span>
+                <select
+                  value={eventLayout}
+                  onChange={(event) => setEventLayout(event.target.value as EventLayoutVariant)}
+                  className="rounded border border-border/60 bg-background px-2 py-1 text-xs"
+                >
+                  <option value="stacked-soft">Stacked • Soft</option>
+                  <option value="stacked-contrast">Stacked • Contrast</option>
+                  <option value="stacked-rail">Stacked • Rail</option>
+                </select>
               </div>
             </div>
           )}
@@ -202,7 +219,7 @@ export function ExecutionInspector() {
                 <ExecutionTimeline />
               </div>
               <div className="flex-1 min-h-0 overflow-hidden">
-                <EventInspector className="h-full" />
+                <EventInspector className="h-full" layoutVariant={eventLayout} />
               </div>
             </div>
           )}
