@@ -7,6 +7,8 @@ import {
   type DockerRunnerConfig,
 } from '@shipsec/component-sdk';
 
+const DEFAULT_RESOLVERS = ['1.1.1.1', '8.8.8.8'] as const;
+
 // Input schema for Shuffledns + MassDNS component
 const inputSchema = z
   .object({
@@ -35,15 +37,15 @@ const inputSchema = z
         z
           .string()
           .min(1)
-          .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1:53).'),
+          .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
       )
-      .default([]),
+      .default([...DEFAULT_RESOLVERS]),
     trustedResolvers: z
       .array(
         z
           .string()
           .min(1)
-          .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1:53).'),
+          .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
       )
       .default([]),
     threads: z.number().int().positive().max(20000).optional().describe('Concurrent massdns resolves (-t)'),
@@ -61,14 +63,23 @@ const inputSchema = z
       .optional()
       .describe("Optional massdns commands passed via '-mcmd' (e.g. '-i 10')"),
   })
-  .refine(
-    (val) => (val.mode === 'bruteforce' ? Array.isArray(val.words) && val.words.length > 0 : true),
-    { message: 'words are required for bruteforce mode', path: ['words'] },
-  )
-  .refine(
-    (val) => (val.mode === 'resolve' ? Array.isArray(val.seeds) && val.seeds.length > 0 : true),
-    { message: 'seeds are required for resolve mode', path: ['seeds'] },
-  );
+  .superRefine((val, ctx) => {
+    if (val.mode === 'bruteforce' && (!Array.isArray(val.words) || val.words.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Wordlist is required when using bruteforce mode',
+        path: ['words'],
+      });
+    }
+
+    if (val.mode === 'resolve' && (!Array.isArray(val.seeds) || val.seeds.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Seed list is required when using resolve mode',
+        path: ['seeds'],
+      });
+    }
+  });
 
 type Input = z.infer<typeof inputSchema>;
 
@@ -123,7 +134,13 @@ const definition: ComponentDefinition<Input, Output> = {
       { id: 'domains', label: 'Target Domains', dataType: port.list(port.text()), required: true },
       { id: 'words', label: 'Wordlist (bruteforce)', dataType: port.list(port.text()), required: false },
       { id: 'seeds', label: 'Seeds (resolve)', dataType: port.list(port.text()), required: false },
-      { id: 'resolvers', label: 'Resolvers', dataType: port.list(port.text()), required: false },
+      {
+        id: 'resolvers',
+        label: 'Resolvers',
+        dataType: port.list(port.text()),
+        required: false,
+        description: 'DNS resolvers (defaults to 1.1.1.1 and 8.8.8.8 when not provided).',
+      },
       { id: 'trustedResolvers', label: 'Trusted Resolvers', dataType: port.list(port.text()), required: false },
     ],
     outputs: [
