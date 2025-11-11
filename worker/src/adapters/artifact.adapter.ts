@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 
 import type { ArtifactServiceFactory, ArtifactScope } from '../temporal/artifact-factory';
 import type {
+  ArtifactDestination,
   ArtifactDownloadResult,
   ArtifactUploadRequest,
   ArtifactUploadResult,
@@ -36,7 +37,10 @@ export class ArtifactAdapter {
   ): Promise<ArtifactUploadResult> {
     const fileId = randomUUID();
     const artifactId = randomUUID();
-    const destinations = input.destinations && input.destinations.length > 0 ? input.destinations : ['run'];
+    const destinations: ArtifactDestination[] =
+      input.destinations && input.destinations.length > 0
+        ? input.destinations
+        : (['run'] as ArtifactDestination[]);
 
     await this.minioClient.putObject(
       this.bucketName,
