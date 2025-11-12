@@ -65,17 +65,34 @@ function WorkflowBuilderContent() {
     markDirty,
     resetWorkflow,
   } = useWorkflowStore()
-  const [nodes, setNodes, onNodesChange] = useNodesState<FrontendNodeData>([])
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState<FrontendNodeData>([])
   const roles = useAuthStore((state) => state.roles)
   const canManageWorkflows = hasAdminRole(roles)
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [edges, setEdges, onEdgesChangeBase] = useEdgesState([])
+  const mode = useWorkflowUiStore((state) => state.mode)
+
+  // Wrap change handlers to mark workflow as dirty
+  const onNodesChange = useCallback((changes: any[]) => {
+    onNodesChangeBase(changes)
+    // Mark as dirty when nodes change (only in design mode)
+    if (mode === 'design' && changes.length > 0) {
+      markDirty()
+    }
+  }, [onNodesChangeBase, markDirty, mode])
+
+  const onEdgesChange = useCallback((changes: any[]) => {
+    onEdgesChangeBase(changes)
+    // Mark as dirty when edges change (only in design mode)
+    if (mode === 'design' && changes.length > 0) {
+      markDirty()
+    }
+  }, [onEdgesChangeBase, markDirty, mode])
   const { getComponent } = useComponentStore()
   const [isLoading, setIsLoading] = useState(false)
   const [runDialogOpen, setRunDialogOpen] = useState(false)
   const [runtimeInputs, setRuntimeInputs] = useState<any[]>([])
   const [prefilledRuntimeValues, setPrefilledRuntimeValues] = useState<Record<string, unknown>>({})
   const [pendingVersionId, setPendingVersionId] = useState<string | null>(null)
-  const mode = useWorkflowUiStore((state) => state.mode)
   const libraryOpen = useWorkflowUiStore((state) => state.libraryOpen)
   const toggleLibrary = useWorkflowUiStore((state) => state.toggleLibrary)
   const inspectorWidth = useWorkflowUiStore((state) => state.inspectorWidth)
@@ -694,7 +711,7 @@ function WorkflowBuilderContent() {
     }
   }, [canManageWorkflows, edges, metadata, nodes, toast])
 
-  const handleSave = async (showToast: boolean = true) => {
+  const handleSave = useCallback(async (showToast: boolean = true) => {
     if (!canManageWorkflows) {
       if (showToast) {
         toast({
@@ -708,12 +725,12 @@ function WorkflowBuilderContent() {
 
     try {
       // Defensive check for undefined nodes/edges
-      if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
+      if (!nodes || !Array.isArray(nodes)) {
         if (showToast) {
           toast({
             variant: 'destructive',
             title: 'Cannot save workflow',
-            description: 'Add at least one component before saving.',
+            description: 'Invalid workflow nodes data.',
           })
         }
         return
@@ -734,6 +751,17 @@ function WorkflowBuilderContent() {
       const workflowId = metadata.id
 
       if (!workflowId || isNewWorkflow) {
+        // Block creating a brand-new workflow with no nodes (backend expects at least one)
+        if (nodes.length === 0) {
+          if (showToast) {
+            toast({
+              variant: 'destructive',
+              title: 'Cannot save workflow',
+              description: 'Add at least one component before saving.',
+            })
+          }
+          return
+        }
         // Create new workflow
         const payload = serializeWorkflowForCreate(
           metadata.name,
@@ -833,7 +861,7 @@ function WorkflowBuilderContent() {
         }
       }
     }
-  }
+  }, [canManageWorkflows, nodes, edges, metadata, isNewWorkflow, toast, setWorkflowId, setMetadata, markClean, navigate])
 
   // Track auto-save state for UI feedback
   const [isAutoSaving, setIsAutoSaving] = useState(false)
@@ -845,8 +873,7 @@ function WorkflowBuilderContent() {
     // - New workflow (needs manual save first)
     // - Currently loading or already auto-saving
     // - No permission to manage workflows
-    // - No nodes (empty workflow)
-    if (!isDirty || isNewWorkflow || isLoading || isAutoSaving || !canManageWorkflows || !nodes || nodes.length === 0) {
+    if (!isDirty || isNewWorkflow || isLoading || isAutoSaving || !canManageWorkflows || !nodes) {
       return
     }
 
@@ -988,6 +1015,16 @@ function WorkflowBuilderContent() {
       )}
 
       <div ref={layoutRef} className="flex flex-1 overflow-hidden">
+        {/* Loading overlay for initial load */}
+        {isLoading && nodes.length === 0 && !isNewWorkflow && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-sm">
+            <svg className="animate-spin h-8 w-8 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <p className="mt-3 text-sm text-muted-foreground">Loading workflow…</p>
+          </div>
+        )}
         <aside
           className={cn(
             'relative h-full transition-[width] duration-200 ease-in-out bg-background',

@@ -6,7 +6,7 @@ import {
   ArrowLeft,
   Save,
   Play,
-  StopCircle,
+  Square,
   PencilLine,
   MonitorPlay,
   Upload,
@@ -15,7 +15,7 @@ import {
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
-import { cn } from '@/lib/utils'
+// 
 
 interface TopBarProps {
   workflowId?: string
@@ -115,7 +115,7 @@ export function TopBar({
   }
 
   return (
-    <div className="h-[60px] border-b bg-background flex items-center px-4 gap-4">
+    <div className="h-[60px] border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex items-center px-4 gap-4">
       <Button
         variant="ghost"
         size="icon"
@@ -125,17 +125,17 @@ export function TopBar({
         <ArrowLeft className="h-5 w-5" />
       </Button>
 
-      <div className="flex flex-1 max-w-2xl items-center gap-2">
+      <div className="flex flex-1 max-w-3xl items-center gap-3">
         <Input
           value={metadata.name}
           onChange={(e) => setWorkflowName(e.target.value)}
           readOnly={!canEdit}
           aria-readonly={!canEdit}
-          className="font-semibold"
+          className="font-semibold border-none bg-transparent focus-visible:ring-0 focus-visible:outline-none px-2"
           placeholder="Workflow name"
         />
         {(onImport || onExport) && (
-          <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-2 py-1">
+          <div className="hidden md:flex items-center gap-1 rounded-md border bg-muted/40 px-1.5 py-0.5">
             {onImport && (
               <>
                 <input
@@ -149,13 +149,13 @@ export function TopBar({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-3 gap-2"
+                  className="h-8 px-2 gap-1"
                   onClick={handleImportClick}
                   disabled={!canEdit || isImporting}
                   aria-label="Import workflow"
                 >
-                  <Upload className="h-4 w-4" />
-                  <span className="text-xs font-medium">Import</span>
+                  <Upload className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Import</span>
                 </Button>
               </>
             )}
@@ -164,13 +164,13 @@ export function TopBar({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-8 px-3 gap-2"
+                className="h-8 px-2 gap-1"
                 onClick={handleExport}
                 disabled={!canEdit}
                 aria-label="Export workflow"
               >
-                <Download className="h-4 w-4" />
-                <span className="text-xs font-medium">Export</span>
+                <Download className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Export</span>
               </Button>
             )}
           </div>
@@ -178,11 +178,11 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-3 ml-auto">
-        <div className="flex rounded-lg border bg-muted/40 overflow-hidden text-xs font-medium shadow-sm">
+        <div className="flex rounded-md border bg-muted/40 p-0.5 text-xs font-medium shadow-sm">
           <Button
             variant={mode === 'design' ? 'default' : 'ghost'}
             size="sm"
-            className="h-9 px-3 gap-2 rounded-none"
+            className="h-8 px-2 gap-1 rounded-sm"
             onClick={() => {
               if (!canEdit) return
               setMode('design')
@@ -191,109 +191,103 @@ export function TopBar({
             aria-pressed={mode === 'design'}
           >
             <PencilLine className="h-4 w-4" />
-            <span className="flex flex-col leading-tight text-left">
-              <span className="text-xs font-semibold">Design</span>
-              <span
-                className={cn(
-                  'text-[10px]',
-                  mode === 'design' ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                )}
-              >
-                Edit workflow
-              </span>
-            </span>
+            <span className="text-xs font-medium hidden sm:inline">Design</span>
           </Button>
           <Button
             variant={mode === 'execution' ? 'default' : 'ghost'}
             size="sm"
-            className="h-9 px-3 gap-2 rounded-none border-l border-border/50"
+            className="h-8 px-2 gap-1 rounded-sm"
             onClick={() => setMode('execution')}
             aria-pressed={mode === 'execution'}
           >
             <MonitorPlay className="h-4 w-4" />
-            <span className="flex flex-col leading-tight text-left">
-              <span className="text-xs font-semibold">Execution</span>
-              <span
-                className={cn(
-                  'text-[10px]',
-                  mode === 'execution' ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                )}
-              >
-                Inspect executions
-              </span>
-            </span>
+            <span className="text-xs font-medium hidden sm:inline">Execution</span>
           </Button>
         </div>
 
-        <div className="flex gap-2">
-          {isAutoSaving && (
-            <span className="text-xs text-blue-600 self-center animate-pulse">
-              Auto-saving...
-            </span>
-          )}
-          {isDirty && !isAutoSaving && (
-            <span className="text-xs text-muted-foreground self-center">
-              Unsaved changes
-            </span>
-          )}
-          {!isDirty && !isRunning && !isAutoSaving && (
-            <span className="text-xs text-green-600 self-center">
-              All changes saved
-            </span>
-          )}
-          <Button
-            onClick={handleSave}
-            disabled={!canEdit || isSaving || isRunning}
-            variant="outline"
-            className="gap-2"
-          >
-            <Save className="h-4 w-4" />
-            {isSaving ? 'Saving...' : 'Save'}
-          </Button>
-          {isRunning ? (
+        <div className="hidden md:flex items-center gap-2">
+          {/* Save status indicators */}
+          <div className="flex items-center gap-2">
+            {isAutoSaving && (
+              <span className="text-xs text-blue-600 animate-pulse">
+                Auto-saving...
+              </span>
+            )}
+            {isDirty && !isAutoSaving && (
+              <span className="text-xs text-muted-foreground">
+                Unsaved changes
+              </span>
+            )}
+            {!isDirty && !isRunning && !isAutoSaving && (
+              <span className="text-xs text-green-600">
+                All changes saved
+              </span>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
             <Button
-              onClick={handleStop}
-              variant="destructive"
-              disabled={!canEdit}
-              className="gap-2"
+              onClick={handleSave}
+              disabled={!canEdit || isSaving || isRunning}
+              variant="outline"
+              className="gap-2 h-9 rounded-md bg-background hover:bg-muted/50 border-border/50"
             >
-              <StopCircle className="h-4 w-4" />
-              Stop
+              <Save className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">
+                {isSaving ? 'Saving...' : 'Save'}
+              </span>
             </Button>
-          ) : (
-            <Button
-              onClick={handleRun}
-              disabled={!canEdit || isRunning || isExecuting}
-              className="gap-2"
-            >
-              <Play className="h-4 w-4" />
-              Run
-            </Button>
-          )}
+            
+            {isRunning ? (
+              <Button
+                onClick={handleStop}
+                variant="destructive"
+                disabled={!canEdit}
+                className="gap-2 h-9 rounded-md bg-destructive hover:bg-destructive/90"
+              >
+                <Square className="h-4 w-4 fill-white" />
+                <span className="text-sm font-medium">Stop</span>
+              </Button>
+            ) : (
+              <Button
+                onClick={handleRun}
+                disabled={!canEdit || isRunning || isExecuting}
+                className="gap-2 h-9 rounded-md"
+              >
+                <Play className="h-4 w-4" />
+                <span className="text-sm font-medium">Run</span>
+              </Button>
+            )}
 
-          {status === 'queued' && (
-            <span className="text-sm text-muted-foreground font-medium">
-              Queued…
-            </span>
-          )}
+            {/* Progress indicator */}
+            {runStatus?.progress && (
+              <span className="text-sm text-muted-foreground font-medium ml-1">
+                {runStatus.progress.completedActions}/{runStatus.progress.totalActions} actions
+              </span>
+            )}
 
-          {runStatus?.progress && (
-            <span className="text-sm text-muted-foreground font-medium">
-              {runStatus.progress.completedActions}/{runStatus.progress.totalActions} actions
-            </span>
-          )}
+            {/* Status messages */}
+            {status === 'queued' && (
+              <span className="text-sm text-muted-foreground font-medium">
+                Queued…
+              </span>
+            )}
 
-          {status === 'completed' && (
-            <span className="text-sm text-green-600 font-medium">
-              ✓ Completed
-            </span>
-          )}
+            {status === 'completed' && (
+              <span className="text-sm text-green-600 font-medium">
+                ✓ Completed
+              </span>
+            )}
 
-          {status === 'failed' && (
-            <span className="text-sm text-red-600 font-medium">
-              ✗ Failed
-            </span>
-          )}
+            {status === 'failed' && (
+              <span className="text-sm text-red-600 font-medium">
+                ✗ Failed
+              </span>
+            )}
+          </div>
+
+          {/* Failure reason */}
           {status === 'failed' && runStatus?.failure?.reason && (
             <span className="text-sm text-red-600">
               {runStatus.failure.reason}

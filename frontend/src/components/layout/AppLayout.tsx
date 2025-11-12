@@ -211,7 +211,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </SidebarContent>
 
         <SidebarFooter className="border-t">
-          <div className="flex flex-col gap-2 p-2">
+          <div className="flex flex-col gap-2 p-">
             {/* Auth components - UserButton includes organization switching */}
             {showUserButton && (
               <div className={`flex ${sidebarOpen ? 'justify-start' : 'justify-center'}`}>

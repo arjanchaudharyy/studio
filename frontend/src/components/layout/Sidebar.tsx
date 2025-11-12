@@ -11,6 +11,7 @@ import {
 import type { ComponentMetadata } from '@/schemas/component'
 import { cn } from '@/lib/utils'
 import { env } from '@/config/env'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // Use backend-provided category configuration
 // The frontend will no longer categorize components - it will use backend data
@@ -143,9 +144,9 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
       <div className="p-4 border-b space-y-3">
         <div>
           <h2 className="text-lg font-semibold">Components</h2>
-          <p className="text-xs text-muted-foreground mt-1">
+          {/* <p className="text-xs text-muted-foreground mt-1">
             Drag and drop to add to workflow
-          </p>
+          </p> */}
         </div>
 
         <div className="relative">
@@ -169,10 +170,19 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
+      <div className="flex-1 overflow-y-auto px-2 py-2 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
         {loading ? (
-          <div className="text-sm text-muted-foreground text-center py-8">
-            Loading components...
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-2">
+              {Array.from({ length: 8 }).map((_, idx) => (
+                <div key={idx} className="border border-border/50 rounded-sm px-3 py-3">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <Skeleton className="h-8 w-8 rounded-md" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : error ? (
           <div className="text-sm text-red-500 text-center py-8">
@@ -210,7 +220,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
                   <AccordionItem 
                     key={category} 
                     value={category} 
-                    className="border border-border/50 rounded-lg  px-3 py-1 hover:bg-muted/50 transition-colors"
+                    className="border border-border/50 rounded-sm  px-3 py-1 hover:bg-muted/50 transition-colors"
                   >
                     <AccordionTrigger className={cn(
                       'py-3 px-0 hover:no-underline [&[data-state=open]]:text-foreground',

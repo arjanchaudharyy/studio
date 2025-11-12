@@ -19,7 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Workflow, Loader2, AlertCircle, Trash2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Workflow, AlertCircle, Trash2 } from 'lucide-react'
 import { api } from '@/services/api'
 import {
   WorkflowMetadataSchema,
@@ -162,9 +163,37 @@ export function WorkflowList() {
         </div> */}
 
         {isLoading ? (
-          <div className="text-center py-12">
-            <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-muted-foreground" />
-            <p className="text-muted-foreground">Loading workflows...</p>
+          <div className="border rounded-lg bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Nodes</TableHead>
+                  <TableHead>Last Updated</TableHead>
+                  {canManageWorkflows && <TableHead className="text-right">Actions</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.from({ length: 5 }).map((_, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>
+                      <Skeleton className="h-4 w-[220px]" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-5 w-[80px]" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-[160px]" />
+                    </TableCell>
+                    {canManageWorkflows && (
+                      <TableCell className="text-right">
+                        <Skeleton className="h-8 w-8 ml-auto rounded-md" />
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         ) : error ? (
           <div className="text-center py-12 border rounded-lg bg-card border-destructive">
