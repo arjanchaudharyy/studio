@@ -3313,8 +3313,58 @@
                 },
                 "metadata": {
                   "type": "object",
-                  "propertyNames": {
-                    "type": "string"
+                  "properties": {
+                    "remoteUploads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "s3",
+                              "gcs"
+                            ]
+                          },
+                          "bucket": {
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "uri": {
+                            "type": "string"
+                          },
+                          "region": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "etag": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "bucket",
+                          "key",
+                          "uri"
+                        ]
+                      }
+                    }
                   },
                   "additionalProperties": {},
                   "nullable": true
@@ -3410,8 +3460,58 @@
                 },
                 "metadata": {
                   "type": "object",
-                  "propertyNames": {
-                    "type": "string"
+                  "properties": {
+                    "remoteUploads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "s3",
+                              "gcs"
+                            ]
+                          },
+                          "bucket": {
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "uri": {
+                            "type": "string"
+                          },
+                          "region": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "etag": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "bucket",
+                          "key",
+                          "uri"
+                        ]
+                      }
+                    }
                   },
                   "additionalProperties": {},
                   "nullable": true

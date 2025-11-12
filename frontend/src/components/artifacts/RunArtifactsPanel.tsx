@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, RefreshCw, Copy } from 'lucide-react'
+import { Download, RefreshCw, Copy, ExternalLink } from 'lucide-react'
 import type { ArtifactMetadata } from '@shipsec/shared'
 import { useArtifactStore } from '@/store/artifactStore'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { getRemoteUploads } from '@/utils/artifacts'
 
 const formatBytes = (bytes: number) => {
   if (!Number.isFinite(bytes)) return '—'
@@ -32,6 +34,7 @@ export function RunArtifactsPanel({ runId }: RunArtifactsPanelProps) {
   const downloadArtifact = useArtifactStore((state) => state.downloadArtifact)
   const downloading = useArtifactStore((state) => state.downloading)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedRemoteUri, setCopiedRemoteUri] = useState<string | null>(null)
 
   const handleCopy = useCallback(async (artifactId: string) => {
     try {
@@ -113,6 +116,18 @@ export function RunArtifactsPanel({ runId }: RunArtifactsPanelProps) {
                 onDownload={() => downloadArtifact(artifact, { runId })}
                 onCopy={() => handleCopy(artifact.id)}
                 copied={copiedId === artifact.id}
+                onCopyRemoteUri={async (uri: string) => {
+                  try {
+                    await navigator.clipboard.writeText(uri)
+                    setCopiedRemoteUri(uri)
+                    setTimeout(() => {
+                      setCopiedRemoteUri((current) => (current === uri ? null : current))
+                    }, 2000)
+                  } catch (error) {
+                    console.error('Failed to copy remote URI', error)
+                  }
+                }}
+                copiedRemoteUri={copiedRemoteUri}
                 isDownloading={Boolean(downloading[artifact.id])}
               />
             ))}
@@ -120,7 +135,7 @@ export function RunArtifactsPanel({ runId }: RunArtifactsPanelProps) {
         </table>
       </div>
     )
-  }, [runId, entry, fetchRunArtifacts, downloadArtifact, downloading, handleCopy, copiedId])
+  }, [runId, entry, fetchRunArtifacts, downloadArtifact, downloading, handleCopy, copiedId, copiedRemoteUri])
 
   return (
     <div className="flex h-full flex-col">
@@ -155,19 +170,63 @@ function ArtifactRow({
   onDownload,
   onCopy,
   copied,
+  onCopyRemoteUri,
+  copiedRemoteUri,
   isDownloading,
 }: {
   artifact: ArtifactMetadata
   onDownload: () => void
   onCopy: () => void
   copied: boolean
+  onCopyRemoteUri: (uri: string) => void
+  copiedRemoteUri: string | null
   isDownloading: boolean
 }) {
+  const remoteUploads = getRemoteUploads(artifact)
+
   return (
     <tr className="border-b last:border-none">
       <td className="px-4 py-3 align-top">
         <div className="font-medium">{artifact.name}</div>
         <div className="text-xs text-muted-foreground font-mono">{artifact.id}</div>
+        {remoteUploads.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {remoteUploads.map((remote) => (
+              <div
+                key={`${artifact.id}-${remote.uri}`}
+                className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+              >
+                <Badge variant="outline" className="text-[10px] uppercase">
+                  {remote.type}
+                </Badge>
+                <code className="max-w-[200px] truncate font-mono text-[11px]">
+                  {remote.uri}
+                </code>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="gap-1"
+                  onClick={() => onCopyRemoteUri(remote.uri)}
+                >
+                  <Copy className="h-3 w-3" />
+                  {copiedRemoteUri === remote.uri ? 'Copied' : 'Copy URI'}
+                </Button>
+                {remote.url ? (
+                  <a
+                    href={remote.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Open
+                  </a>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
       </td>
       <td className="px-4 py-3 align-top text-sm text-muted-foreground">
         {artifact.componentRef}

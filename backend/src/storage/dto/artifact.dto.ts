@@ -3,6 +3,24 @@ import { z } from 'zod';
 
 const ArtifactDestinationSchema = z.enum(['run', 'library']);
 
+const ArtifactRemoteUploadSchema = z.object({
+  type: z.enum(['s3', 'gcs']),
+  bucket: z.string(),
+  key: z.string(),
+  uri: z.string(),
+  region: z.string().optional(),
+  size: z.number().nonnegative().optional(),
+  etag: z.string().optional(),
+  url: z.string().url().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+const ArtifactMetadataDetailsSchema = z
+  .object({
+    remoteUploads: z.array(ArtifactRemoteUploadSchema).optional(),
+  })
+  .catchall(z.unknown());
+
 const ArtifactMetadataSchema = z.object({
   id: z.string().uuid(),
   runId: z.string(),
@@ -15,7 +33,7 @@ const ArtifactMetadataSchema = z.object({
   mimeType: z.string(),
   size: z.number().nonnegative(),
   destinations: z.array(ArtifactDestinationSchema),
-  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  metadata: ArtifactMetadataDetailsSchema.nullable().optional(),
   organizationId: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
 });
