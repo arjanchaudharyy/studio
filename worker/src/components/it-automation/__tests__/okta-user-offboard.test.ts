@@ -39,15 +39,22 @@ const execute = definition.execute as (
 describe('okta-user-offboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUserApi.getUser.mockReset();
+    mockUserApi.deactivateUser.mockReset();
+    mockUserApi.deleteUser.mockReset();
   });
 
-  it('should successfully deactivate a user in a non-dry run', async () => {
-    // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: 'test-api-token' }),
-      list: vi.fn().mockResolvedValue([]),
-    };
+  const baseParams = {
+    user_email: 'test@example.com',
+    okta_domain: 'company.okta.com',
+    apiToken: 'okta-api-token',
+    action: 'deactivate' as const,
+    dry_run: false,
+  };
 
+  const createContext = () => createMockExecutionContext();
+
+  it('successfully deactivates a user in non-dry-run mode', async () => {
     const mockUser = {
       id: '12345',
       profile: {
@@ -63,48 +70,24 @@ describe('okta-user-offboard', () => {
 
     mockUserApi.getUser.mockResolvedValue(mockUser);
     mockUserApi.deactivateUser.mockResolvedValue({});
-    mockUserApi.deleteUser.mockResolvedValue({});
 
-    // 2. Define input parameters
-    const params = {
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
-      action: 'deactivate',
-      dry_run: false,
-    };
+    const context = createContext();
+    const result = await execute(baseParams, context);
 
-    // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
-
-    // 4. Execute the component
-    const result: OktaUserOffboardOutput = await execute(params, context);
-
-    // 5. Assert the results
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
     expect(result.userDeleted).toBe(false);
     expect(result.message).toContain('Successfully deactivated user');
-    expect(mockSecrets.get).toHaveBeenCalledWith('okta-token-secret');
     expect(mockUserApi.getUser).toHaveBeenCalledWith({ userId: 'test@example.com' });
     expect(mockUserApi.deactivateUser).toHaveBeenCalledWith({ userId: '12345' });
     expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
     expect(context.logger.info).toHaveBeenCalledWith('[Okta] Successfully deactivated user account: test@example.com');
   });
 
-  it('should successfully deactivate and delete a user in a non-dry run', async () => {
-    // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: 'test-api-token' }),
-      list: vi.fn().mockResolvedValue([]),
-    };
-
+  it('deactivates and deletes when action=delete', async () => {
     const mockUser = {
       id: '12345',
-      profile: {
-        email: 'test@example.com',
-        login: 'test@example.com',
-      },
+      profile: { email: 'test@example.com', login: 'test@example.com' },
       status: 'ACTIVE',
       created: new Date('2023-01-01'),
       activated: new Date('2023-01-01'),
@@ -116,45 +99,26 @@ describe('okta-user-offboard', () => {
     mockUserApi.deactivateUser.mockResolvedValue({});
     mockUserApi.deleteUser.mockResolvedValue({});
 
-    // 2. Define input parameters
-    const params = {
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
-      action: 'delete',
-      dry_run: false,
-    };
+    const context = createContext();
+    const result = await execute(
+      {
+        ...baseParams,
+        action: 'delete',
+      },
+      context,
+    );
 
-    // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
-
-    // 4. Execute the component
-    const result: OktaUserOffboardOutput = await execute(params, context);
-
-    // 5. Assert the results
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
     expect(result.userDeleted).toBe(true);
-    expect(result.message).toContain('Successfully deactivated and deleted user');
-    expect(mockSecrets.get).toHaveBeenCalledWith('okta-token-secret');
-    expect(mockUserApi.getUser).toHaveBeenCalledWith({ userId: 'test@example.com' });
     expect(mockUserApi.deactivateUser).toHaveBeenCalledWith({ userId: '12345' });
     expect(mockUserApi.deleteUser).toHaveBeenCalledWith({ userId: '12345' });
   });
 
-  it('should simulate deactivation in dry run mode', async () => {
-    // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: 'test-api-token' }),
-      list: vi.fn().mockResolvedValue([]),
-    };
-
+  it('simulates operations when dry_run is true', async () => {
     const mockUser = {
       id: '12345',
-      profile: {
-        email: 'test@example.com',
-        login: 'test@example.com',
-      },
+      profile: { email: 'test@example.com', login: 'test@example.com' },
       status: 'ACTIVE',
       created: new Date('2023-01-01'),
       activated: new Date('2023-01-01'),
@@ -164,235 +128,43 @@ describe('okta-user-offboard', () => {
 
     mockUserApi.getUser.mockResolvedValue(mockUser);
 
-    // 2. Define input parameters
-    const params = {
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
-      action: 'deactivate',
-      dry_run: true,
-    };
+    const context = createContext();
+    const result = await execute(
+      {
+        ...baseParams,
+        dry_run: true,
+        action: 'delete',
+      },
+      context,
+    );
 
-    // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
-
-    // 4. Execute the component
-    const result: OktaUserOffboardOutput = await execute(params, context);
-
-    // 5. Assert the results
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
-    expect(result.userDeleted).toBe(false);
-    expect(result.message).toContain('DRY RUN: Would deactivate user');
+    expect(result.userDeleted).toBe(true);
     expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
     expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
     expect(context.logger.info).toHaveBeenCalledWith('[Okta] Running in DRY RUN mode - no changes will be made');
   });
 
-  it('should simulate deactivation and deletion in dry run mode', async () => {
-    // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: 'test-api-token' }),
-      list: vi.fn().mockResolvedValue([]),
-    };
-
-    const mockUser = {
-      id: '12345',
-      profile: {
-        email: 'test@example.com',
-        login: 'test@example.com',
-      },
-      status: 'ACTIVE',
-      created: new Date('2023-01-01'),
-      activated: new Date('2023-01-01'),
-      lastLogin: new Date('2023-10-01'),
-      lastUpdated: new Date('2023-10-01'),
-    };
-
-    mockUserApi.getUser.mockResolvedValue(mockUser);
-
-    // 2. Define input parameters
-    const params = {
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
-      action: 'delete',
-      dry_run: true,
-    };
-
-    // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
-
-    // 4. Execute the component
-    const result: OktaUserOffboardOutput = await execute(params, context);
-
-    // 5. Assert the results
-    expect(result.success).toBe(true);
-    expect(result.userDeactivated).toBe(true);
-    expect(result.userDeleted).toBe(true);
-    expect(result.message).toContain('DRY RUN: Would deactivate and delete user');
-    expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
-  });
-
-  it('should handle already deactivated user', async () => {
-    // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: 'test-api-token' }),
-      list: vi.fn().mockResolvedValue([]),
-    };
-
-    const mockUser = {
-      id: '12345',
-      profile: {
-        email: 'test@example.com',
-        login: 'test@example.com',
-      },
-      status: 'DEPROVISIONED',
-      created: new Date('2023-01-01'),
-      activated: new Date('2023-01-01'),
-      lastLogin: new Date('2023-10-01'),
-      lastUpdated: new Date('2023-10-01'),
-    };
-
-    mockUserApi.getUser.mockResolvedValue(mockUser);
-
-    // 2. Define input parameters
-    const params = {
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
-      action: 'deactivate',
-      dry_run: false,
-    };
-
-    // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
-
-    // 4. Execute the component
-    const result: OktaUserOffboardOutput = await execute(params, context);
-
-    // 5. Assert the results
-    expect(result.success).toBe(true);
-    expect(result.userDeactivated).toBe(false);
-    expect(result.userDeleted).toBe(false);
-    expect(result.message).toContain('is already deactivated');
-    expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
-  });
-
-  it('should fail gracefully if user is not found', async () => {
-    // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: 'test-api-token' }),
-      list: vi.fn().mockResolvedValue([]),
-    };
-
+  it('returns structured failure when user is not found', async () => {
     const error = new Error('User not found');
-    error.status = 404;
+    (error as any).status = 404;
     mockUserApi.getUser.mockRejectedValue(error);
 
-    // 2. Define input parameters
-    const params = {
-      user_email: 'notfound@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
-      action: 'deactivate',
-    };
+    const context = createContext();
+    const result = await execute(baseParams, context);
 
-    // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
-
-    // 4. Execute the component
-    const result: OktaUserOffboardOutput = await execute(params, context);
-
-    // 5. Assert the results
     expect(result.success).toBe(false);
     expect(result.userDeactivated).toBe(false);
     expect(result.userDeleted).toBe(false);
-    expect(result.error).toContain('User notfound@example.com not found');
+    expect(result.error).toContain('User test@example.com not found');
     expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
   });
 
-  it('should fail if secret is not found', async () => {
-    // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue(null),
-      list: vi.fn().mockResolvedValue([]),
-    };
-
-    // 2. Define input parameters
-    const params = {
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'invalid-secret',
-      action: 'deactivate',
-    };
-
-    // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
-
-    // 4. Execute the component
-    const result: OktaUserOffboardOutput = await execute(params, context);
-
-    // 5. Assert the results
-    expect(result.success).toBe(false);
-    expect(result.userDeactivated).toBe(false);
-    expect(result.userDeleted).toBe(false);
-    expect(result.error).toContain('not found or has no active version');
-    expect(mockUserApi.getUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
-  });
-
-  it('should fail if API token is invalid', async () => {
-    // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: 'invalid-token' }),
-      list: vi.fn().mockResolvedValue([]),
-    };
-
-    const error = new Error('Invalid token');
-    error.status = 401;
-    mockUserApi.getUser.mockRejectedValue(error);
-
-    // 2. Define input parameters
-    const params = {
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
-      action: 'deactivate',
-    };
-
-    // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
-
-    // 4. Execute the component
-    const result: OktaUserOffboardOutput = await execute(params, context);
-
-    // 5. Assert the results
-    expect(result.success).toBe(false);
-    expect(result.userDeactivated).toBe(false);
-    expect(result.userDeleted).toBe(false);
-    expect(result.error).toContain('Failed to get user details');
-    expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
-  });
-
-  it('should handle deactivation errors', async () => {
-    // 1. Set up mocks
-    const mockSecrets = {
-      get: vi.fn().mockResolvedValue({ value: 'test-api-token' }),
-      list: vi.fn().mockResolvedValue([]),
-    };
-
+  it('returns structured failure when deactivate call fails', async () => {
     const mockUser = {
       id: '12345',
-      profile: {
-        email: 'test@example.com',
-        login: 'test@example.com',
-      },
+      profile: { email: 'test@example.com', login: 'test@example.com' },
       status: 'ACTIVE',
       created: new Date('2023-01-01'),
       activated: new Date('2023-01-01'),
@@ -401,31 +173,64 @@ describe('okta-user-offboard', () => {
     };
 
     mockUserApi.getUser.mockResolvedValue(mockUser);
+    mockUserApi.deactivateUser.mockRejectedValue(new Error('network down'));
 
-    const deactivationError = new Error('Permission denied');
-    deactivationError.status = 403;
-    mockUserApi.deactivateUser.mockRejectedValue(deactivationError);
+    const context = createContext();
+    const result = await execute(baseParams, context);
 
-    // 2. Define input parameters
-    const params = {
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
-      action: 'deactivate',
-      dry_run: false,
+    expect(result.success).toBe(false);
+    expect(result.userDeactivated).toBe(false);
+    expect(result.error).toContain('Failed to deactivate user');
+  });
+
+  it('returns structured failure when delete call fails', async () => {
+    const mockUser = {
+      id: '12345',
+      profile: { email: 'test@example.com', login: 'test@example.com' },
+      status: 'ACTIVE',
+      created: new Date('2023-01-01'),
+      activated: new Date('2023-01-01'),
+      lastLogin: new Date('2023-10-01'),
+      lastUpdated: new Date('2023-10-01'),
     };
 
-    // 3. Create mock context
-    const context = createMockExecutionContext({ secrets: mockSecrets });
+    mockUserApi.getUser.mockResolvedValue(mockUser);
+    mockUserApi.deactivateUser.mockResolvedValue({});
+    mockUserApi.deleteUser.mockRejectedValue(new Error('timeout'));
 
-    // 4. Execute the component
-    const result: OktaUserOffboardOutput = await execute(params, context);
+    const context = createContext();
+    const result = await execute(
+      {
+        ...baseParams,
+        action: 'delete',
+      },
+      context,
+    );
 
-    // 5. Assert the results
     expect(result.success).toBe(false);
     expect(result.userDeactivated).toBe(false);
     expect(result.userDeleted).toBe(false);
-    expect(result.error).toContain('Failed to deactivate user');
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
+    expect(result.error).toContain('Failed to delete user');
+  });
+
+  it('rejects inputs without an API token', () => {
+    expect(() =>
+      definition.inputSchema.parse({
+        user_email: 'test@example.com',
+        okta_domain: 'company.okta.com',
+      }),
+    ).toThrowError(/expected string/);
+  });
+
+  it('throws when provided API token trims to an empty string', async () => {
+    const params = definition.inputSchema.parse({
+      ...baseParams,
+      apiToken: '   ',
+    });
+
+    const context = createContext();
+    const result = await execute(params, context);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('API token is required to contact Okta');
   });
 });

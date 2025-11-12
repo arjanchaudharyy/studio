@@ -4,11 +4,6 @@ import { ExecutionContext, ISecretsService } from '@shipsec/component-sdk';
 export function createMockExecutionContext(
   overrides: Partial<ExecutionContext> = {},
 ): ExecutionContext {
-  const defaultSecrets: ISecretsService = {
-    get: vi.fn(),
-    list: vi.fn(),
-  };
-
   const defaultContext: ExecutionContext = {
     runId: 'test-run-id',
     componentRef: 'test-component-ref',
@@ -17,7 +12,7 @@ export function createMockExecutionContext(
       error: vi.fn(),
     },
     emitProgress: vi.fn(),
-    secrets: defaultSecrets,
+    secrets: undefined,
     // Add other default mock implementations as needed
     storage: undefined,
     artifacts: undefined,
@@ -26,16 +21,10 @@ export function createMockExecutionContext(
     metadata: { runId: 'test-run-id', componentRef: 'test-component-ref' },
   };
 
-  const mergedSecrets: ISecretsService = {
-    get: overrides.secrets?.get ?? defaultSecrets.get,
-    list: overrides.secrets?.list ?? defaultSecrets.list,
-  };
-
   return {
     ...defaultContext,
     ...overrides,
     logger: { ...defaultContext.logger, ...overrides.logger },
-    secrets: mergedSecrets,
   };
 }
 
@@ -69,6 +58,7 @@ export function createMockLogCollector(): any {
     append: vi.fn().mockImplementation((log) => {
       logs.push(log);
       console.log('LOG:', log.level, log.message);
+      return Promise.resolve();
     }),
     flush: vi.fn().mockResolvedValue(undefined),
     logs,

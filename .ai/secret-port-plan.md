@@ -35,4 +35,5 @@
 - ✅ AWS credential bundler and S3 destination/adapter refactored to use credential ports.
 - ✅ OpenAI, OpenRouter, Gemini chat components now require secret inputs instead of secret IDs.
 - 🚧 AI Agent still accepts `chatModel.apiKeySecretId`; needs to be reworked into a chat-model adapter flow (future task).
-- 🚧 Security/IT components (Subfinder, Okta Offboard, Atlassian Offboarding, etc.) still consume secret IDs directly—next phase is to replace those with loader inputs/bundlers.
+- ✅ Security/IT components (Subfinder, Okta Offboard, Atlassian Offboarding) now rely on secret/credential ports only; docs + tests updated to reflect the new flow.
+- 🚧 Builder UI still shows legacy secret-id parameters; follow-up needed to surface credential ports more clearly.

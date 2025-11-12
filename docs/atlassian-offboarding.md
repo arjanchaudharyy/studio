@@ -8,9 +8,8 @@ for a set of users when an offboarding request lands in ShipSec.
 
 - Atlassian Cloud organization ID (UUID). You can find it in the admin portal
   under **Settings → Organization settings**.
-- Atlassian Admin API bearer token with permission to manage users.
-- ShipSec secret containing the bearer token (recommended). The secret UUID is
-  needed by the workflow.
+- Atlassian Admin API bearer token with permission to manage users (store it in
+  ShipSec secrets and resolve it via Secret Fetch).
 
 ## Recommended Workflow
 
@@ -37,12 +36,11 @@ Input builder ─┘
 | ----------------- | ----------- | --------------------------------------------------------------------------- |
 | `emailUsernames`  | `list<text>`| Comma or newline separated list of usernames (portion before `@`).         |
 | `orgId`           | `text`      | Atlassian organization UUID.                                               |
-| `accessToken`     | `secret`    | Direct bearer token (optional, secret connection preferred).               |
-| `accessTokenSecretId` | `text` | UUID of the ShipSec secret containing the bearer token.                     |
+| `accessToken`     | `secret`    | Bearer token resolved via Secret Fetch (connect the Secret Loader output). |
 | `limit`           | `number`    | Optional search limit (default `20`).                                      |
 
 > **Tip:** Connect `Secret Fetch.secret` to `accessToken` so credentials are
-> masked. Provide `emailUsernames` via manual trigger input or transform.
+> masked in logs. Provide `emailUsernames` via manual trigger input or transform.
 
 ## Outputs
 

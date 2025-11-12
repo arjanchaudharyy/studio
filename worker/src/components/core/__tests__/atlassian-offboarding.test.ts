@@ -1,6 +1,5 @@
 import { beforeAll, afterEach, describe, expect, it, vi } from 'bun:test';
 import { createExecutionContext } from '@shipsec/component-sdk';
-import type { ISecretsService } from '@shipsec/component-sdk';
 import { componentRegistry } from '../../index';
 
 describe('atlassian offboarding component', () => {
@@ -131,115 +130,31 @@ describe('atlassian offboarding component', () => {
     });
   });
 
-  it('resolves access token from secrets when not provided directly', async () => {
-    const component = getComponent();
-    const orgId = 'f417e814-52d3-4f0b-9fea-7d1f0535dc30';
-    const secretId = '1c562ff0-808a-4d1f-b516-f205ae4b4e11';
-
-    const secrets: ISecretsService = {
-      async get(key) {
-        expect(key).toBe(secretId);
-        return { value: ' secret-token ', version: 1 };
-      },
-      async list() {
-        return [];
-      },
-    };
-
-    const fetchMock = vi
-      .fn<(url: unknown, init?: any) => Promise<Response>>()
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          results: [{ accountId: 'acc-9', emailUsername: 'sam' }],
-        }),
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 200 }));
-
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    const context = createExecutionContext({
-      runId: 'test-run',
-      componentRef: 'atlassian-offboarding-secret',
-      secrets,
-    });
-
-    const params = component.inputSchema.parse({
-      orgId,
-      accessTokenSecretId: secretId,
-      emailUsernames: ['sam'],
-    });
-
-    const result = await component.execute(params, context);
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [, deleteInit] = fetchMock.mock.calls[1];
-    expect(deleteInit?.headers).toMatchObject({
-      Authorization: 'Bearer secret-token',
-    });
-    expect(result.summary).toEqual({
-      requested: 1,
-      found: 1,
-      deleted: 1,
-      failed: 0,
-    });
-  });
-
-  it('rejects inputs that omit both accessToken and accessTokenSecretId', () => {
+  it('rejects inputs that omit accessToken', () => {
     const component = getComponent();
     expect(() =>
       component.inputSchema.parse({
         orgId: 'org-123',
         emailUsernames: ['alice'],
       }),
-    ).toThrowError(/Provide either accessTokenSecretId or accessToken/);
+    ).toThrowError(/expected string/);
   });
 
-  it('throws when secrets service is missing despite secret id', async () => {
+  it('throws when provided access token trims to an empty string', async () => {
     const component = getComponent();
-    const params = component.inputSchema.parse({
-      orgId: 'b51b44a1-b614-4cfc-9b58-daeced73dede',
-      emailUsernames: ['abhishekudiya09 '],
-      accessTokenSecretId: '3def0959-2093-4745-81e4-36c8b58250b1',
-    });
-
-    const context = createExecutionContext({
-      runId: 'test-run',
-      componentRef: 'atlassian-offboarding-no-secret-service',
-    });
-
-    await expect(component.execute(params, context)).rejects.toThrow(
-      'Atlassian Offboarding component requires the secrets service to resolve the access token.',
-    );
-  });
-
-  it('throws when secret cannot be found', async () => {
-    const component = getComponent();
-    const secretId = '69e44c77-1d64-4c72-9161-1891d48853f3';
-
-    const secrets: ISecretsService = {
-      async get(key) {
-        expect(key).toBe(secretId);
-        return null;
-      },
-      async list() {
-        return [];
-      },
-    };
-
     const params = component.inputSchema.parse({
       orgId: 'org-123',
       emailUsernames: ['alice'],
-      accessTokenSecretId: secretId,
+      accessToken: '   ',
     });
 
     const context = createExecutionContext({
       runId: 'test-run',
-      componentRef: 'atlassian-offboarding-secret-missing',
-      secrets,
+      componentRef: 'atlassian-offboarding-empty-token',
     });
 
     await expect(component.execute(params, context)).rejects.toThrow(
-      `Secret ${secretId} not found or has no active version.`,
+      /Access token is required to call the Atlassian Admin API/,
     );
   });
 

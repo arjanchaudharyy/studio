@@ -13,13 +13,12 @@ const inputSchema = z
   .object({
     domains: domainValueSchema.optional().describe('Array of target domains'),
     domain: domainValueSchema.optional().describe('Legacy single domain input'),
-    providerConfigSecretId: z
+    providerConfig: z
       .string()
-      .uuid()
       .optional()
-      .describe('Secret containing provider-config.yaml for authenticated data sources'),
+      .describe('Resolved provider-config.yaml content (connect via Secret Loader)'),
   })
-  .transform(({ domains, domain, providerConfigSecretId }) => {
+  .transform(({ domains, domain, providerConfig }) => {
     const values = new Set<string>();
 
     const addValue = (value: string | string[] | undefined) => {
@@ -46,7 +45,9 @@ const inputSchema = z
 
     return {
       domains: Array.from(values),
-      providerConfigSecretId,
+      providerConfig: typeof providerConfig === 'string' && providerConfig.trim().length > 0
+        ? providerConfig
+        : undefined,
     };
   });
 
@@ -168,6 +169,13 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d}'
         required: true,
         description: 'Array of domain names to enumerate for subdomains.',
       },
+      {
+        id: 'providerConfig',
+        label: 'Provider Config',
+        dataType: port.secret(),
+        required: false,
+        description: 'Connect the provider-config.yaml contents via a Secret Loader if authenticated sources are needed.',
+      },
     ],
     outputs: [
       {
@@ -187,16 +195,7 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d}'
       'Enumerate subdomains for a single target domain prior to Amass or Naabu.',
       'Quick passive discovery during scope triage workflows.',
     ],
-    parameters: [
-      {
-        id: 'providerConfigSecretId',
-        label: 'Provider Config Secret',
-        type: 'secret',
-        required: false,
-        description: 'Secret containing a subfinder provider-config YAML file to enable authenticated sources.',
-        helpText: 'Store the YAML contents as a secret. The worker will mount it inside the container before execution.',
-      },
-    ],
+    parameters: [],
   },
   async execute(input, context) {
     const baseRunner = definition.runner;
@@ -209,17 +208,8 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d}'
       env: { ...(baseRunner.env ?? {}) },
     };
 
-    if (input.providerConfigSecretId) {
-      if (!context.secrets) {
-        throw new Error('Subfinder component requires the secrets service to load provider credentials.');
-      }
-      context.emitProgress('Loading provider configuration secret for subfinder...');
-      const secret = await context.secrets.get(input.providerConfigSecretId);
-      if (!secret) {
-        throw new Error(`Secret ${input.providerConfigSecretId} not found or has no active version.`);
-      }
-
-      const encoded = Buffer.from(secret.value, 'utf8').toString('base64');
+    if (input.providerConfig) {
+      const encoded = Buffer.from(input.providerConfig, 'utf8').toString('base64');
 
       if (runnerConfig.kind === 'docker') {
         runnerConfig.env = {

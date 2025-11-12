@@ -5,56 +5,35 @@ const emailUsernameArraySchema = z
   .array(z.string().min(1, 'Email username cannot be empty'))
   .min(1, 'Provide at least one email username to offboard');
 
-const inputSchema = z
-  .object({
-    orgId: z.string().min(1, 'Organization ID is required'),
-    emailUsernames: z
-      .preprocess(value => {
-        if (Array.isArray(value)) {
-          return value;
-        }
-        if (typeof value === 'string') {
-          return value
-            .split(/[\r\n,]+/)
-            .map(item => item.trim())
-            .filter(item => item.length > 0);
-        }
+const inputSchema = z.object({
+  orgId: z.string().min(1, 'Organization ID is required'),
+  emailUsernames: z
+    .preprocess(value => {
+      if (Array.isArray(value)) {
         return value;
-      }, emailUsernameArraySchema)
-      .describe('Email usernames (portion before @) to remove from the organization'),
-    accessTokenSecretId: z
-      .string()
-      .uuid()
-      .optional()
-      .describe('Secret containing Atlassian access token'),
-    accessToken: z
-      .string()
-      .min(1, 'Access token cannot be empty')
-      .optional()
-      .describe('Direct Atlassian access token input'),
-    limit: z
-      .number()
-      .int({ message: 'Limit must be an integer' })
-      .positive('Limit must be a positive integer')
-      .max(200, 'Limit cannot exceed 200')
-      .default(20)
-      .optional()
-      .describe('Maximum number of users to return from search'),
-  })
-  .superRefine((value, ctx) => {
-    if (!value.accessTokenSecretId && !value.accessToken) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Provide either accessTokenSecretId or accessToken.',
-        path: ['accessTokenSecretId'],
-      });
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Provide either accessTokenSecretId or accessToken.',
-        path: ['accessToken'],
-      });
-    }
-  });
+      }
+      if (typeof value === 'string') {
+        return value
+          .split(/[\r\n,]+/)
+          .map(item => item.trim())
+          .filter(item => item.length > 0);
+      }
+      return value;
+    }, emailUsernameArraySchema)
+    .describe('Email usernames (portion before @) to remove from the organization'),
+  accessToken: z
+    .string()
+    .min(1, 'Access token is required')
+    .describe('Resolved Atlassian admin API bearer token (connect via Secret Loader).'),
+  limit: z
+    .number()
+    .int({ message: 'Limit must be an integer' })
+    .positive('Limit must be a positive integer')
+    .max(200, 'Limit cannot exceed 200')
+    .default(20)
+    .optional()
+    .describe('Maximum number of users to return from search'),
+});
 
 type Input = z.infer<typeof inputSchema>;
 
@@ -189,7 +168,7 @@ const definition: ComponentDefinition<Input, Output> = {
   inputSchema,
   outputSchema,
   docs:
-    'Search for Atlassian accounts by email username and remove them from an organization using the Atlassian Admin API. Typical workflow: Secret Fetch → Atlassian Offboarding → Console Log / Notify.\n\nPrerequisites:\n- Atlassian organization ID (UUID) with admin API access.\n- Admin API bearer token stored in ShipSec secrets.\n\nInputs:\n- emailUsernames: comma/newline separated list or array of email usernames (portion before @).\n- orgId: Atlassian organization identifier.\n- accessToken/accessTokenSecretId: bearer token (secret recommended).\n\nOutputs:\n- results: entry for each requested username including accountId, status, and message.\n- summary: aggregate counts (requested/found/deleted/failed).\n- searchRaw: raw API response for audit/debug.\n\nSee docs/atlassian-offboarding.md for end-to-end workflow guidance.',
+    'Search for Atlassian accounts by email username and remove them from an organization using the Atlassian Admin API. Typical workflow: Secret Fetch → Atlassian Offboarding → Console Log / Notify.\n\nPrerequisites:\n- Atlassian organization ID (UUID) with admin API access.\n- Admin API bearer token delivered via Secret Fetch (connect the secret output to the accessToken input).\n\nInputs:\n- emailUsernames: comma/newline separated list or array of email usernames (portion before @).\n- orgId: Atlassian organization identifier.\n- accessToken: bearer token supplied via a secret/credential port.\n\nOutputs:\n- results: entry for each requested username including accountId, status, and message.\n- summary: aggregate counts (requested/found/deleted/failed).\n- searchRaw: raw API response for audit/debug.\n\nSee docs/atlassian-offboarding.md for end-to-end workflow guidance.',
   metadata: {
     slug: 'atlassian-offboarding',
     version: '1.0.0',
@@ -225,8 +204,8 @@ const definition: ComponentDefinition<Input, Output> = {
         id: 'accessToken',
         label: 'Access Token',
         dataType: port.secret(),
-        required: false,
-        description: 'Bearer token with admin scope. Takes priority over accessTokenSecretId if both provided.',
+        required: true,
+        description: 'Bearer token with admin scope (connect from Secret Fetch to keep credentials masked).',
         valuePriority: 'connection-first',
       },
     ],
@@ -271,16 +250,6 @@ const definition: ComponentDefinition<Input, Output> = {
         helpText: 'Example: abhishekudiya09 or abhishekudiya09@example.com',
       },
       {
-        id: 'accessTokenSecretId',
-        label: 'Access Token Secret ID',
-        type: 'text',
-        required: false,
-        default: '2183633e-9cd8-4d33-ace1-9874ce4055f3',
-        placeholder: '00000000-0000-0000-0000-000000000000',
-        description: 'Secret ID referencing the Atlassian Admin API bearer token.',
-        helpText: 'Create a secret containing the Atlassian admin bearer token and paste its UUID here or connect via Secret Fetch.',
-      },
-      {
         id: 'limit',
         label: 'Search Limit',
         type: 'number',
@@ -312,27 +281,11 @@ const definition: ComponentDefinition<Input, Output> = {
       `[AtlassianOffboarding] Normalised ${requestedUsernames.length} username(s): ${requestedUsernames.join(', ')}`,
     );
 
-    let accessToken = params.accessToken?.trim();
-    if (accessToken) {
-      context.logger.info('[AtlassianOffboarding] Using access token provided via input connection.');
-    }
-
-    if (!accessToken && params.accessTokenSecretId) {
-      if (!context.secrets) {
-        throw new Error('Atlassian Offboarding component requires the secrets service to resolve the access token.');
-      }
-      context.emitProgress('Loading Atlassian API access token from secret store...');
-      const secret = await context.secrets.get(params.accessTokenSecretId);
-      if (!secret) {
-        throw new Error(`Secret ${params.accessTokenSecretId} not found or has no active version.`);
-      }
-      accessToken = secret.value.trim();
-      context.logger.info('[AtlassianOffboarding] Access token resolved from secret store.');
-    }
-
+    const accessToken = params.accessToken.trim();
     if (!accessToken) {
-      throw new Error('Failed to resolve Atlassian access token from provided inputs.');
+      throw new Error('Access token is required to call the Atlassian Admin API.');
     }
+    context.logger.info('[AtlassianOffboarding] Using access token provided via secret input.');
 
     context.emitProgress(`Searching Atlassian for ${requestedUsernames.length} user(s) to offboard...`);
     context.logger.info(

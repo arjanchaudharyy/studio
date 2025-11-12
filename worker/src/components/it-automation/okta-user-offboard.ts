@@ -11,7 +11,10 @@ const inputSchema = z.object({
   dry_run: z.boolean().default(false),
   action: z.enum(['deactivate', 'delete']).default('deactivate'),
   okta_domain: z.string(),
-  api_token_secret_id: z.string().describe('Secret ID for Okta API token'),
+  apiToken: z
+    .string()
+    .min(1, 'API token is required')
+    .describe('Resolved Okta API token'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -188,11 +191,11 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
         description: 'Your Okta organization domain.',
       },
       {
-        id: 'api_token_secret_id',
-        label: 'API Token Secret',
-        dataType: port.text({ coerceFrom: [] }),
+        id: 'apiToken',
+        label: 'API Token',
+        dataType: port.secret(),
         required: true,
-        description: 'Secret ID containing the Okta API token.',
+        description: 'Connect the Secret Loader output containing the Okta API token.',
       },
     ],
     outputs: [
@@ -238,7 +241,7 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
       okta_domain,
       action = 'deactivate',
       dry_run = false,
-      api_token_secret_id,
+      apiToken,
     } = params;
 
     context.logger.info(`[Okta] Starting user offboarding for ${user_email}`);
@@ -254,35 +257,15 @@ const definition: ComponentDefinition<Input, OktaUserOffboardOutput> = {
     let userDeleted = false;
 
     try {
-      // Validate secrets service
-      if (!context.secrets) {
-        throw new Error('Okta User Offboard component requires the secrets service. Ensure the worker injects ISecretsService.');
-      }
-
-      // Validate secret ID input
-      if (!api_token_secret_id) {
-        throw new Error('API token secret ID is required. Please provide a secret ID containing the Okta API token.');
-      }
-
-      // Get and validate secret
-      const resolvedSecret = await context.secrets.get(api_token_secret_id);
-      if (!resolvedSecret) {
-        throw new Error(`Secret ${api_token_secret_id} not found or has no active version.`);
-      }
-
-      // Parse API token
-      let apiToken: string;
-      try {
-        apiToken = typeof resolvedSecret.value === 'string'
-          ? resolvedSecret.value
-          : JSON.stringify(resolvedSecret.value);
-      } catch (error) {
-        throw new Error(`Failed to parse API token secret: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Resolve API token
+      const resolvedApiToken = apiToken.trim();
+      if (!resolvedApiToken) {
+        throw new Error('API token is required to contact Okta.');
       }
 
       // Initialize Okta client
       context.emitProgress('Initializing Okta SDK');
-      const oktaClient = initializeOktaClient(okta_domain, apiToken);
+      const oktaClient = initializeOktaClient(okta_domain, resolvedApiToken);
 
       // Get current user state
       context.emitProgress('Fetching user details');

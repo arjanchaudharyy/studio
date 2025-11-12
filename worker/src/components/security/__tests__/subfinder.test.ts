@@ -85,34 +85,22 @@ describe('subfinder component', () => {
     expect(params.domains).toEqual(['legacy.example.com']);
   });
 
-  it('should inject provider config secret into docker environment when configured', async () => {
+  it('should inject provider config content into docker environment when configured', async () => {
     const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
     if (!component) throw new Error('Component not registered');
 
-    const secretId = '123e4567-e89b-42d3-a456-426614174000';
     const secretValue = `providers:
   - name: shodan
     api_key: abc123`;
 
-    const secrets: sdk.ISecretsService = {
-      async get(key) {
-        expect(key).toBe(secretId);
-        return { value: secretValue, version: 1 };
-      },
-      async list() {
-        return [];
-      },
-    };
-
     const context = sdk.createExecutionContext({
       runId: 'test-run',
       componentRef: 'subfinder-secret-test',
-      secrets,
     });
 
     const params = component.inputSchema.parse({
       domains: ['example.com'],
-      providerConfigSecretId: secretId,
+      providerConfig: secretValue,
     });
 
     const runnerSpy = vi

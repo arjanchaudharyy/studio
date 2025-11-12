@@ -182,6 +182,8 @@ export async function executeWorkflow(
           })
         : undefined;
 
+      const allowSecrets = component.requiresSecrets === true;
+
       const context = createExecutionContext({
         runId,
         componentRef: action.ref,
@@ -193,7 +195,7 @@ export async function executeWorkflow(
           failure,
         },
         storage: options.storage,
-        secrets: options.secrets,
+        secrets: allowSecrets ? options.secrets : undefined,
         artifacts: scopedArtifacts,
         trace: options.trace,
         logCollector: forwardLog,

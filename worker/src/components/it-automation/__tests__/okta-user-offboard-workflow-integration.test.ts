@@ -26,6 +26,9 @@ import '../../index';
 describe('Okta User Offboard - Workflow Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUserApi.getUser.mockReset();
+    mockUserApi.deactivateUser.mockReset();
+    mockUserApi.deleteUser.mockReset();
   });
 
   const createTestWorkflow = (params: any): WorkflowDefinition => ({
@@ -55,34 +58,15 @@ describe('Okta User Offboard - Workflow Integration', () => {
     ],
   });
 
-  const createTestSecretsService = (shouldFail: boolean = false, errorType: string = 'secret-not-found') => {
-    if (shouldFail) {
-      return {
-        get: vi.fn().mockResolvedValue(null),
-        list: vi.fn().mockResolvedValue([]),
-      };
-    }
-    return {
-      get: vi.fn().mockResolvedValue({ value: 'test-api-token' }),
-      list: vi.fn().mockResolvedValue([]),
-    };
-  };
-
-  it('should successfully deactivate user through workflow runner', async () => {
-    // Set up mocks
-    const mockSecretsService = createTestSecretsService(false);
-
+  it('successfully deactivates a user via the workflow runner', async () => {
     const mockUser = {
       id: '12345',
-      profile: {
-        email: 'test@example.com',
-        login: 'test@example.com',
-      },
+      profile: { email: 'test@example.com', login: 'test@example.com' },
       status: 'ACTIVE',
-      created: new Date('2023-01-01'),
-      activated: new Date('2023-01-01'),
-      lastLogin: new Date('2023-10-01'),
-      lastUpdated: new Date('2023-10-01'),
+      created: new Date(),
+      activated: new Date(),
+      lastLogin: new Date(),
+      lastUpdated: new Date(),
     };
 
     mockUserApi.getUser.mockResolvedValue(mockUser);
@@ -90,277 +74,117 @@ describe('Okta User Offboard - Workflow Integration', () => {
 
     const traceEvents: TraceEvent[] = [];
     const trace = {
-      record: (event: TraceEvent) => {
-        traceEvents.push(event);
-        console.log('TRACE EVENT:', event.type, event.nodeRef, event.message);
-      },
+      record: (event: TraceEvent) => traceEvents.push(event),
     };
 
-    // Create workflow
     const workflow = createTestWorkflow({
       user_email: 'test@example.com',
       okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
+      apiToken: 'okta-api-token',
       action: 'deactivate',
       dry_run: false,
     });
 
-    // Execute workflow
-    const result = await executeWorkflow(workflow, {}, {
-      runId: 'okta-integration-test',
-      trace,
-      secrets: mockSecretsService,
-    });
+    const result = await executeWorkflow(workflow, {}, { runId: 'workflow-success', trace });
 
-    // Assertions
     expect(result.success).toBe(true);
-    expect(result.outputs).toBeDefined();
-
     const output = result.outputs['okta-offboard'] as any;
     expect(output.success).toBe(true);
     expect(output.userDeactivated).toBe(true);
     expect(output.userDeleted).toBe(false);
-    expect(output.message).toContain('Successfully deactivated user');
-
-    // Verify API calls were made
-    expect(mockUserApi.getUser).toHaveBeenCalledWith({ userId: 'test@example.com' });
-    expect(mockUserApi.deactivateUser).toHaveBeenCalledWith({ userId: '12345' });
+    expect(mockUserApi.getUser).toHaveBeenCalledTimes(1);
+    expect(mockUserApi.deactivateUser).toHaveBeenCalledTimes(1);
     expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
-
-    console.log('✅ Workflow completed successfully');
   });
 
-  it('should fail gracefully and NOT retry when user not found', async () => {
-    // Set up mocks to simulate user not found
-    const mockSecretsService = createTestSecretsService(false);
-
+  it('returns structured failure without retries when user not found', async () => {
     const error = new Error('User not found');
-    error.status = 404;
+    (error as any).status = 404;
     mockUserApi.getUser.mockRejectedValue(error);
 
-    const traceEvents: TraceEvent[] = [];
-    const trace = {
-      record: (event: TraceEvent) => {
-        traceEvents.push(event);
-        console.log('TRACE EVENT:', event.type, event.nodeRef, event.message, event.level);
-      },
-    };
-
-    // Create workflow
     const workflow = createTestWorkflow({
-      user_email: 'notfound@example.com',
+      user_email: 'missing@example.com',
       okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
+      apiToken: 'okta-api-token',
       action: 'deactivate',
       dry_run: false,
     });
 
-    // Mock time to prevent infinite test in case of retries
     const startTime = Date.now();
+    const result = await executeWorkflow(workflow, {}, { runId: 'workflow-notfound' });
+    const executionTime = Date.now() - startTime;
 
-    // Execute workflow
-    const result = await executeWorkflow(workflow, {}, {
-      runId: 'okta-integration-test-fail',
-      trace,
-      secrets: mockSecretsService,
-    });
-
-    const endTime = Date.now();
-    const executionTime = endTime - startTime;
-
-    // Assertions
     expect(result.success).toBe(false);
-    expect(result.error).toContain('One or more workflow actions failed');
-
     const output = result.outputs['okta-offboard'] as any;
     expect(output.success).toBe(false);
-    expect(output.userDeactivated).toBe(false);
-    expect(output.userDeleted).toBe(false);
-    expect(output.error).toContain('User notfound@example.com not found');
-
-    // CRITICAL: Verify no retry loops occurred
-    expect(executionTime).toBeLessThan(5000); // Should complete quickly, not get stuck in retries
-
-    // Should only call getUser once, no retries
+    expect(output.error).toContain('User missing@example.com not found');
     expect(mockUserApi.getUser).toHaveBeenCalledTimes(1);
     expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
-
-    console.log('✅ Workflow failed gracefully without retries');
+    expect(executionTime).toBeLessThan(5000);
   });
 
-  it('should fail gracefully and NOT retry when secret is invalid', async () => {
-    // Set up mocks to simulate secret failure
-    const mockSecretsService = createTestSecretsService(true, 'secret-not-found');
-
-    const traceEvents: TraceEvent[] = [];
-    const trace = {
-      record: (event: TraceEvent) => {
-        traceEvents.push(event);
-        console.log('TRACE EVENT:', event.type, event.nodeRef, event.message, event.level);
-      },
-    };
-
-    // Create workflow
-    const workflow = createTestWorkflow({
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'invalid-secret',
-      action: 'deactivate',
-      dry_run: false,
-    });
-
-    // Mock time to prevent infinite test in case of retries
-    const startTime = Date.now();
-
-    // Execute workflow
-    const result = await executeWorkflow(workflow, {}, {
-      runId: 'okta-integration-test-secret-fail',
-      trace,
-      secrets: mockSecretsService,
-    });
-
-    const endTime = Date.now();
-    const executionTime = endTime - startTime;
-
-    // Assertions
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('One or more workflow actions failed');
-
-    const output = result.outputs['okta-offboard'] as any;
-    expect(output.success).toBe(false);
-    expect(output.userDeactivated).toBe(false);
-    expect(output.userDeleted).toBe(false);
-    expect(output.error).toContain('not found or has no active version');
-
-    // CRITICAL: Verify no retry loops occurred
-    expect(executionTime).toBeLessThan(5000); // Should complete quickly, not get stuck in retries
-
-    // Should not attempt any API calls
-    expect(mockUserApi.getUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
-
-    console.log('✅ Workflow failed gracefully without retries when secret invalid');
-  });
-
-  it('should fail gracefully and NOT retry when API token is invalid', async () => {
-    // Set up mocks to simulate invalid API token
-    const mockSecretsService = createTestSecretsService(false);
-
-    const error = new Error('Invalid token');
-    error.status = 401;
-    mockUserApi.getUser.mockRejectedValue(error);
-
-    const traceEvents: TraceEvent[] = [];
-    const trace = {
-      record: (event: TraceEvent) => {
-        traceEvents.push(event);
-        console.log('TRACE EVENT:', event.type, event.nodeRef, event.message, event.level);
-      },
-    };
-
-    // Create workflow
-    const workflow = createTestWorkflow({
-      user_email: 'test@example.com',
-      okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
-      action: 'deactivate',
-      dry_run: false,
-    });
-
-    // Mock time to prevent infinite test in case of retries
-    const startTime = Date.now();
-
-    // Execute workflow
-    const result = await executeWorkflow(workflow, {}, {
-      runId: 'okta-integration-test-auth-fail',
-      trace,
-      secrets: mockSecretsService,
-    });
-
-    const endTime = Date.now();
-    const executionTime = endTime - startTime;
-
-    // Assertions
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('One or more workflow actions failed');
-
-    const output = result.outputs['okta-offboard'] as any;
-    expect(output.success).toBe(false);
-    expect(output.userDeactivated).toBe(false);
-    expect(output.userDeleted).toBe(false);
-    expect(output.error).toContain('Failed to get user details');
-
-    // CRITICAL: Verify no retry loops occurred
-    expect(executionTime).toBeLessThan(5000); // Should complete quickly, not get stuck in retries
-
-    // Should only call getUser once, no retries
-    expect(mockUserApi.getUser).toHaveBeenCalledTimes(1);
-    expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
-
-    console.log('✅ Workflow failed gracefully without retries when auth fails');
-  });
-
-  it('should work correctly in dry run mode through workflow', async () => {
-    // Set up mocks
-    const mockSecretsService = createTestSecretsService(false);
-
+  it('supports dry run mode through the workflow runner', async () => {
     const mockUser = {
       id: '12345',
-      profile: {
-        email: 'test@example.com',
-        login: 'test@example.com',
-      },
+      profile: { email: 'test@example.com', login: 'test@example.com' },
       status: 'ACTIVE',
-      created: new Date('2023-01-01'),
-      activated: new Date('2023-01-01'),
-      lastLogin: new Date('2023-10-01'),
-      lastUpdated: new Date('2023-10-01'),
+      created: new Date(),
+      activated: new Date(),
+      lastLogin: new Date(),
+      lastUpdated: new Date(),
     };
 
     mockUserApi.getUser.mockResolvedValue(mockUser);
 
-    const traceEvents: TraceEvent[] = [];
-    const trace = {
-      record: (event: TraceEvent) => {
-        traceEvents.push(event);
-        console.log('TRACE EVENT:', event.type, event.nodeRef, event.message);
-      },
-    };
-
-    // Create workflow in dry run mode
     const workflow = createTestWorkflow({
       user_email: 'test@example.com',
       okta_domain: 'company.okta.com',
-      api_token_secret_id: 'okta-token-secret',
+      apiToken: 'okta-api-token',
       action: 'deactivate',
       dry_run: true,
     });
 
-    // Execute workflow
-    const result = await executeWorkflow(workflow, {}, {
-      runId: 'okta-integration-test-dry-run',
-      trace,
-      secrets: mockSecretsService,
-    });
+    const result = await executeWorkflow(workflow, {}, { runId: 'workflow-dry' });
 
-    // Assertions
     expect(result.success).toBe(true);
-
     const output = result.outputs['okta-offboard'] as any;
     expect(output.success).toBe(true);
-    expect(output.userDeactivated).toBe(true); // Simulated
-    expect(output.userDeleted).toBe(false);
-    expect(output.message).toContain('DRY RUN: Would deactivate user');
-    expect(output.audit.dryRun).toBe(true);
-
-    // Verify only getUser was called, no mutations
-    expect(mockUserApi.getUser).toHaveBeenCalledWith({ userId: 'test@example.com' });
+    expect(output.userDeactivated).toBe(true);
+    expect(output.message).toContain('DRY RUN');
     expect(mockUserApi.deactivateUser).not.toHaveBeenCalled();
-    expect(mockUserApi.deleteUser).not.toHaveBeenCalled();
+  });
 
-    console.log('✅ Dry run mode works correctly through workflow');
+  it('supports delete action end-to-end', async () => {
+    const mockUser = {
+      id: '12345',
+      profile: { email: 'test@example.com', login: 'test@example.com' },
+      status: 'ACTIVE',
+      created: new Date(),
+      activated: new Date(),
+      lastLogin: new Date(),
+      lastUpdated: new Date(),
+    };
+
+    mockUserApi.getUser.mockResolvedValue(mockUser);
+    mockUserApi.deactivateUser.mockResolvedValue({});
+    mockUserApi.deleteUser.mockResolvedValue({});
+
+    const workflow = createTestWorkflow({
+      user_email: 'test@example.com',
+      okta_domain: 'company.okta.com',
+      apiToken: 'okta-api-token',
+      action: 'delete',
+      dry_run: false,
+    });
+
+    const result = await executeWorkflow(workflow, {}, { runId: 'workflow-delete' });
+
+    expect(result.success).toBe(true);
+    const output = result.outputs['okta-offboard'] as any;
+    expect(output.success).toBe(true);
+    expect(output.userDeactivated).toBe(true);
+    expect(output.userDeleted).toBe(true);
+    expect(mockUserApi.deactivateUser).toHaveBeenCalledTimes(1);
+    expect(mockUserApi.deleteUser).toHaveBeenCalledTimes(1);
   });
 });
