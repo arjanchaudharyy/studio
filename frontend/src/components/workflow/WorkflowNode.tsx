@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import { Handle, Position, type NodeProps, useReactFlow } from 'reactflow'
-import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle } from 'lucide-react'
+import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useComponentStore } from '@/store/componentStore'
@@ -25,7 +25,7 @@ const STATUS_ICONS = {
 export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) => {
   const { getComponent, loading } = useComponentStore()
   const { getNodes, getEdges } = useReactFlow()
-  const { nodeStates, selectedRunId, selectNode } = useExecutionTimelineStore()
+  const { nodeStates, selectedRunId, selectNode, isPlaying } = useExecutionTimelineStore()
   const { mode } = useWorkflowUiStore()
   const [isHovered, setIsHovered] = useState(false)
 
@@ -174,7 +174,11 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
           strokeDasharray={`${(progress / 100) * (Math.PI * (size - 4))} ${Math.PI * (size - 4)}`}
           className={cn(
             "transition-all duration-300",
-            effectiveStatus === 'running' ? "text-blue-500" : "text-green-500"
+            effectiveStatus === 'running'
+              ? isPlaying
+                ? "text-blue-500 animate-pulse"
+                : "text-blue-400"
+              : "text-green-500"
           )}
         />
       </svg>
@@ -194,15 +198,20 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   return (
     <div
       className={cn(
-        'shadow-lg rounded-lg border-2 min-w-[240px] max-w-[280px] bg-background transition-all relative',
+        'shadow-lg rounded-lg border-2 min-w-[240px] max-w-[280px] transition-all relative',
         // Enhanced border styling for timeline
-        isTimelineActive && effectiveStatus === 'running' && 'animate-pulse border-blue-400',
+        isTimelineActive && effectiveStatus === 'running' && 'border-blue-400',
+        isTimelineActive && effectiveStatus === 'running' && !isPlaying && 'border-dashed',
         isTimelineActive && effectiveStatus === 'error' && 'border-red-400 bg-red-50/20',
         isTimelineActive && effectiveStatus === 'success' && 'border-green-400 bg-green-50/20',
 
         // Existing styling
         nodeData.status ? nodeStyle.border : typeBorderColor,
-        nodeData.status && nodeData.status !== 'idle' ? nodeStyle.bg : 'bg-background',
+        nodeData.status && nodeData.status !== 'idle'
+          ? nodeStyle.bg
+          : isTimelineActive && visualState.status === 'running'
+            ? 'bg-blue-50/80 dark:bg-blue-900/30'
+            : 'bg-background',
         selected && 'ring-2 ring-blue-500 ring-offset-2',
         hasUnfilledRequired && !nodeData.status && 'border-red-300 shadow-red-100',
 
@@ -245,13 +254,14 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                 {hasUnfilledRequired && !nodeData.status && (
                   <span className="text-red-500 text-xs" title="Required fields missing">!</span>
                 )}
-                {StatusIcon && (
-                  <StatusIcon className={cn(
-                    'h-4 w-4 flex-shrink-0',
-                    nodeStyle.iconClass,
-                    isTimelineActive && effectiveStatus === 'running' && 'animate-spin',
-                    isTimelineActive && effectiveStatus === 'error' && 'animate-bounce'
-                  )} />
+                {StatusIcon && (!isTimelineActive || effectiveStatus !== 'running' || isPlaying) && (
+                  <StatusIcon
+                    className={cn(
+                      'h-4 w-4 flex-shrink-0',
+                      nodeStyle.iconClass,
+                      isTimelineActive && effectiveStatus === 'running' && isPlaying && 'animate-spin',
+                    )}
+                  />
                 )}
               </div>
             </div>
@@ -261,8 +271,17 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
               <div className="flex items-center gap-2 mt-1">
                 {visualState.status === 'running' && (
                   <div className="flex items-center gap-1 text-xs text-blue-600">
-                    <Activity className="h-3 w-3" />
-                    Running
+                    {isPlaying ? (
+                      <>
+                        <Activity className="h-3 w-3" />
+                        Running
+                      </>
+                    ) : (
+                      <>
+                        <Pause className="h-3 w-3" />
+                        Paused
+                      </>
+                    )}
                   </div>
                 )}
                 {visualState.status === 'success' && (

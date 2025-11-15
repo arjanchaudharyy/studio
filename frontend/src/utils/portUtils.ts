@@ -74,8 +74,13 @@ export const arePortDataTypesCompatible = (
   target: PortDataType,
 ): boolean => comparePortDataTypes(source, target)
 
+const isPrimitiveAnd = (
+  dataType: PortDataType,
+  predicate: (name: string) => boolean,
+): boolean => isPrimitive(dataType) && predicate(dataType.name)
+
 export const isTextLikePort = (dataType: PortDataType): boolean =>
-  isPrimitive(dataType) && dataType.name === 'text'
+  isPrimitiveAnd(dataType, (name) => name === 'text')
 
 export const describePortDataType = (dataType: PortDataType): string => {
   if (isPrimitive(dataType)) {
@@ -98,7 +103,9 @@ export const describePortDataType = (dataType: PortDataType): string => {
 }
 
 export const inputSupportsManualValue = (input: InputPort): boolean =>
-  isTextLikePort(input.dataType)
+  isPrimitiveAnd(input.dataType, (name) =>
+    name === 'text' || name === 'number' || name === 'boolean',
+  )
 
 export const runtimeInputTypeToPortDataType = (type: string): PortDataType => {
   const normalized = type.toLowerCase()

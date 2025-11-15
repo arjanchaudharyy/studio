@@ -2,6 +2,13 @@ import { X, ExternalLink } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useComponentStore } from '@/store/componentStore'
 import { ParameterFieldWrapper } from './ParameterField'
@@ -14,6 +21,24 @@ interface ConfigPanelProps {
   selectedNode: Node<NodeData> | null
   onClose: () => void
   onUpdateNode?: (nodeId: string, data: Partial<NodeData>) => void
+}
+
+const formatManualValue = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  try {
+    return JSON.stringify(value)
+  } catch (error) {
+    console.error('Failed to serialise manual value for preview', error)
+    return String(value)
+  }
 }
 
 /**
@@ -162,6 +187,17 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                       ? manualValue.trim().length > 0
                       : true)
                   const manualLocked = hasConnection && !manualOverridesPort
+                  const primitiveName =
+                    input.dataType?.kind === 'primitive' ? input.dataType.name : null
+                  const isNumberInput = primitiveName === 'number'
+                  const isBooleanInput = primitiveName === 'boolean'
+                  const manualInputValue =
+                    manualValue === undefined || manualValue === null
+                      ? ''
+                      : typeof manualValue === 'string'
+                        ? manualValue
+                        : String(manualValue)
+                  const manualValuePreview = formatManualValue(manualValue)
                   const useSecretSelect =
                     (component.slug === 'secret-fetch' || component.id === 'core.secret.fetch') &&
                     input.id === 'secretId'
@@ -169,7 +205,9 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                     ? 'Select a secret...'
                     : input.id === 'supabaseUrl'
                       ? 'https://<project-ref>.supabase.co or <project_ref>'
-                      : 'Enter text to use without a connection'
+                      : isNumberInput
+                        ? 'Enter a number to use without a connection'
+                        : 'Enter text to use without a connection'
                   const typeLabel = describePortDataType(input.dataType)
 
                   return (
@@ -215,15 +253,62 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                               disabled={manualLocked}
                               allowManualEntry={!manualLocked}
                             />
+                          ) : isBooleanInput ? (
+                            <div className="space-y-2">
+                              <Select
+                                value={
+                                  typeof manualValue === 'boolean'
+                                    ? manualValue
+                                      ? 'true'
+                                      : 'false'
+                                    : undefined
+                                }
+                                onValueChange={(value) => {
+                                  if (value === 'true') {
+                                    handleParameterChange(input.id, true)
+                                  } else if (value === 'false') {
+                                    handleParameterChange(input.id, false)
+                                  }
+                                }}
+                                disabled={manualLocked}
+                              >
+                                <SelectTrigger className="text-sm">
+                                  <SelectValue placeholder="Select true or false" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="true">True</SelectItem>
+                                  <SelectItem value="false">False</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {!manualLocked && typeof manualValue === 'boolean' && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-fit text-xs px-2"
+                                  onClick={() => handleParameterChange(input.id, undefined)}
+                                >
+                                  Clear manual value
+                                </Button>
+                              )}
+                            </div>
                           ) : (
                             <Input
                               id={`manual-${input.id}`}
-                              type="text"
-                              value={typeof manualValue === 'string' ? manualValue : ''}
+                              type={isNumberInput ? 'number' : 'text'}
+                              value={manualInputValue}
                               onChange={(e) => {
                                 const nextValue = e.target.value
                                 if (nextValue === '') {
                                   handleParameterChange(input.id, undefined)
+                                  return
+                                }
+                                if (isNumberInput) {
+                                  const parsed = Number(nextValue)
+                                  if (Number.isNaN(parsed)) {
+                                    return
+                                  }
+                                  handleParameterChange(input.id, parsed)
                                 } else {
                                   handleParameterChange(input.id, nextValue)
                                 }
@@ -239,7 +324,9 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                             </p>
                           ) : (
                             <p className="text-[10px] text-muted-foreground">
-                              Leave blank to require a port connection.
+                              {isBooleanInput
+                                ? 'Select a value or clear manual input to require a port connection.'
+                                : 'Leave blank to require a port connection.'}
                             </p>
                           )}
                         </div>
@@ -253,11 +340,11 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                               <div className="text-blue-600 flex items-center gap-1">
                                 • <span className="font-medium">Manual value in use</span>
                               </div>
-                              {inputSupportsManualValue(input) && typeof manualValue === 'string' && manualValue.trim().length > 0 && (
+                              {inputSupportsManualValue(input) && manualValuePreview && (
                                 <div className="text-muted-foreground break-words">
                                   Value:{' '}
                                   <span className="font-mono text-blue-600">
-                                    {manualValue}
+                                    {manualValuePreview}
                                   </span>
                                 </div>
                               )}

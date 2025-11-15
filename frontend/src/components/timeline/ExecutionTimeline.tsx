@@ -1,11 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import {
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  EyeOff,
-} from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -71,9 +65,17 @@ export function ExecutionTimeline() {
     setPlaybackSpeed,
     stepForward,
     stepBackward,
-    toggleTimeline,
     setTimelineZoom,
   } = useExecutionTimelineStore()
+
+  // Reset viewport + zoom whenever a new run is selected so we always show full history
+  useEffect(() => {
+    if (!selectedRunId) {
+      return
+    }
+    setTimelineStart(0)
+    setTimelineZoom(1)
+  }, [selectedRunId, setTimelineZoom])
 
   // Animation loop for playback with auto-follow
   useEffect(() => {
@@ -201,10 +203,35 @@ export function ExecutionTimeline() {
     setPlaybackSpeed(speed)
   }, [setPlaybackSpeed])
 
+
   // Calculate progress percentage with better bounds checking
   const progress = totalDuration > 0 ? Math.min(100, Math.max(0, (currentTime / totalDuration) * 100)) : 0
 
   // Generate event markers
+  const markerBaseColors: Record<string, string> = {
+    STARTED: 'bg-blue-300/60 dark:bg-blue-700/60',
+    PROGRESS: 'bg-purple-300/60 dark:bg-purple-700/60',
+    COMPLETED: 'bg-green-300/60 dark:bg-green-700/60',
+    FAILED: 'bg-red-300/60 dark:bg-red-700/60',
+    default: 'bg-muted-foreground/60'
+  }
+
+  const markerViewportColors: Record<string, string> = {
+    STARTED: 'bg-blue-400 dark:bg-blue-300',
+    PROGRESS: 'bg-purple-400 dark:bg-purple-300',
+    COMPLETED: 'bg-green-400 dark:bg-green-300',
+    FAILED: 'bg-red-400 dark:bg-red-300',
+    default: 'bg-gray/80'
+  }
+
+  const markerAccentColors: Record<string, string> = {
+    STARTED: 'bg-blue-600',
+    PROGRESS: 'bg-purple-500',
+    COMPLETED: 'bg-green-600',
+    FAILED: 'bg-red-600',
+    default: 'bg-gray-500'
+  }
+
   const eventMarkers = events.map((event) => {
     const percentage = totalDuration > 0
       ? Math.min(100, Math.max(0, (event.offsetMs / totalDuration) * 100))
@@ -219,24 +246,22 @@ export function ExecutionTimeline() {
     // Determine if event is close to current seeker position (within 2% of timeline for better highlighting)
     const isNearSeeker = Math.abs(percentage - progress) <= 2
 
-    let markerColor = isNearSeeker ? 'bg-purple-500' : 'bg-gray-400' // Highlight events near seeker
-    if (event.type === 'COMPLETED') markerColor = isNearSeeker ? 'bg-green-600' : 'bg-green-500'
-    else if (event.type === 'FAILED') markerColor = isNearSeeker ? 'bg-red-600' : 'bg-red-500'
-    else if (event.type === 'STARTED') markerColor = isNearSeeker ? 'bg-blue-600' : 'bg-blue-500'
+    const baseColor = markerBaseColors[event.type] ?? markerBaseColors.default
+    const viewportColor = markerViewportColors[event.type] ?? markerViewportColors.default
+    const accentColor = markerAccentColors[event.type] ?? markerAccentColors.default
+
+    const color = isNearSeeker
+      ? accentColor
+      : (isWithinViewport ? viewportColor : baseColor)
 
     return { 
       percentage, 
-      color: markerColor, 
+      color, 
       event,
       isWithinViewport,
       isNearSeeker
     }
   })
-
-  // Filter markers to only show those in viewport when zoomed in
-  const visibleEventMarkers = timelineZoom > 1.0 
-    ? eventMarkers.filter(marker => marker.isWithinViewport) 
-    : eventMarkers
 
   if (!selectedRunId || !showTimeline) {
     return null
@@ -325,39 +350,27 @@ export function ExecutionTimeline() {
             </Badge>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Hide Timeline */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTimeline}
-            >
-              <EyeOff className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
 
         {/* Timeline */}
         <div className="space-y-2">
           {/* Time display */}
           <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{formatTime(timelineZoom > 1.0 ? timelineStart * totalDuration : 0)}</span>
             <span>
               {playbackMode === 'live' ? (
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1 text-red-500">
                   <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                   LIVE
                 </span>
-              ) : timelineZoom > 1.0 ? (
-                formatTime(timelineStart * totalDuration)
               ) : (
                 formatTime(currentTime)
               )}
             </span>
             <span>
               {timelineZoom > 1.0
-                ? `${formatTime((timelineStart + (1 / timelineZoom)) * totalDuration)}`
-                : formatTime(totalDuration)
-              }
+                ? formatTime(Math.min(totalDuration, (timelineStart + (1 / timelineZoom)) * totalDuration))
+                : formatTime(totalDuration)}
             </span>
           </div>
 
@@ -374,7 +387,7 @@ export function ExecutionTimeline() {
             {/* Timeline Content (scrollable) */}
             <div
               ref={timelineContentRef}
-              className="relative h-full cursor-pointer"
+              className="relative h-full cursor-pointer z-10"
               onClick={handleTimelineClick}
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
@@ -394,26 +407,40 @@ export function ExecutionTimeline() {
               />
 
               {/* Event Markers - Clickable */}
-              {visibleEventMarkers.map((marker) => (
-                <div
-                  key={marker.event.id}
-                  className={cn(
-                    "absolute rounded-full cursor-pointer hover:scale-125 transition-all duration-150",
-                    marker.color,
-                    "hover:ring-2 hover:ring-white/50",
-                    "top-2 bottom-2 w-2"
-                  )}
-                  style={{
-                    left: `${marker.percentage}%`,
-                    transform: 'translateX(-50%)',
-                  }}
-                  title={`${marker.event.type} - ${marker.event.nodeId || 'System'} - ${formatTimestamp(marker.event.timestamp)}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    seek(marker.event.offsetMs)
-                  }}
-                />
-              ))}
+              {eventMarkers.map((marker) => {
+                const { event } = marker
+                const thicknessClass = marker.isNearSeeker
+                  ? 'w-[3px]'
+                  : 'w-[2px]'
+                const verticalPaddingClass = marker.isNearSeeker
+                  ? 'top-1 bottom-1'
+                  : 'top-2 bottom-2'
+                const baseClasses = marker.isNearSeeker
+                  ? marker.color
+                  : 'bg-gray-400 dark:bg-gray-500 border border-gray-200/80 dark:border-gray-700'
+                return (
+                  <div
+                    key={marker.event.id}
+                    className={cn(
+                      "absolute rounded-full cursor-pointer transition-all duration-150",
+                      baseClasses,
+                      marker.isNearSeeker && "border border-white/50 shadow-[0_0_6px_rgba(0,0,0,0.25)]",
+                      "hover:ring-2 hover:ring-white/60 hover:scale-110",
+                      thicknessClass,
+                      verticalPaddingClass
+                    )}
+                    style={{
+                      left: `${marker.percentage}%`,
+                      transform: 'translateX(-50%)',
+                    }}
+                    title={`${event.type} - ${event.nodeId || 'System'} - ${formatTimestamp(event.timestamp)}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      seek(event.offsetMs)
+                    }}
+                  />
+                )
+              })}
 
               {/* Main Scrubber/Playhead */}
               {playbackMode === 'replay' && (

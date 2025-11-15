@@ -21,10 +21,10 @@ export function getNodeStyle(state: NodeStatus): NodeStateStyle {
       icon: null,
     },
     running: {
-      border: 'border-amber-500',
-      bg: 'bg-amber-50',
-      icon: 'Loader2',
-      iconClass: 'animate-spin text-amber-600',
+      border: 'border-blue-500',
+      bg: 'bg-blue-50',
+      icon: 'Activity',
+      iconClass: 'text-blue-600',
     },
     success: {
       border: 'border-green-500',
