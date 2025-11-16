@@ -365,14 +365,26 @@ printf '{"results":%s,"raw":"%s","stderr":"%s","exitCode":%d}' \
       data: { targets: runnerParams.targets.slice(0, 5) },
     });
 
-    const result = await runComponentWithRunner(
+    const rawRunnerResult = await runComponentWithRunner(
       this.runner,
       async () => ({}) as Output,
       runnerParams,
       context,
     );
 
-    const parsedRunnerResult = httpxRunnerOutputSchema.safeParse(result);
+    let candidateResult: unknown = rawRunnerResult;
+    if (typeof candidateResult === 'string') {
+      const trimmed = candidateResult.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          candidateResult = JSON.parse(trimmed);
+        } catch {
+          candidateResult = rawRunnerResult;
+        }
+      }
+    }
+
+    const parsedRunnerResult = httpxRunnerOutputSchema.safeParse(candidateResult);
 
     let runnerOutput = '';
     let stderrOutput = '';
@@ -407,18 +419,18 @@ printf '{"results":%s,"raw":"%s","stderr":"%s","exitCode":%d}' \
             : `httpx exited with code ${exitCode}`,
         );
       }
-    } else if (typeof result === 'string') {
-      runnerOutput = result;
-    } else if (result && typeof result === 'object') {
-      const parsedOutput = outputSchema.safeParse(result);
+    } else if (typeof rawRunnerResult === 'string') {
+      runnerOutput = rawRunnerResult;
+    } else if (rawRunnerResult && typeof rawRunnerResult === 'object') {
+      const parsedOutput = outputSchema.safeParse(rawRunnerResult);
       if (parsedOutput.success) {
         return parsedOutput.data;
       }
 
       runnerOutput =
-        'rawOutput' in result
-          ? String((result as Record<string, unknown>).rawOutput ?? '')
-          : JSON.stringify(result);
+        'rawOutput' in rawRunnerResult
+          ? String((rawRunnerResult as Record<string, unknown>).rawOutput ?? '')
+          : JSON.stringify(rawRunnerResult);
     } else {
       runnerOutput = '';
     }
