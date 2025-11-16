@@ -9,7 +9,6 @@ import {
 const inputSchema = z.object({
   targets: z
     .array(z.string().min(1, 'Target cannot be empty'))
-    .min(1, 'Provide at least one target')
     .describe('Hostnames or URLs to probe for HTTP services'),
   followRedirects: z
     .boolean()
@@ -354,6 +353,27 @@ printf '{"results":%s,"raw":"%s","stderr":"%s","exitCode":%d}' \
       tlsProbe: parsedInput.tlsProbe ?? false,
       preferHttps: parsedInput.preferHttps ?? false,
     };
+
+    if (runnerParams.targets.length === 0) {
+      context.logger.info('[httpx] Skipping httpx probe because no targets were provided.');
+      const emptyOutput: Output = {
+        results: [],
+        rawOutput: '',
+        targetCount: 0,
+        resultCount: 0,
+        options: {
+          followRedirects: runnerParams.followRedirects,
+          tlsProbe: runnerParams.tlsProbe,
+          preferHttps: runnerParams.preferHttps,
+          ports: runnerParams.ports ?? null,
+          statusCodes: runnerParams.statusCodes ?? null,
+          threads: runnerParams.threads ?? null,
+          path: runnerParams.path ?? null,
+        },
+      };
+
+      return outputSchema.parse(emptyOutput);
+    }
 
     context.logger.info(
       `[httpx] Probing ${runnerParams.targets.length} target(s) with options: ports=${runnerParams.ports ?? 'default'}, statusCodes=${runnerParams.statusCodes ?? 'any'}, threads=${runnerParams.threads ?? 'auto'}, followRedirects=${runnerParams.followRedirects}, tlsProbe=${runnerParams.tlsProbe}, preferHttps=${runnerParams.preferHttps}, path=${runnerParams.path ?? 'none'}`,
