@@ -810,7 +810,6 @@ export interface components {
                 };
             };
             createdAt: string;
-            updatedAt: string;
         };
         RunWorkflowRequestDto: {
             inputs?: {

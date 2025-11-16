@@ -23,7 +23,7 @@ const inputSchema = z.object({
     .default(5)
     .describe('Spacing between individual heartbeat events.'),
   annotations: z
-    .record(z.unknown())
+    .record(z.string(), z.unknown())
     .optional()
     .describe('Optional JSON payload echoed back with every event.'),
 });
@@ -54,7 +54,7 @@ const definition: ComponentDefinition<Input, Output> = {
     slug: 'test-live-event-heartbeat',
     version: '1.0.0',
     type: 'process',
-    category: 'test',
+    category: 'transform',
     description: 'Diagnostic component that continuously emits progress events to exercise live trace streaming.',
     author: {
       name: 'ShipSecAI',

@@ -561,8 +561,8 @@ export class WorkflowsService {
       workflowId: version.workflowId,
       version: version.version,
       graph: version.graph,
-      createdAt: version.createdAt,
-      updatedAt: version.updatedAt,
+      createdAt:
+        version.createdAt instanceof Date ? version.createdAt.toISOString() : version.createdAt,
     };
   }
 

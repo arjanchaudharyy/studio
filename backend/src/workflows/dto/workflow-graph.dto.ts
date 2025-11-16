@@ -155,7 +155,6 @@ export const WorkflowVersionResponseSchema = z.object({
   version: z.number().int().positive(),
   graph: WorkflowGraphSchema,
   createdAt: z.string(),
-  updatedAt: z.string(),
 })
 
 export class WorkflowVersionResponseDto extends createZodDto(WorkflowVersionResponseSchema) {}

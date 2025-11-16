@@ -3403,9 +3403,6 @@
           },
           "createdAt": {
             "type": "string"
-          },
-          "updatedAt": {
-            "type": "string"
           }
         },
         "required": [
@@ -3413,8 +3410,7 @@
           "workflowId",
           "version",
           "graph",
-          "createdAt",
-          "updatedAt"
+          "createdAt"
         ]
       },
       "RunWorkflowRequestDto": {
