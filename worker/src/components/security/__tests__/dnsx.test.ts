@@ -113,6 +113,7 @@ describe('dnsx component', () => {
 
     const params = component.inputSchema.parse({
       domains: ['example.com'],
+      outputMode: 'silent',
     });
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(

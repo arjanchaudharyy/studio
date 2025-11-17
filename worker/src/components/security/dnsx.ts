@@ -86,7 +86,7 @@ const inputSchema = z.object({
     .trim()
     .optional()
     .describe('Raw CLI flags appended to the dnsx invocation.'),
-  outputMode: outputModeEnum.default('silent'),
+  outputMode: outputModeEnum.default('json'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -392,8 +392,8 @@ const definition: ComponentDefinition<Input, Output> = {
         id: 'outputMode',
         label: 'Output Mode',
         type: 'select',
-        default: 'silent',
-        description: 'Silent mode prints resolved hosts, JSON mode returns structured dnsx records.',
+        default: 'json',
+        description: 'JSON mode (default) returns structured dnsx records; Silent mode prints resolved hosts only.',
         options: [
           { label: 'Silent (resolved hosts)', value: 'silent' },
           { label: 'JSON (structured records)', value: 'json' },
