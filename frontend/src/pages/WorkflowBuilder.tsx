@@ -20,6 +20,7 @@ import { useWorkflowStore } from '@/store/workflowStore'
 import { useComponentStore } from '@/store/componentStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
+import { useRunStore } from '@/store/runStore'
 import { api, API_BASE_URL } from '@/services/api'
 import { cn } from '@/lib/utils'
 import {
@@ -79,11 +80,12 @@ function WorkflowBuilderContent() {
   const inspectorWidth = useWorkflowUiStore((state) => state.inspectorWidth)
   const setInspectorWidth = useWorkflowUiStore((state) => state.setInspectorWidth)
   const setMode = useWorkflowUiStore((state) => state.setMode)
-  const loadRuns = useExecutionTimelineStore((state) => state.loadRuns)
   const selectRun = useExecutionTimelineStore((state) => state.selectRun)
   const switchToLiveMode = useExecutionTimelineStore((state) => state.switchToLiveMode)
-  const availableRuns = useExecutionTimelineStore((state) => state.availableRuns)
   const selectedRunId = useExecutionTimelineStore((state) => state.selectedRunId)
+  const fetchRuns = useRunStore((state) => state.fetchRuns)
+  const workflowCacheKey = metadata.id ?? '__global__'
+  const runs = useRunStore((state) => state.cache[workflowCacheKey]?.runs ?? [])
   const { toast } = useToast()
   const layoutRef = useRef<HTMLDivElement | null>(null)
   const inspectorResizingRef = useRef(false)
@@ -104,9 +106,10 @@ function WorkflowBuilderContent() {
   useEffect(() => {
     edgesRef.current = edges
   }, [edges])
+  const workflowRuns = useMemo(() => runs, [runs])
   const mostRecentRunId = useMemo(
-    () => (availableRuns.length > 0 ? availableRuns[0].id : null),
-    [availableRuns],
+    () => (workflowRuns.length > 0 ? workflowRuns[0].id : null),
+    [workflowRuns],
   )
   // Ensure "New workflow" always opens in design mode
   useEffect(() => {
@@ -120,15 +123,16 @@ function WorkflowBuilderContent() {
       useExecutionTimelineStore.getState().reset()
       return
     }
-    loadRuns({ workflowId: metadata.id }).catch(() => undefined)
-  }, [loadRuns, metadata.id])
+
+    fetchRuns({ workflowId: metadata.id }).catch(() => undefined)
+  }, [fetchRuns, metadata.id])
 
   useEffect(() => {
     if (!metadata.id) {
       return
     }
 
-    const run = availableRuns.find((candidate) => candidate.id === selectedRunId)
+    const run = workflowRuns.find((candidate) => candidate.id === selectedRunId)
     const versionId = run?.workflowVersionId ?? null
 
     if (!run || !versionId || versionId === metadata.currentVersionId) {
@@ -189,7 +193,7 @@ function WorkflowBuilderContent() {
   }, [
     metadata.id,
     metadata.currentVersionId,
-    availableRuns,
+    workflowRuns,
     selectedRunId,
     historicalVersionId,
     setNodes,
@@ -363,10 +367,7 @@ function WorkflowBuilderContent() {
           node_count: nodes.length,
         })
         setMode('execution')
-        await loadRuns({
-          workflowId: metadata.id,
-          force: true,
-        }).catch(() => undefined)
+        await fetchRuns({ workflowId, force: true }).catch(() => undefined)
         let selected = true
         try {
           await selectRun(runId)
