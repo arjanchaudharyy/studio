@@ -2,10 +2,6 @@ import { spawn } from 'child_process';
 import type { ExecutionContext, RunnerConfig, DockerRunnerConfig } from './types';
 import { createTerminalChunkEmitter } from './terminal';
 
-const enableTerminalStreaming =
-  process.env.SHIPSEC_TERMINAL_STREAMING === '1' ||
-  process.env.SHIPSEC_TERMINAL_STREAMING === 'true';
-
 type PtySpawn = typeof import('node-pty')['spawn'];
 let cachedPtySpawn: PtySpawn | null = null;
 
@@ -77,7 +73,7 @@ async function runComponentInDocker<I, O>(
 
   dockerArgs.push(image, ...command);
 
-  const useTerminal = enableTerminalStreaming && Boolean(context.terminalCollector);
+  const useTerminal = Boolean(context.terminalCollector);
   if (useTerminal) {
     if (!dockerArgs.includes('-t')) {
       dockerArgs.splice(2, 0, '-t');
@@ -232,20 +228,19 @@ async function runDockerWithPty<I, O>(
       reject(new Error(`Docker container timed out after ${timeoutSeconds}s`));
     }, timeoutSeconds * 1000);
 
+    try {
+      const input = JSON.stringify(params);
+      ptyProcess.write(input);
+      ptyProcess.write('\x04');
+    } catch (error) {
+      ptyProcess.kill();
+      reject(new Error(`Failed to write input to Docker PTY: ${error instanceof Error ? error.message : String(error)}`));
+      return;
+    }
+
     ptyProcess.onData((data) => {
       emitChunk(data);
       stdout += data;
-      // Removed raw logCollector call to prevent flooding trace stream with PTY chunks
-      // as per user request. Line-buffered output is still handled via emitProgress below.
-      
-      const trimmed = data.replace(/\r/g, '').trim();
-      if (trimmed.length > 0) {
-        context.emitProgress({
-          message: trimmed,
-          level: 'info',
-          data: { stream: 'stdout', origin: 'docker', mode: 'pty' },
-        });
-      }
     });
 
     ptyProcess.onExit(({ exitCode }) => {
@@ -258,6 +253,11 @@ async function runDockerWithPty<I, O>(
       }
 
       context.logger.info('[Docker][PTY] Completed successfully');
+      context.emitProgress({
+        message: 'Terminal stream completed',
+        level: 'info',
+        data: { stream: 'pty', origin: 'docker' },
+      });
       context.emitProgress('Docker container completed');
 
       try {

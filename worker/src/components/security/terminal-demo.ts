@@ -14,123 +14,89 @@ const inputSchema = z.object({
     .min(1)
     .max(120)
     .default('ShipSec terminal demo')
-    .describe('Message rendered alongside the animated progress bar.'),
-  durationSeconds: z
-    .number()
-    .int()
-    .min(5)
-    .max(300)
-    .default(20)
-    .describe('How long the animation should run (seconds).'),
-  barWidth: z
-    .number()
-    .int()
-    .min(10)
-    .max(80)
-    .default(32)
-    .describe('Width of the progress bar in characters.'),
-  intervalMs: z
-    .number()
-    .int()
-    .min(50)
-    .max(1000)
-    .default(120)
-    .describe('Delay between frames in milliseconds.'),
-  burstLines: z
+    .describe('Message to display in the terminal.'),
+  count: z
     .number()
     .int()
     .min(1)
-    .max(50)
+    .max(20)
     .default(5)
-    .describe('Number of log lines emitted per animation frame.'),
-  lineLength: z
-    .number()
-    .int()
-    .min(10)
-    .max(200)
-    .default(72)
-    .describe('Approximate width (characters) of each emitted line.'),
+    .describe('How many progress steps to show.'),
 });
 
 const outputSchema = z.object({
   message: z.string(),
-  durationSeconds: z.number(),
-  framesAttempted: z.number(),
+  stepsCompleted: z.number(),
   rawOutput: z.string(),
 });
 
 export type TerminalDemoInput = z.infer<typeof inputSchema>;
 export type TerminalDemoOutput = z.infer<typeof outputSchema>;
 
-const pythonScript = String.raw`
-import json
-import math
-import sys
-import time
+const nodeScript = String.raw`const readline = require('readline');
 
-payload_text = sys.stdin.read() or "{}"
-try:
-    payload = json.loads(payload_text)
-except json.JSONDecodeError:
-    payload = {}
+function showInteractiveProgress() {
+  const steps = 10;
+  const barWidth = 30;
+  let current = 0;
 
-message = (payload.get("message") or "ShipSec terminal demo").strip() or "ShipSec terminal demo"
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
 
-def clamp(value, minimum, maximum, default):
-    try:
-        numeric = int(value)
-    except (TypeError, ValueError):
-        numeric = default
-    return max(minimum, min(maximum, numeric))
+  console.log('🚀 Starting interactive terminal demo...');
+  console.log('📊 Watch the progress bar update in real-time!');
+  console.log('');
 
-duration = clamp(payload.get("durationSeconds"), 5, 300, 20)
-bar_width = clamp(payload.get("barWidth"), 10, 80, 32)
-interval_ms = clamp(payload.get("intervalMs"), 50, 1000, 120)
-interval = interval_ms / 1000.0
-burst_lines = clamp(payload.get("burstLines"), 1, 50, 5)
-line_length = clamp(payload.get("lineLength"), 10, 200, 72)
+  const interval = setInterval(() => {
+    if (current <= steps) {
+      const progress = current;
+      const filled = Math.floor((progress / steps) * barWidth);
+      const empty = barWidth - filled;
+      const bar = '='.repeat(filled) + '.'.repeat(empty);
+      const percentage = Math.floor((progress / steps) * 100);
+      const spinner = '|/-\\'[Math.floor(Date.now() / 250) % 4];
 
-spinner = "|/-\\"
-start = time.time()
-frames = 0
+      process.stdout.write('\\r[' + progress.toString().padStart(2) + '/' + steps + '] [' + bar + '] ' + percentage.toString().padStart(3) + '% ' + spinner);
 
-try:
-    while True:
-        elapsed = time.time() - start
-        if elapsed >= duration:
-            break
-        phase = (elapsed % 5.0) / 5.0
-        filled = int(math.floor(phase * bar_width))
-        bar = "#" * filled + "." * (bar_width - filled)
-        spin = spinner[frames % len(spinner)]
-        # Use newline instead of carriage return for better visibility in terminal UI
-        line = f"{spin} {message} [{bar}] {phase * 100:05.1f}%\n"
-        sys.stdout.write(line)
-        for burst in range(burst_lines):
-            prefix = f"[{frames:04d}:{burst:02d}] "
-            payload_line = ''.join(
-                chr(65 + ((frames + burst + idx) % 26))
-                for idx in range(line_length)
-            )
-            sys.stdout.write(prefix + payload_line + "\n")
-        sys.stdout.flush()
-        time.sleep(interval)
-        frames += 1
-finally:
-    sys.stdout.write("Terminal demo complete.\n")
-    sys.stdout.flush()
-`;
+      if (current < steps) {
+        current++;
+      } else {
+        clearInterval(interval);
+        console.log('\\n✅ Interactive demo completed successfully!');
+        console.log('🎯 This demonstrates:');
+        console.log('   • Real-time progress updates');
+        console.log('   • Carriage return for line rewriting');
+        console.log('   • PTY terminal capabilities');
+
+        const result = {
+          message: "Interactive terminal demo",
+          stepsCompleted: steps,
+          interactive: true,
+          rawOutput: "Demo completed with " + steps + " interactive steps using carriage returns"
+        };
+        console.log(JSON.stringify(result));
+
+        rl.close();
+      }
+    }
+  }, 200);
+}
+
+console.log('🔧 Initializing interactive demo...');
+setTimeout(() => {
+  showInteractiveProgress();
+}, 1000);`;
 
 const runner: DockerRunnerConfig = {
   kind: 'docker',
-  image: 'python:3.12-alpine',
-  entrypoint: 'python3',
-  command: ['-u', '-c', pythonScript],
-  env: {
-    PYTHONUNBUFFERED: '1',
-  },
-  network: 'bridge',
-  timeoutSeconds: 600,
+  image: 'node:18-alpine',
+  entrypoint: 'node',
+  command: ['-e', nodeScript],
+  env: {},
+  network: 'none',
+  timeoutSeconds: 15,
 };
 
 const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
@@ -146,8 +112,8 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
     type: 'process',
     category: 'security',
     documentation:
-      'Launches a lightweight Python animation inside Docker so engineers can confirm that PTY output is flowing into the ShipSec UI.',
-    documentationUrl: 'https://parrot.live',
+      'Launches an interactive Node.js demo with real-time progress bar updates using carriage returns to test PTY terminal streaming capabilities.',
+    documentationUrl: 'https://asciinema.org/',
     icon: 'Terminal',
     author: {
       name: 'ShipSecAI',
@@ -163,28 +129,14 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
         label: 'Message',
         dataType: port.text(),
         required: false,
-        description: 'Text displayed next to the progress bar.',
+        description: 'Message to display in the terminal demo.',
       },
       {
-        id: 'durationSeconds',
-        label: 'Duration',
+        id: 'count',
+        label: 'Steps',
         dataType: port.number(),
         required: false,
-        description: 'How long the animation should run.',
-      },
-      {
-        id: 'burstLines',
-        label: 'Burst lines',
-        dataType: port.number(),
-        required: false,
-        description: 'How many lines to emit per frame when exercising the PTY stream.',
-      },
-      {
-        id: 'lineLength',
-        label: 'Line length',
-        dataType: port.number(),
-        required: false,
-        description: 'Character width of each emitted line.',
+        description: 'Number of progress steps to show.',
       },
     ],
     outputs: [
@@ -198,44 +150,12 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
     examples: ['Verify PTY streaming by running this component inside a workflow.'],
     parameters: [
       {
-        id: 'durationSeconds',
-        label: 'Duration (seconds)',
-        type: 'number',
-        min: 5,
-        max: 300,
-        default: 20,
-      },
-      {
-        id: 'barWidth',
-        label: 'Progress Bar Width',
-        type: 'number',
-        min: 10,
-        max: 80,
-        default: 32,
-      },
-      {
-        id: 'intervalMs',
-        label: 'Interval (ms)',
-        type: 'number',
-        min: 50,
-        max: 1000,
-        default: 120,
-      },
-      {
-        id: 'burstLines',
-        label: 'Burst Lines',
+        id: 'count',
+        label: 'Steps',
         type: 'number',
         min: 1,
-        max: 50,
+        max: 20,
         default: 5,
-      },
-      {
-        id: 'lineLength',
-        label: 'Line Length',
-        type: 'number',
-        min: 10,
-        max: 200,
-        default: 72,
       },
     ],
   },
@@ -243,30 +163,38 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
     const params = inputSchema.parse(input)
 
     context.emitProgress({
-      message: 'Launching terminal stream demo…',
+      message: 'Launching terminal demo…',
       level: 'info',
       data: {
-        durationSeconds: params.durationSeconds,
-        barWidth: params.barWidth,
-        intervalMs: params.intervalMs,
-        burstLines: params.burstLines,
-        lineLength: params.lineLength,
+        message: params.message,
+        count: params.count,
       },
     });
 
-    const raw = await runComponentWithRunner<typeof params, string>(
+    const raw = await runComponentWithRunner<typeof params, any>(
       this.runner,
-      async () => '' as string,
+      async () => ({ message: params.message, stepsCompleted: 0, rawOutput: 'No output' }),
       params,
       context,
     );
 
+    // Parse the JSON output from the Python script
+    let parsedOutput = { message: params.message, stepsCompleted: params.count, rawOutput: 'Demo completed' };
+    if (typeof raw === 'string') {
+      try {
+        parsedOutput = JSON.parse(raw);
+      } catch (e) {
+        // If parsing fails, use the raw string as output
+        parsedOutput.rawOutput = raw;
+      }
+    } else if (raw && typeof raw === 'object') {
+      parsedOutput = raw;
+    }
+
     const result: TerminalDemoOutput = {
-      message: params.message,
-      durationSeconds: params.durationSeconds,
-      framesAttempted:
-        Math.floor((params.durationSeconds * 1000) / params.intervalMs) * params.burstLines,
-      rawOutput: typeof raw === 'string' ? raw : JSON.stringify(raw),
+      message: parsedOutput.message || params.message,
+      stepsCompleted: parsedOutput.stepsCompleted || params.count,
+      rawOutput: parsedOutput.rawOutput || (typeof raw === 'string' ? raw : JSON.stringify(raw)),
     };
 
     return outputSchema.parse(result);

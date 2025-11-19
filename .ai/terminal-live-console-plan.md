@@ -79,7 +79,7 @@ Goal: deliver low-latency, PTY-accurate Docker console streaming with archival r
 - Each docker-backed node yields a downloadable replay file stored in MinIO/S3.
 - Redis streams are trimmed once archival confirms persistence.
 
-## Phase 5 – Frontend Terminal Player (Live + Replay)
+## Phase 5 – Frontend Terminal Player (Live + Replay) ✅ *Completed*
 
 **Objectives**
 - Introduce an `xterm.js`-based terminal panel that consumes the new SSE events and can replay cast files.

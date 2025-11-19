@@ -333,7 +333,11 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                     </button>
                     {isTerminalOpen && (
                       <div className="absolute bottom-full right-0 mb-2 z-[60]">
-                        <NodeTerminalPanel nodeId={id} onClose={() => setIsTerminalOpen(false)} />
+                        <NodeTerminalPanel
+                          nodeId={id}
+                          runId={selectedRunId}
+                          onClose={() => setIsTerminalOpen(false)}
+                        />
                       </div>
                     )}
                   </div>
