@@ -39,6 +39,7 @@ import './security/notify';
 import './security/prowler-scan';
 import './security/shuffledns-massdns';
 import './security/atlassian-offboarding';
+import './security/trufflehog';
 
 // GitHub components
 import './github/connection-provider';
