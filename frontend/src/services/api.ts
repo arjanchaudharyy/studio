@@ -346,10 +346,11 @@ export const api = {
           }
         : undefined
       const response = await apiClient.runWorkflow(workflowId, payload)
-      if (response.error) {
+      if ((response as any).error) {
+        const error = (response as any).error
         const errorMessage =
-          response.error?.message ||
-          (typeof response.error === 'string' ? response.error : 'Failed to start execution')
+          error?.message ||
+          (typeof error === 'string' ? error : 'Failed to start execution')
         throw new Error(errorMessage)
       }
       return { executionId: (response.data as any)?.runId || '' }
