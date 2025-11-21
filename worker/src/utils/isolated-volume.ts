@@ -90,6 +90,37 @@ export class IsolatedContainerVolume {
   }
 
   /**
+   * Validates filename to prevent path traversal and shell injection.
+   *
+   * @param filename - Filename to validate
+   * @throws Error if filename is invalid
+   */
+  private validateFilename(filename: string): void {
+    // Prevent path traversal
+    if (filename.includes('..') || filename.startsWith('/')) {
+      throw new Error(`Invalid filename (path traversal): ${filename}`);
+    }
+
+    // Prevent shell metacharacters that could cause injection
+    // Allow: alphanumeric, dots, hyphens, underscores, forward slashes (for subdirs)
+    const safePattern = /^[a-zA-Z0-9._/-]+$/;
+    if (!safePattern.test(filename)) {
+      throw new Error(
+        `Invalid filename (contains unsafe characters): ${filename}. ` +
+        `Only alphanumeric, dots, hyphens, underscores, and slashes allowed.`
+      );
+    }
+
+    // Additional check: no leading dots (hidden files) unless explicitly allowed
+    const parts = filename.split('/');
+    for (const part of parts) {
+      if (part.startsWith('.') && part !== '.' && part !== '..') {
+        throw new Error(`Invalid filename (hidden file): ${filename}`);
+      }
+    }
+  }
+
+  /**
    * Writes files to the volume using a temporary Alpine container.
    *
    * @param files - Map of filename to content
@@ -100,10 +131,8 @@ export class IsolatedContainerVolume {
     }
 
     for (const [filename, content] of Object.entries(files)) {
-      // Validate filename to prevent path traversal
-      if (filename.includes('..') || filename.startsWith('/')) {
-        throw new Error(`Invalid filename: ${filename}`);
-      }
+      // Strict validation to prevent path traversal and shell injection
+      this.validateFilename(filename);
 
       const contentString = typeof content === 'string'
         ? content
@@ -116,11 +145,16 @@ export class IsolatedContainerVolume {
 
   /**
    * Writes a single file to the volume using docker run with stdin.
+   * Uses single-quote escaping to prevent shell injection.
    */
   private async writeFileToVolume(filename: string, content: string): Promise<void> {
     if (!this.volumeName) {
       throw new Error('Volume not initialized');
     }
+
+    // Escape single quotes in filename to prevent shell injection
+    // Replace ' with '\'' (close quote, escaped quote, open quote)
+    const safeFilename = filename.replace(/'/g, "'\\''");
 
     return new Promise((resolve, reject) => {
       const proc = spawn('docker', [
@@ -130,7 +164,7 @@ export class IsolatedContainerVolume {
         '-v', `${this.volumeName}:/data`,
         '--entrypoint', 'sh',
         'alpine:latest',
-        '-c', `cat > /data/${filename}`,
+        '-c', `cat > '/data/${safeFilename}'`,  // Single quotes prevent shell injection
       ]);
 
       let stderr = '';
@@ -177,10 +211,8 @@ export class IsolatedContainerVolume {
     const results: Record<string, string> = {};
 
     for (const filename of filenames) {
-      // Validate filename
-      if (filename.includes('..') || filename.startsWith('/')) {
-        throw new Error(`Invalid filename: ${filename}`);
-      }
+      // Strict validation to prevent path traversal and injection
+      this.validateFilename(filename);
 
       try {
         const content = await this.readFileFromVolume(filename);
@@ -196,12 +228,15 @@ export class IsolatedContainerVolume {
 
   /**
    * Reads a single file from the volume using docker run.
+   * Uses cat entrypoint to avoid shell interpretation.
    */
   private async readFileFromVolume(filename: string): Promise<string> {
     if (!this.volumeName) {
       throw new Error('Volume not initialized');
     }
 
+    // Note: Using cat as entrypoint (not sh), so filename is passed as argument
+    // to cat directly, not interpreted by shell. No escaping needed here.
     return new Promise((resolve, reject) => {
       const proc = spawn('docker', [
         'run',
@@ -209,7 +244,7 @@ export class IsolatedContainerVolume {
         '-v', `${this.volumeName}:/data:ro`,
         '--entrypoint', 'cat',
         'alpine:latest',
-        `/data/${filename}`,
+        `/data/${filename}`,  // Safe: passed to cat, not shell
       ]);
 
       let stdout = '';
