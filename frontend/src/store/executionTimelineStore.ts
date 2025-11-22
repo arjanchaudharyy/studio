@@ -64,6 +64,7 @@ export interface TimelineState {
   dataFlows: DataPacket[]
   totalDuration: number // in ms
   timelineStartTime: number | null
+  clockOffset: number | null // Clock offset: serverTime - clientTime (calculated once, reused)
   currentTime: number // Current position in timeline (ms)
   playbackMode: 'live' | 'replay'
 
@@ -127,7 +128,8 @@ const PLAYBACK_SPEEDS = [0.1, 0.5, 1, 2, 5, 10]
 const MIN_TIMELINE_DURATION_MS = 1
 
 const prepareTimelineEvents = (
-  rawEvents: ExecutionLog[]
+  rawEvents: ExecutionLog[],
+  workflowStartTime?: number | null
 ): {
   events: TimelineEvent[]
   totalDuration: number
@@ -137,7 +139,7 @@ const prepareTimelineEvents = (
     return {
       events: [],
       totalDuration: 0,
-      timelineStartTime: null,
+      timelineStartTime: workflowStartTime ?? null,
     }
   }
 
@@ -149,11 +151,16 @@ const prepareTimelineEvents = (
     return {
       events: [],
       totalDuration: 0,
-      timelineStartTime: 0,
+      timelineStartTime: workflowStartTime ?? 0,
     }
   }
 
-  const startTime = new Date(sortedEvents[0].timestamp).getTime()
+  // Use workflow start time if provided, otherwise use first event timestamp
+  // Always prefer workflowStartTime when available (it's the authoritative source)
+  const firstEventTime = new Date(sortedEvents[0].timestamp).getTime()
+  const startTime = workflowStartTime !== null && workflowStartTime !== undefined
+    ? workflowStartTime
+    : firstEventTime
   const endTime = new Date(sortedEvents[sortedEvents.length - 1].timestamp).getTime()
   const totalDuration = Math.max(endTime - startTime, MIN_TIMELINE_DURATION_MS)
 
@@ -337,11 +344,23 @@ const calculateNodeStates = (
         break
     }
 
-    // Calculate progress (simplified)
-    const progressEvents = sortedEvents.filter(e => e.type === 'PROGRESS')
+    // Calculate progress based on events observed vs total events
+    // Always show progress based on event counts, not just when PROGRESS events exist
     const completedEvents = relevantEvents.filter(e => e.type === 'COMPLETED')
-    const progress = completedEvents.length > 0 ? 100 :
-      progressEvents.length > 0 ? (relevantEvents.length / sortedEvents.length) * 100 : 0
+    const hasCompleted = completedEvents.length > 0
+    
+    // Calculate progress: if completed, show 100%, otherwise show percentage based on events
+    // Use relevantEvents.length and sortedEvents.length for accurate progress calculation
+    let progress = 0
+    if (hasCompleted) {
+      progress = 100
+    } else if (sortedEvents.length > 0) {
+      // Calculate percentage: events observed / total events
+      const eventRatio = relevantEvents.length / sortedEvents.length
+      progress = Math.min(100, Math.max(0, eventRatio * 100))
+    } else {
+      progress = 0
+    }
 
     states[nodeId] = {
       status,
@@ -411,6 +430,7 @@ const INITIAL_STATE: TimelineState = {
   dataFlows: [],
   totalDuration: 0,
   timelineStartTime: null,
+  clockOffset: null,
   currentTime: 0,
   playbackMode: 'replay',
   isPlaying: false,
@@ -438,6 +458,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
         totalDuration: 0,
         currentTime: 0,
         timelineStartTime: null,
+        clockOffset: null,
         nodeStates: {},
         playbackMode: 'replay',
         isPlaying: false,
@@ -499,6 +520,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
           totalDuration,
           currentTime: initialCurrentTime,
           timelineStartTime,
+          clockOffset: null,
           nodeStates: calculateNodeStates(events, dataFlows, initialCurrentTime, timelineStartTime)
         })
       } catch (error) {
@@ -631,7 +653,23 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
         return
       }
       liveTickTimestamp = now
-      const elapsed = Math.max(0, now - state.timelineStartTime)
+      
+      // Use clock offset to calculate server time: serverTime = clientTime + offset
+      // This allows smooth clock progression without constant syncing
+      let serverNow: number
+      if (state.clockOffset !== null) {
+        // Use calculated offset for smooth progression
+        serverNow = now + state.clockOffset
+      } else if (state.events.length > 0) {
+        // Fallback: use last event timestamp (from server) if offset not calculated yet
+        const lastEvent = state.events[state.events.length - 1]
+        serverNow = new Date(lastEvent.timestamp).getTime()
+      } else {
+        // No server time available, use client time as fallback
+        serverNow = now
+      }
+      
+      const elapsed = Math.max(0, serverNow - state.timelineStartTime)
       const nextDuration = Math.max(state.totalDuration, elapsed)
       const nextCurrent = state.isLiveFollowing ? nextDuration : Math.min(state.currentTime, nextDuration)
       if (nextDuration === state.totalDuration && nextCurrent === state.currentTime) {
@@ -644,7 +682,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
     },
 
     updateFromLiveEvent: (event: ExecutionLog) => {
-      const { events, playbackMode } = get()
+      const { events, playbackMode, timelineStartTime: currentStartTime } = get()
       if (playbackMode !== 'live') return
 
       if (events.some(existing => existing.id === event.id)) {
@@ -652,21 +690,35 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
       }
 
       const combinedEvents = [...events, event]
+      // Preserve existing timelineStartTime if already set correctly (from workflow start time)
+      // This prevents recalculating it from first event timestamp
       const {
         events: preparedEvents,
         totalDuration,
-        timelineStartTime
-      } = prepareTimelineEvents(combinedEvents)
+        timelineStartTime: calculatedStartTime
+      } = prepareTimelineEvents(combinedEvents, currentStartTime)
 
       set((state) => {
-        const resolvedStart = timelineStartTime ?? state.timelineStartTime ?? null
+        // Use calculated start time, which will preserve currentStartTime if it was passed
+        const resolvedStart = calculatedStartTime
         const nextTotal = Math.max(totalDuration, state.totalDuration)
         const shouldFollow = state.isLiveFollowing
         const nextCurrent = shouldFollow ? nextTotal : Math.min(state.currentTime, nextTotal)
+        
+        // Calculate clock offset if not already set (only once per run)
+        // offset = serverTime - clientTime, so serverTime = clientTime + offset
+        let clockOffset = state.clockOffset
+        if (clockOffset === null) {
+          const eventServerTime = new Date(event.timestamp).getTime()
+          const clientTime = Date.now()
+          clockOffset = eventServerTime - clientTime
+        }
+        
         return {
           events: preparedEvents,
           totalDuration: nextTotal,
           timelineStartTime: resolvedStart,
+          clockOffset,
           currentTime: nextCurrent,
           nodeStates: calculateNodeStates(preparedEvents, state.dataFlows, nextCurrent, resolvedStart),
         }
@@ -786,20 +838,48 @@ export const initializeTimelineStore = () => {
           }
           
           // Continue updating timeline with new logs
+          // Use workflow start time (from runStatus) as the timeline start time if available
+          // This ensures the timeline starts at 0 seconds, not when the first event arrives
+          // Always prefer workflowStartTime when available - it's the authoritative source
+          // This fixes the issue where timelineStartTime might have been set from first event timestamp
+          // before runStatus.startedAt was available
+          const workflowStartTime = runStatus?.startedAt ? new Date(runStatus.startedAt).getTime() : null
+          
           const {
             events,
             totalDuration,
-            timelineStartTime,
-          } = prepareTimelineEvents(logs)
-          const currentTime = totalDuration
+            timelineStartTime: calculatedStartTime,
+          } = prepareTimelineEvents(logs, workflowStartTime)
+          
+          // Use workflowStartTime if available, otherwise use calculated start time (from first event)
+          const finalStartTime = workflowStartTime ?? calculatedStartTime
+          
+          // Calculate clock offset once when we first get server time
+          // This allows smooth clock progression without constant syncing
+          // Only update if not already set (to avoid constant recalculation)
+          let clockOffset = useExecutionTimelineStore.getState().clockOffset
+          if (clockOffset === null && runStatus?.updatedAt) {
+            const serverTime = new Date(runStatus.updatedAt).getTime()
+            const clientTime = Date.now()
+            clockOffset = serverTime - clientTime
+          }
 
-          useExecutionTimelineStore.setState((state) => ({
-            events,
-            totalDuration,
-            timelineStartTime,
-            currentTime,
-            nodeStates: calculateNodeStates(events, state.dataFlows, currentTime, timelineStartTime),
-          }))
+          useExecutionTimelineStore.setState((state) => {
+            // Respect user's manual seek position - only update currentTime if following live
+            const shouldFollow = state.isLiveFollowing
+            const nextCurrentTime = shouldFollow 
+              ? totalDuration 
+              : Math.min(state.currentTime, totalDuration) // Don't go past end, but preserve manual position
+            
+            return {
+              events,
+              totalDuration,
+              timelineStartTime: finalStartTime,
+              clockOffset: clockOffset ?? state.clockOffset,
+              currentTime: nextCurrentTime,
+              nodeStates: calculateNodeStates(events, state.dataFlows, nextCurrentTime, finalStartTime),
+            }
+          })
         }
       })
     })

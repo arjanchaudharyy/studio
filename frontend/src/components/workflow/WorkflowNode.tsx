@@ -172,11 +172,13 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
     events,
     totalEvents,
     isRunning,
+    status,
   }: {
     progress: number
     events: number
     totalEvents: number
     isRunning: boolean
+    status: NodeStatus
   }) => {
     const clampPercent = (value?: number) => {
       if (!Number.isFinite(value)) return undefined
@@ -184,43 +186,74 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
     }
     const normalizedProgress = clampPercent(progress)
     const normalizedFromEvents =
-      totalEvents > 0 && Number.isFinite(events)
+      totalEvents > 0 && Number.isFinite(events) && Number.isFinite(totalEvents)
         ? clampPercent((events / totalEvents) * 100)
         : undefined
     const fallbackWidth = isRunning ? 5 : 0
-    const width =
-      effectiveStatus === 'success'
-        ? 100
-        : clampPercent(
-            Math.max(
-              normalizedProgress ?? 0,
-              normalizedFromEvents ?? 0,
-              fallbackWidth,
-            ),
-          ) ?? fallbackWidth
+    
+    // Calculate width - prefer normalizedFromEvents for accurate event-based progress
+    // This ensures the bar shows the actual event progress (e.g., 4/10 = 40%)
+    let calculatedWidth: number
+    if (status === 'success') {
+      calculatedWidth = 100
+    } else if (normalizedFromEvents !== undefined && Number.isFinite(normalizedFromEvents)) {
+      // Use event-based calculation (most accurate)
+      calculatedWidth = normalizedFromEvents
+    } else if (normalizedProgress !== undefined && Number.isFinite(normalizedProgress)) {
+      // Fall back to progress prop
+      calculatedWidth = normalizedProgress
+    } else if (totalEvents > 0 && events > 0) {
+      // Fallback: calculate directly from events/totalEvents
+      calculatedWidth = Math.min(100, (events / totalEvents) * 100)
+    } else {
+      // Fall back to minimum width
+      calculatedWidth = fallbackWidth
+    }
+    
+    // Ensure width is clamped between 0 and 100, and is always a valid number
+    const width = Number.isFinite(calculatedWidth) 
+      ? Math.max(0, Math.min(100, calculatedWidth))
+      : 0
     const eventLabel = totalEvents > 0
       ? `${events}/${totalEvents} events`
       : `${events} ${events === 1 ? 'event' : 'events'}`
+    
+    // Determine bar color based on status
+    // IMPORTANT: Only show green when status is 'success', otherwise use blue for progress visibility
+    const getBarColor = () => {
+      if (status === 'success') {
+        return 'bg-green-500'
+      }
+      if (status === 'error') {
+        return 'bg-red-600'
+      }
+      // For running/idle states, use solid blue to show progress (better contrast and visibility)
+      // Use solid color instead of gradient for better browser compatibility
+      if (isRunning) {
+        return 'bg-blue-500 animate-pulse'
+      }
+      return 'bg-blue-500'
+    }
+    
+    // Ensure width is always a string with % for the style
+    const widthStyle = `${width}%`
 
     return (
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>{isRunning ? 'Live stream' : 'Events observed'}</span>
+          <span>Events observed</span>
           <span>{eventLabel}</span>
         </div>
-        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden relative">
           <div
             className={cn(
-              'h-full rounded-full transition-all duration-500',
-              isRunning
-                ? 'bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 animate-pulse'
-                : effectiveStatus === 'success'
-                  ? 'bg-green-500'
-                  : effectiveStatus === 'error'
-                    ? 'bg-red-500'
-                    : 'bg-blue-400',
+              'absolute left-0 top-0 h-full rounded-full transition-all duration-500',
+              getBarColor(),
             )}
-            style={{ width: `${width}%` }}
+            style={{ 
+              width: widthStyle,
+              minWidth: width > 0 ? '2px' : '0px', // Ensure minimum 2px for visibility
+            }}
           />
         </div>
       </div>
@@ -369,9 +402,6 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                     Failed
                   </div>
                 )}
-                <span className="text-xs text-muted-foreground">
-                  {visualState.eventCount} events
-                </span>
               </div>
             )}
           </div>
@@ -381,12 +411,16 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
       {/* Body - Input/Output Ports */}
       <div className="px-3 py-3 space-y-2">
         {isTimelineActive && (
-          <ProgressBar
-            progress={Number.isFinite(visualState.progress) ? visualState.progress : 0}
-            events={visualState.eventCount}
-            totalEvents={visualState.totalEvents}
-            isRunning={visualState.status === 'running'}
-          />
+          <>
+            <ProgressBar
+              progress={Number.isFinite(visualState.progress) ? visualState.progress : 0}
+              events={visualState.eventCount}
+              totalEvents={visualState.totalEvents}
+              isRunning={visualState.status === 'running'}
+              status={visualState.status}
+            />
+            <div className="border-t border-border/50 my-1" />
+          </>
         )}
 
         {/* Input Ports */}
