@@ -136,14 +136,20 @@ export class TerminalArchiveService {
   }
 
   private buildCastFile(
-    chunks: Array<{ payload: string; deltaMs: number; stream: string }>,
+    chunks: Array<{ payload: string; deltaMs: number; stream: string; recordedAt?: string }>,
     options: { width: number; height: number },
   ): Buffer {
+    // Use first chunk's recordedAt as workflow start time (Unix epoch seconds)
+    // If no chunks or no recordedAt, fall back to current time
+    const workflowStartTime = chunks.length > 0 && chunks[0].recordedAt
+      ? Math.floor(new Date(chunks[0].recordedAt).getTime() / 1000)
+      : Math.floor(Date.now() / 1000);
+
     const header = {
       version: 2,
       width: options.width,
       height: options.height,
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: workflowStartTime,
     };
 
     const lines: string[] = [JSON.stringify(header)];
