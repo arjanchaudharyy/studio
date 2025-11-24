@@ -256,7 +256,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
             {Object.keys(filteredComponentsByCategory).length > 0 && (
             <Accordion 
               type="multiple" 
-              className="space-y-2 -mx-2" 
+              className="space-y-2" 
               defaultValue={accordionDefaultValue}
             >
               {Object.entries(filteredComponentsByCategory).map(([category, components]) => {
@@ -268,10 +268,10 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
                   <AccordionItem 
                     key={category} 
                     value={category} 
-                    className="border-0 hover:bg-muted/50 transition-colors"
+                    className="border border-border/50 rounded-sm px-3 py-1 hover:bg-muted/50 transition-colors"
                   >
                     <AccordionTrigger className={cn(
-                      'py-3 px-2 hover:no-underline [&[data-state=open]]:text-foreground',
+                      'py-3 px-0 hover:no-underline [&[data-state=open]]:text-foreground',
                       'group'
                     )}>
                       <div className="flex flex-col items-start gap-0.5 w-full">
@@ -285,7 +285,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
                         </div>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="pt-2 pb-3 px-2">
+                    <AccordionContent className="pt-2 pb-3 px-0">
                       <div className="grid grid-cols-2 gap-2">
                         {components.map((component) => (
                           <ComponentItem
