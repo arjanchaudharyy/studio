@@ -47,6 +47,7 @@ export function NodeTerminalPanel({
   const lastTimelineTimeRef = useRef<number | null>(null)
   const [terminalKey, setTerminalKey] = useState(0)
   const terminalReadyRef = useRef<boolean>(false)
+  const [isTerminalReady, setIsTerminalReady] = useState(false)
 
   const currentTime = useExecutionTimelineStore((state) => state.currentTime)
 
@@ -58,12 +59,7 @@ export function NodeTerminalPanel({
     timelineSync,
   })
 
-  const session = useMemo(
-    () => ({
-      chunks,
-    }),
-    [chunks],
-  )
+  const session = useMemo(() => ({ chunks }), [chunks])
 
   // Initialize terminal
   useEffect(() => {
@@ -99,6 +95,7 @@ export function NodeTerminalPanel({
     terminalRef.current = term
     fitAddonRef.current = fitAddon
     terminalReadyRef.current = false
+    setIsTerminalReady(false)
 
     // Wait for terminal to be fully initialized before fitting
     // Use requestAnimationFrame to ensure DOM and terminal render service are ready
@@ -108,10 +105,12 @@ export function NodeTerminalPanel({
           try {
             fitAddonRef.current.fit()
             terminalReadyRef.current = true
+            setIsTerminalReady(true)
           } catch (error) {
             console.warn('[NodeTerminalPanel] Failed to fit terminal on mount', error)
             // Mark as ready anyway to allow rendering
             terminalReadyRef.current = true
+            setIsTerminalReady(true)
           }
         }
       })
@@ -131,6 +130,7 @@ export function NodeTerminalPanel({
     return () => {
       window.removeEventListener('resize', handleResize)
       terminalReadyRef.current = false
+      setIsTerminalReady(false)
       term.dispose()
       terminalRef.current = null
       fitAddonRef.current = null
@@ -142,7 +142,7 @@ export function NodeTerminalPanel({
   // - Backward: reset terminal and render from start to current position
   useEffect(() => {
     // Wait for terminal to be ready (especially after recreation)
-    if (!terminalRef.current || !containerRef.current || !terminalReadyRef.current || !chunks || chunks.length === 0) {
+    if (!terminalRef.current || !containerRef.current || !terminalReadyRef.current || !chunks || chunks.length === 0 || !isTerminalReady) {
       lastTimelineTimeRef.current = currentTime
       return
     }
@@ -165,15 +165,24 @@ export function NodeTerminalPanel({
       return // Terminal will be recreated, this effect will run again
     }
 
-    // Forward: render only new chunks (incremental)
-    const newChunks = chunks.filter((chunk) => chunk.chunkIndex > lastRenderedChunkIndex.current)
-
-    for (const chunk of newChunks) {
-      if (!terminalRef.current) break
-      const bytes = decodePayload(chunk.payload)
-      if (bytes.length === 0) continue
-      terminalRef.current.write(bytes)
-      lastRenderedChunkIndex.current = chunk.chunkIndex
+    if (lastRenderedChunkIndex.current === -1) {
+      terminalRef.current?.clear()
+      terminalRef.current?.reset()
+      for (const chunk of chunks) {
+        const bytes = decodePayload(chunk.payload)
+        if (bytes.length === 0) continue
+        terminalRef.current?.write(bytes)
+        lastRenderedChunkIndex.current = chunk.chunkIndex
+      }
+    } else {
+      const newChunks = chunks.filter((chunk) => chunk.chunkIndex > lastRenderedChunkIndex.current)
+      for (const chunk of newChunks) {
+        if (!terminalRef.current) break
+        const bytes = decodePayload(chunk.payload)
+        if (bytes.length === 0) continue
+        terminalRef.current.write(bytes)
+        lastRenderedChunkIndex.current = chunk.chunkIndex
+      }
     }
 
     lastTimelineTimeRef.current = currentTime
@@ -190,7 +199,7 @@ export function NodeTerminalPanel({
         }
       })
     }
-  }, [chunks, timelineSync, currentTime, terminalKey])
+  }, [chunks, timelineSync, currentTime, terminalKey, isTerminalReady])
 
   const streamBadge = isTimelineSync ? (
     <span className="flex items-center gap-1 text-xs text-purple-400">
@@ -210,11 +219,17 @@ export function NodeTerminalPanel({
     </span>
   )
 
+  useEffect(() => {
+    lastRenderedChunkIndex.current = -1
+    lastTimelineTimeRef.current = null
+    setTerminalKey((key) => key + 1)
+  }, [runId, nodeId])
+
   return (
     <div className="w-[520px] bg-slate-900 text-slate-100 rounded-lg shadow-2xl border border-slate-700 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-950/70">
         <div>
-          <div className="text-xs uppercase tracking-wide text-slate-300">Terminal • {nodeId}</div>
+        <div className="text-xs uppercase tracking-wide text-slate-300">Live Logs • {nodeId}</div>
           {streamBadge}
         </div>
         <div className="flex items-center gap-2">
@@ -243,7 +258,7 @@ export function NodeTerminalPanel({
         <div ref={containerRef} className="h-[360px] w-full" />
         {!session?.chunks?.length && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-xs text-slate-500 space-y-2 text-center p-4">
+            <div className="text-xs text-slate-200 space-y-2 text-center p-4">
               <div>{isHydrating || isFetchingTimeline ? 'Loading output…' : 'Waiting for terminal output…'}</div>
               <div className="font-mono text-[10px] opacity-50">
                 {nodeId} • pty

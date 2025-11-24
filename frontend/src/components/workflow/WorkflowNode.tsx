@@ -338,24 +338,27 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                   />
                 )}
                 {mode === 'execution' && selectedRunId && (
-                  <div className="relative">
+                  <div className="relative flex justify-center">
                     <button
                       type="button"
                       onClick={() => setIsTerminalOpen((prev) => !prev)}
                       className={cn(
                         'flex items-center gap-1 rounded-full px-2 py-1 text-[11px] border transition-colors',
-                        isTerminalOpen ? 'bg-blue-600 text-white border-blue-500' : 'bg-slate-900/60 text-slate-100 border-slate-700',
+                        isTerminalOpen
+                          ? 'bg-blue-600/15 text-blue-600 border-blue-400 shadow-sm ring-2 ring-blue-300/60'
+                          : 'bg-slate-900/60 text-slate-100 border-slate-700',
                       )}
+                      title="Live Logs"
+                      aria-label="Live Logs"
                     >
-                      <TerminalIcon className="h-3 w-3" />
-                      <span>Terminal</span>
+                      <TerminalIcon className="h-3 w-3 text-current" />
                       {isTerminalLoading && <span className="animate-pulse">…</span>}
                       {!isTerminalLoading && terminalSession?.chunks?.length ? (
                         <span className="w-2 h-2 rounded-full bg-green-400" />
                       ) : null}
                     </button>
                     {isTerminalOpen && (
-                      <div className="absolute bottom-full right-0 mb-2 z-[60]">
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 z-[60]">
                         <NodeTerminalPanel
                           nodeId={id}
                           runId={selectedRunId}
