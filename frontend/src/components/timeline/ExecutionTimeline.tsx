@@ -103,6 +103,7 @@ export function ExecutionTimeline() {
   }, [maxStart])
 
   useEffect(() => {
+    // Always advance the live clock so overall duration keeps moving even when user scrubs away from follow mode.
     if (!isLiveMode) return
     let frame: number
     const pump = () => {

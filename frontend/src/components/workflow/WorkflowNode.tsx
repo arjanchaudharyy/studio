@@ -66,6 +66,7 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
   // Get component metadata
   const componentRef: string | undefined = nodeData.componentId ?? nodeData.componentSlug
   const component = getComponent(componentRef)
+  const supportsLiveLogs = component?.runner?.kind === 'docker'
 
   if (!component) {
     if (loading) {
@@ -337,7 +338,8 @@ export const WorkflowNode = memo(({ data, selected, id }: NodeProps<NodeData>) =
                     )}
                   />
                 )}
-                {mode === 'execution' && selectedRunId && (
+                {/* Only docker-runner components expose live logs (they have streaming terminal output). */}
+                {supportsLiveLogs && mode === 'execution' && selectedRunId && (
                   <div className="relative flex justify-center">
                     <button
                       type="button"
