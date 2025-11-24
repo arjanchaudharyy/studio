@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTerminalStream, type UseTerminalStreamOptions, type UseTerminalStreamResult } from './useTerminalStream'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
 import { api } from '@/services/api'
@@ -57,21 +57,22 @@ export function useTimelineTerminalStream(
   // Store ALL chunks fetched from API (only in timeline sync mode)
   const [allChunks, setAllChunks] = useState<typeof terminalResult.chunks>([])
   const [isFetchingTimeline, setIsFetchingTimeline] = useState(false)
-  const hasFetchedRef = useRef(false)
+  const fetchedRunIdRef = useRef<string | null | undefined>(null)
+
+  // Reset state when runId changes
+  useEffect(() => {
+    setAllChunks([])
+    fetchedRunIdRef.current = null
+  }, [terminalOptions.runId])
 
   // Fetch ALL chunks once when timeline sync is enabled and we have a runId
   useEffect(() => {
     if (!timelineSync || playbackMode === 'live' || !selectedRunId || !terminalOptions.runId || !terminalOptions.nodeId) {
-      // Reset when not in sync mode
-      if (!timelineSync) {
-        setAllChunks([])
-        hasFetchedRef.current = false
-      }
       return
     }
 
     // Only fetch once per run
-    if (hasFetchedRef.current && selectedRunId === terminalOptions.runId) {
+    if (fetchedRunIdRef.current === terminalOptions.runId) {
       return
     }
 
@@ -88,7 +89,7 @@ export function useTimelineTerminalStream(
         // Sort by chunkIndex to ensure correct order
         const sorted = [...result.chunks].sort((a, b) => a.chunkIndex - b.chunkIndex)
         setAllChunks(sorted)
-        hasFetchedRef.current = true
+        fetchedRunIdRef.current = terminalOptions.runId
         
         // DETAILED LOGGING: Log all chunks with timestamps
         console.log('[useTimelineTerminalStream] Fetched all chunks', {
@@ -129,14 +130,6 @@ export function useTimelineTerminalStream(
 
     void fetchAllChunks()
   }, [timelineSync, playbackMode, selectedRunId, terminalOptions.runId, terminalOptions.nodeId, terminalOptions.stream])
-
-  // Reset fetch flag when runId changes
-  useEffect(() => {
-    if (selectedRunId !== terminalOptions.runId) {
-      hasFetchedRef.current = false
-      setAllChunks([])
-    }
-  }, [selectedRunId, terminalOptions.runId])
 
   // Filter chunks by current timeline position
   const displayChunks = useMemo(() => {

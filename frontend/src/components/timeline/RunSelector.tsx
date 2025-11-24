@@ -35,6 +35,18 @@ const STATUS_COLORS = {
   QUEUED: 'text-yellow-500',
 } as const
 
+const TERMINAL_STATUSES: ExecutionRun['status'][] = ['COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'TIMED_OUT']
+
+const isRunLive = (run?: ExecutionRun | null) => {
+  if (!run) {
+    return false
+  }
+  if (run.isLive) {
+    return true
+  }
+  return !TERMINAL_STATUSES.includes(run.status)
+}
+
 const formatDuration = (ms: number): string => {
   if (ms < 1000) return `${ms}ms`
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
@@ -77,6 +89,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     runId: currentLiveRunId,
     status: _currentLiveStatus,
     workflowId: _currentWorkflowId,
+    monitorRun,
   } = useExecutionStore()
   const filteredRuns = useMemo(() => {
     if (!workflowId) {
@@ -87,7 +100,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   const liveRuns = useMemo(
     () =>
       filteredRuns
-        .filter((run) => run.isLive)
+        .filter((run) => isRunLive(run))
         .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()),
     [filteredRuns],
   )
@@ -105,14 +118,19 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     if (currentLiveRunId) {
       const liveRun = runs.find((run) => run.id === currentLiveRunId)
       if (!workflowId || liveRun?.workflowId === workflowId) {
-        selectRun(currentLiveRunId)
+        const initialMode = liveRun ? (isRunLive(liveRun) ? 'live' : 'replay') : 'live'
+        void selectRun(currentLiveRunId, initialMode)
+        if (liveRun && isRunLive(liveRun)) {
+          monitorRun(currentLiveRunId, liveRun.workflowId)
+        }
         return
       }
     }
     if (liveRuns.length > 0) {
-      selectRun(liveRuns[0].id, 'live')
+      void selectRun(liveRuns[0].id, 'live')
+      monitorRun(liveRuns[0].id, liveRuns[0].workflowId)
     }
-  }, [currentLiveRunId, selectedRunId, selectRun, workflowId, runs, liveRuns])
+  }, [currentLiveRunId, selectedRunId, selectRun, workflowId, runs, liveRuns, monitorRun])
 
   // Fallback to the most recent historical run when nothing is selected
   useEffect(() => {
@@ -158,8 +176,14 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   }
 
   const handleSelectRun = (runId: string) => {
-    const isLive = liveRuns.some((run) => run.id === runId)
-    selectRun(runId, isLive ? 'live' : 'replay')
+    const run = runs.find((r) => r.id === runId)
+    const runIsLive = isRunLive(run)
+    void selectRun(runId, runIsLive ? 'live' : 'replay')
+
+    if (runIsLive && run) {
+      monitorRun(runId, run.workflowId)
+    }
+
     setIsOpen(false)
   }
 
@@ -193,7 +217,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
                 v{runVersion}
               </Badge>
             )}
-            {run.isLive && (
+            {isRunLive(run) && (
               <Badge variant="outline" className="text-xs animate-pulse">
                 <Wifi className="h-3 w-3 mr-1" />
                 LIVE
@@ -267,7 +291,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
                       v{selectedRunVersion}
                     </Badge>
                   )}
-                  {selectedRun.isLive && (
+                  {isRunLive(selectedRun) && (
                     <Badge variant="outline" className="text-xs animate-pulse">
                       LIVE
                     </Badge>
@@ -307,7 +331,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
           ) : (
             <div className="max-h-64 overflow-y-auto">
               {filteredRuns
-                .filter(run => !run.isLive)
+                .filter(run => !isRunLive(run))
                 .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
                 .map(renderRunItem)}
             </div>
