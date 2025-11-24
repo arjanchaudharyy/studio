@@ -513,7 +513,7 @@ export const useExecutionTimelineStore = create<TimelineStore>()(
         const dataFlows = normalizeDataPackets(
           packetsList,
           timelineStartTime,
-          totalDuration,
+          eventDuration,
         )
 
         const state = get()
