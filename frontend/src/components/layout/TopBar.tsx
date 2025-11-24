@@ -49,7 +49,7 @@ export function TopBar({
       : null
   const failureReason =
     runStatus?.status === 'FAILED'
-      ? runStatus.failure?.reason ?? runStatus.failure?.message ?? 'Unknown error'
+      ? runStatus.failure?.reason ?? 'Unknown error'
       : null
 
   const handleSave = async () => {
