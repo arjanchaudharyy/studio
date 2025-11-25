@@ -187,6 +187,16 @@ export const api = {
       return response.data
     },
 
+    updateMetadata: async (
+      id: string,
+      metadata: { name: string; description?: string | null }
+    ): Promise<WorkflowResponseDto> => {
+      const response = await apiClient.updateWorkflowMetadata(id, metadata)
+      if (response.error) throw new Error('Failed to update workflow metadata')
+      if (!response.data) throw new Error('Workflow update failed')
+      return response.data
+    },
+
     delete: async (id: string): Promise<void> => {
       const response = await apiClient.deleteWorkflow(id)
       if (response.error) throw new Error('Failed to delete workflow')

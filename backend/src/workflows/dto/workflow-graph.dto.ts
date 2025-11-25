@@ -48,6 +48,13 @@ export type WorkflowGraph = WorkflowGraphDto;
 export class CreateWorkflowRequestDto extends WorkflowGraphDto {}
 export class UpdateWorkflowRequestDto extends WorkflowGraphDto {}
 
+export const UpdateWorkflowMetadataSchema = z.object({
+  name: z.string().trim().min(1),
+  description: z.string().optional().nullable(),
+});
+
+export class UpdateWorkflowMetadataDto extends createZodDto(UpdateWorkflowMetadataSchema) {}
+
 export const RunWorkflowRequestSchema = z
   .object({
     inputs: z.record(z.string(), z.unknown()).optional(),

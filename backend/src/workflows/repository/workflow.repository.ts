@@ -64,6 +64,28 @@ export class WorkflowRepository {
     return record;
   }
 
+  async updateMetadata(
+    id: string,
+    metadata: { name: string; description?: string | null },
+    options: WorkflowRepositoryOptions = {},
+  ): Promise<WorkflowRecord> {
+    const [record] = await this.db
+      .update(workflowsTable)
+      .set({
+        name: metadata.name,
+        description: metadata.description ?? null,
+        updatedAt: new Date(),
+      })
+      .where(this.buildIdFilter(id, options.organizationId))
+      .returning();
+
+    if (!record) {
+      throw new Error(`Workflow ${id} not found`);
+    }
+
+    return record;
+  }
+
   async saveCompiledDefinition(
     id: string,
     definition: WorkflowDefinition,

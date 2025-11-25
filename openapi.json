@@ -157,6 +157,46 @@
         ]
       }
     },
+    "/api/v1/workflows/{id}/metadata": {
+      "patch": {
+        "operationId": "WorkflowsController_updateMetadata",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkflowMetadataDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
     "/api/v1/workflows/runs": {
       "get": {
         "operationId": "WorkflowsController_listRuns",
@@ -256,6 +296,90 @@
                           }
                         }
                       }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/api/v1/workflows/runs/{runId}": {
+      "get": {
+        "operationId": "WorkflowsController_getRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Metadata for a single workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "workflowId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "RUNNING",
+                        "COMPLETED",
+                        "FAILED",
+                        "CANCELLED",
+                        "TERMINATED",
+                        "CONTINUED_AS_NEW",
+                        "TIMED_OUT",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "startTime": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "endTime": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "temporalRunId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "workflowVersionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "workflowVersion": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "workflowName": {
+                      "type": "string"
+                    },
+                    "eventCount": {
+                      "type": "number"
+                    },
+                    "nodeCount": {
+                      "type": "number"
+                    },
+                    "duration": {
+                      "type": "number"
                     }
                   }
                 }
@@ -1176,6 +1300,14 @@
               "minLength": 1,
               "type": "string"
             }
+          },
+          {
+            "name": "terminalCursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1232,6 +1364,180 @@
         "responses": {
           "200": {
             "description": "Log streams for a workflow run"
+          }
+        },
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/api/v1/workflows/runs/{runId}/terminal": {
+      "get": {
+        "operationId": "WorkflowsController_terminalChunks",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "nodeRef",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "stream",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stdout",
+                "stderr",
+                "pty"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startTime",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endTime",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Terminal chunks for a workflow run"
+          }
+        },
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/api/v1/workflows/runs/{runId}/terminal/archive": {
+      "post": {
+        "operationId": "WorkflowsController_archiveTerminal",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminalArchiveRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalRecordingDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "workflows"
+        ]
+      },
+      "get": {
+        "operationId": "WorkflowsController_listTerminalArchives",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalRecordListDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/api/v1/workflows/runs/{runId}/terminal/archive/{recordId}/download": {
+      "get": {
+        "operationId": "WorkflowsController_downloadTerminalArchive",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recordId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "maximum": 9007199254740991,
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Download terminal recording"
           }
         },
         "tags": [
@@ -1585,7 +1891,7 @@
                         "properties": {
                           "label": {
                             "type": "string",
-                            "example": "\ud83d\udce5 Input"
+                            "example": "📥 Input"
                           },
                           "color": {
                             "type": "string",
@@ -1597,7 +1903,7 @@
                           },
                           "emoji": {
                             "type": "string",
-                            "example": "\ud83d\udce5"
+                            "example": "📥"
                           }
                         }
                       },
@@ -2825,100 +3131,6 @@
           "TestingWebhook"
         ]
       }
-    },
-    "/api/v1/workflows/runs/{runId}": {
-      "get": {
-        "operationId": "WorkflowsController_getRun",
-        "parameters": [
-          {
-            "name": "runId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Metadata for a single workflow run",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "workflowId": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "RUNNING",
-                        "COMPLETED",
-                        "FAILED",
-                        "CANCELLED",
-                        "TERMINATED",
-                        "CONTINUED_AS_NEW",
-                        "TIMED_OUT",
-                        "UNKNOWN"
-                      ]
-                    },
-                    "startTime": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "endTime": {
-                      "type": "string",
-                      "format": "date-time",
-                      "nullable": true
-                    },
-                    "temporalRunId": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "workflowVersionId": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "workflowVersion": {
-                      "type": "number",
-                      "nullable": true
-                    },
-                    "workflowName": {
-                      "type": "string"
-                    },
-                    "eventCount": {
-                      "type": "number"
-                    },
-                    "nodeCount": {
-                      "type": "number"
-                    },
-                    "duration": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "workflowId",
-                    "status",
-                    "startTime",
-                    "workflowName",
-                    "eventCount",
-                    "nodeCount",
-                    "duration"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "workflows"
-        ]
-      }
     }
   },
   "info": {
@@ -3032,6 +3244,11 @@
             }
           },
           "viewport": {
+            "default": {
+              "x": 0,
+              "y": 0,
+              "zoom": 1
+            },
             "type": "object",
             "properties": {
               "x": {
@@ -3054,8 +3271,7 @@
         "required": [
           "name",
           "nodes",
-          "edges",
-          "viewport"
+          "edges"
         ]
       },
       "WorkflowResponseDto": {
@@ -3167,6 +3383,11 @@
                 }
               },
               "viewport": {
+                "default": {
+                  "x": 0,
+                  "y": 0,
+                  "zoom": 1
+                },
                 "type": "object",
                 "properties": {
                   "x": {
@@ -3189,8 +3410,7 @@
             "required": [
               "name",
               "nodes",
-              "edges",
-              "viewport"
+              "edges"
             ]
           },
           "compiledDefinition": {
@@ -3333,6 +3553,11 @@
             }
           },
           "viewport": {
+            "default": {
+              "x": 0,
+              "y": 0,
+              "zoom": 1
+            },
             "type": "object",
             "properties": {
               "x": {
@@ -3355,8 +3580,23 @@
         "required": [
           "name",
           "nodes",
-          "edges",
-          "viewport"
+          "edges"
+        ]
+      },
+      "UpdateWorkflowMetadataDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name"
         ]
       },
       "WorkflowVersionResponseDto": {
@@ -3469,6 +3709,11 @@
                 }
               },
               "viewport": {
+                "default": {
+                  "x": 0,
+                  "y": 0,
+                  "zoom": 1
+                },
                 "type": "object",
                 "properties": {
                   "x": {
@@ -3491,8 +3736,7 @@
             "required": [
               "name",
               "nodes",
-              "edges",
-              "viewport"
+              "edges"
             ]
           },
           "createdAt": {
@@ -3677,6 +3921,146 @@
         "required": [
           "runId",
           "artifacts"
+        ]
+      },
+      "TerminalArchiveRequestDto": {
+        "type": "object",
+        "properties": {
+          "nodeRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "stream": {
+            "default": "pty",
+            "type": "string",
+            "enum": [
+              "stdout",
+              "stderr",
+              "pty"
+            ]
+          },
+          "width": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 400
+          },
+          "height": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "nodeRef"
+        ]
+      },
+      "TerminalRecordingDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "runId": {
+            "type": "string"
+          },
+          "nodeRef": {
+            "type": "string"
+          },
+          "stream": {
+            "type": "string"
+          },
+          "fileId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "chunkCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "nodeRef",
+          "stream",
+          "fileId",
+          "chunkCount",
+          "durationMs",
+          "createdAt"
+        ]
+      },
+      "TerminalRecordListDto": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "runId": {
+                  "type": "string"
+                },
+                "nodeRef": {
+                  "type": "string"
+                },
+                "stream": {
+                  "type": "string"
+                },
+                "fileId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "chunkCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "durationMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "createdAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "runId",
+                "nodeRef",
+                "stream",
+                "fileId",
+                "chunkCount",
+                "durationMs",
+                "createdAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "runId",
+          "records"
         ]
       },
       "ArtifactListResponseDto": {

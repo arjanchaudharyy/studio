@@ -137,8 +137,11 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
     runVersion !== currentWorkflowVersion
   const versionBadge = runVersion !== null ? (
     <Badge
-      variant={versionMismatch ? 'destructive' : 'secondary'}
-      className="text-[10px] uppercase tracking-wide"
+      variant={versionMismatch ? 'outline' : 'secondary'}
+      className={cn(
+        'text-[10px] uppercase tracking-wide',
+        versionMismatch && 'border-amber-300 bg-amber-50 text-amber-700'
+      )}
     >
       v{runVersion}
     </Badge>
