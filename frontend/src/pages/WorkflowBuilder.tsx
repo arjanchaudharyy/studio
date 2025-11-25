@@ -52,6 +52,29 @@ const cloneNodes = (nodes: ReactFlowNode<FrontendNodeData>[]) =>
 
 const cloneEdges = (edges: ReactFlowEdge[]) => edges.map((edge) => ({ ...edge }))
 
+const computeGraphSignature = (
+  nodesSnapshot: ReactFlowNode<FrontendNodeData>[] | null,
+  edgesSnapshot: ReactFlowEdge[] | null,
+) => {
+  const normalizedNodes = serializeNodes(nodesSnapshot ?? [])
+    .map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        config: node.data.config ?? {},
+      },
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id))
+
+  const normalizedEdges = serializeEdges(edgesSnapshot ?? [])
+    .sort((a, b) => a.id.localeCompare(b.id))
+
+  return JSON.stringify({
+    nodes: normalizedNodes,
+    edges: normalizedEdges,
+  })
+}
+
 const TERMINAL_RUN_STATUSES: ExecutionStatus[] = [
   'COMPLETED',
   'FAILED',
@@ -155,7 +178,10 @@ function WorkflowBuilderContent() {
   const [runtimeInputs, setRuntimeInputs] = useState<any[]>([])
   const [prefilledRuntimeValues, setPrefilledRuntimeValues] = useState<Record<string, unknown>>({})
   const [pendingVersionId, setPendingVersionId] = useState<string | null>(null)
-  const [lastSavedSignature, setLastSavedSignature] = useState<string | null>(null)
+  const [lastSavedGraphSignature, setLastSavedGraphSignature] = useState<string | null>(null)
+  const [lastSavedMetadata, setLastSavedMetadata] = useState<{ name: string; description: string } | null>(null)
+  const [hasGraphChanges, setHasGraphChanges] = useState(false)
+  const [hasMetadataChanges, setHasMetadataChanges] = useState(false)
   const libraryOpen = useWorkflowUiStore((state) => state.libraryOpen)
   const toggleLibrary = useWorkflowUiStore((state) => state.toggleLibrary)
   const inspectorWidth = useWorkflowUiStore((state) => state.inspectorWidth)
@@ -195,52 +221,48 @@ function WorkflowBuilderContent() {
     (
       nodesSnapshot: ReactFlowNode<FrontendNodeData>[] | null,
       edgesSnapshot: ReactFlowEdge[] | null,
-      metadataSnapshot?: { name: string; description?: string | null }
-    ) => {
-      const normalizedNodes = serializeNodes(nodesSnapshot ?? [])
-        .map((node) => ({
-          ...node,
-          data: {
-            ...node.data,
-            config: node.data.config ?? {},
-          },
-        }))
-        .sort((a, b) => a.id.localeCompare(b.id))
-
-      const normalizedEdges = serializeEdges(edgesSnapshot ?? [])
-        .sort((a, b) => a.id.localeCompare(b.id))
-
-      const metadataPayload = metadataSnapshot ?? {
-        name: metadata.name,
-        description: metadata.description ?? '',
-      }
-
-      return JSON.stringify({
-        name: metadataPayload.name,
-        description: metadataPayload.description ?? '',
-        nodes: normalizedNodes,
-        edges: normalizedEdges,
-      })
-    },
-    [metadata.name, metadata.description]
+    ) => computeGraphSignature(nodesSnapshot, edgesSnapshot),
+    []
   )
 
   useEffect(() => {
     const currentSignature = buildGraphSignature(nodes, edges)
 
-    if (lastSavedSignature === null) {
-      setLastSavedSignature(currentSignature)
+    if (lastSavedGraphSignature === null) {
+      setLastSavedGraphSignature(currentSignature)
+      setHasGraphChanges(false)
       return
     }
 
-    if (currentSignature !== lastSavedSignature) {
-      if (!isDirty) {
-        markDirty()
-      }
-    } else if (isDirty) {
+    setHasGraphChanges(currentSignature !== lastSavedGraphSignature)
+  }, [nodes, edges, buildGraphSignature, lastSavedGraphSignature])
+
+  useEffect(() => {
+    const normalizedMetadata = {
+      name: metadata.name,
+      description: metadata.description ?? '',
+    }
+
+    if (lastSavedMetadata === null) {
+      setLastSavedMetadata(normalizedMetadata)
+      setHasMetadataChanges(false)
+      return
+    }
+
+    const changed =
+      normalizedMetadata.name !== lastSavedMetadata.name ||
+      normalizedMetadata.description !== lastSavedMetadata.description
+    setHasMetadataChanges(changed)
+  }, [metadata.name, metadata.description, lastSavedMetadata])
+
+  useEffect(() => {
+    const shouldBeDirty = hasGraphChanges || hasMetadataChanges
+    if (shouldBeDirty && !isDirty) {
+      markDirty()
+    } else if (!shouldBeDirty && isDirty) {
       markClean()
     }
-  }, [nodes, edges, buildGraphSignature, lastSavedSignature, markDirty, markClean, isDirty])
+  }, [hasGraphChanges, hasMetadataChanges, isDirty, markDirty, markClean])
   const workflowRuns = useMemo(() => runs, [runs])
   const mostRecentRunId = useMemo(
     () => (workflowRuns.length > 0 ? workflowRuns[0].id : null),
@@ -426,7 +448,13 @@ function WorkflowBuilderContent() {
         historicalGraphRef.current = null
         setHistoricalVersionId(null)
         const baseMetadata = useWorkflowStore.getState().metadata
-        setLastSavedSignature(buildGraphSignature([], [], baseMetadata))
+        setLastSavedGraphSignature(computeGraphSignature([], []))
+        setLastSavedMetadata({
+          name: baseMetadata.name,
+          description: baseMetadata.description ?? '',
+        })
+        setHasGraphChanges(false)
+        setHasMetadataChanges(false)
         track(Events.WorkflowBuilderLoaded, { is_new: true })
         return
       }
@@ -460,11 +488,14 @@ function WorkflowBuilderContent() {
 
         // Mark as clean (no unsaved changes)
         markClean()
-        const loadedSignature = buildGraphSignature(workflowNodes, workflowEdges, {
+        const loadedSignature = computeGraphSignature(workflowNodes, workflowEdges)
+        setLastSavedGraphSignature(loadedSignature)
+        setLastSavedMetadata({
           name: workflow.name,
           description: workflow.description ?? '',
         })
-        setLastSavedSignature(loadedSignature)
+        setHasGraphChanges(false)
+        setHasMetadataChanges(false)
 
         // Analytics: builder loaded (existing workflow)
         track(Events.WorkflowBuilderLoaded, {
@@ -540,8 +571,10 @@ function WorkflowBuilderContent() {
     setEdges,
     resetWorkflow,
     markClean,
-    buildGraphSignature,
-    setLastSavedSignature,
+    setLastSavedGraphSignature,
+    setLastSavedMetadata,
+    setHasGraphChanges,
+    setHasMetadataChanges,
   ])
 
   const resolveRuntimeInputDefinitions = useCallback(() => {
@@ -1109,6 +1142,38 @@ function WorkflowBuilderContent() {
 
       // Determine if this is a create or update operation
       const workflowId = metadata.id
+      const metadataChangesOnly = hasMetadataChanges && !hasGraphChanges
+
+      if (metadataChangesOnly && workflowId && !isNewWorkflow) {
+        const updatedMetadata = await api.workflows.updateMetadata(workflowId, {
+          name: metadata.name,
+          description: metadata.description ?? '',
+        })
+
+        setMetadata({
+          id: updatedMetadata.id,
+          name: updatedMetadata.name,
+          description: updatedMetadata.description ?? '',
+          currentVersionId: updatedMetadata.currentVersionId ?? null,
+          currentVersion: updatedMetadata.currentVersion ?? null,
+        })
+
+        setLastSavedMetadata({
+          name: updatedMetadata.name,
+          description: updatedMetadata.description ?? '',
+        })
+        setHasMetadataChanges(false)
+        markClean()
+
+        if (showToast) {
+          toast({
+            variant: 'success',
+            title: 'Workflow details updated',
+            description: 'Name and description have been synced.',
+          })
+        }
+        return
+      }
 
       if (!workflowId || isNewWorkflow) {
         // Block creating a brand-new workflow with no nodes (backend expects at least one)
@@ -1145,12 +1210,14 @@ function WorkflowBuilderContent() {
         const newSignature = buildGraphSignature(
           nodesRef.current,
           edgesRef.current,
-          {
-            name: savedWorkflow.name,
-            description: savedWorkflow.description ?? '',
-          }
         )
-        setLastSavedSignature(newSignature)
+        setLastSavedGraphSignature(newSignature)
+        setLastSavedMetadata({
+          name: savedWorkflow.name,
+          description: savedWorkflow.description ?? '',
+        })
+        setHasGraphChanges(false)
+        setHasMetadataChanges(false)
 
         // Navigate to the new workflow URL
         navigate(`/workflows/${savedWorkflow.id}`, { replace: true })
@@ -1191,12 +1258,14 @@ function WorkflowBuilderContent() {
         const newSignature = buildGraphSignature(
           nodesRef.current,
           edgesRef.current,
-          {
-            name: updatedWorkflow.name,
-            description: updatedWorkflow.description ?? '',
-          }
         )
-        setLastSavedSignature(newSignature)
+        setLastSavedGraphSignature(newSignature)
+        setLastSavedMetadata({
+          name: updatedWorkflow.name,
+          description: updatedWorkflow.description ?? '',
+        })
+        setHasGraphChanges(false)
+        setHasMetadataChanges(false)
 
         // Analytics: workflow saved
         track(Events.WorkflowSaved, {
@@ -1244,6 +1313,8 @@ function WorkflowBuilderContent() {
     nodes,
     edges,
     metadata,
+    hasGraphChanges,
+    hasMetadataChanges,
     isNewWorkflow,
     toast,
     setWorkflowId,

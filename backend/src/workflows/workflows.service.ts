@@ -12,6 +12,7 @@ import {
   WorkflowGraphDto,
   WorkflowGraphSchema,
   ServiceWorkflowResponse,
+  UpdateWorkflowMetadataDto,
 } from './dto/workflow-graph.dto';
 import {
   WorkflowRecord,
@@ -246,6 +247,23 @@ export class WorkflowsService {
     this.logger.log(
       `Updated workflow ${response.id} to version ${version.version} (nodes=${input.nodes.length}, edges=${input.edges.length})`,
     );
+    return response;
+  }
+
+  async updateMetadata(
+    id: string,
+    dto: UpdateWorkflowMetadataDto,
+    auth?: AuthContext | null,
+  ): Promise<ServiceWorkflowResponse> {
+    const organizationId = await this.requireWorkflowAdmin(id, auth);
+    const record = await this.repository.updateMetadata(
+      id,
+      { name: dto.name, description: dto.description ?? null },
+      { organizationId },
+    );
+    const version = await this.versionRepository.findLatestByWorkflowId(id, { organizationId });
+    const response = this.buildWorkflowResponse(record, version ?? null);
+    this.logger.log(`Updated workflow ${response.id} metadata (name=${dto.name})`);
     return response;
   }
 

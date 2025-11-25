@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -36,6 +37,8 @@ import {
   TerminalChunksQueryDto,
   TerminalChunksQuerySchema,
   UpdateWorkflowRequestDto,
+  UpdateWorkflowMetadataDto,
+  UpdateWorkflowMetadataSchema,
   WorkflowResponseDto,
   ServiceWorkflowResponse,
   WorkflowVersionResponseDto,
@@ -257,6 +260,19 @@ export class WorkflowsController {
     @Body() body: UpdateWorkflowRequestDto,
   ): Promise<WorkflowResponseDto> {
     const serviceResponse = await this.workflowsService.update(id, body, auth);
+    return this.transformServiceResponseToApi(serviceResponse);
+  }
+
+  @Patch(':id/metadata')
+  @UseGuards(WorkflowRoleGuard)
+  @RequireWorkflowRole('ADMIN')
+  @ApiOkResponse({ type: WorkflowResponseDto })
+  async updateMetadata(
+    @CurrentAuth() auth: AuthContext | null,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(UpdateWorkflowMetadataSchema)) body: UpdateWorkflowMetadataDto,
+  ): Promise<WorkflowResponseDto> {
+    const serviceResponse = await this.workflowsService.updateMetadata(id, body, auth);
     return this.transformServiceResponseToApi(serviceResponse);
   }
 

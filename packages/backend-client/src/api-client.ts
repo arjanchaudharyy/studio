@@ -9,6 +9,7 @@ export interface ClientConfig {
 
 type CreateWorkflowPayload = components['schemas']['CreateWorkflowRequestDto'];
 type UpdateWorkflowPayload = components['schemas']['UpdateWorkflowRequestDto'];
+type UpdateWorkflowMetadataPayload = components['schemas']['UpdateWorkflowMetadataDto'];
 type RunWorkflowPayload = components['schemas']['RunWorkflowRequestDto'];
 type CreateSecretPayload = components['schemas']['CreateSecretDto'];
 type RotateSecretPayload = components['schemas']['RotateSecretDto'];
@@ -91,6 +92,13 @@ export class ShipSecApiClient {
     return this.client.PUT('/api/v1/workflows/{id}', {
       params: { path: { id } },
       body: workflow,
+    });
+  }
+
+  async updateWorkflowMetadata(id: string, metadata: UpdateWorkflowMetadataPayload) {
+    return this.client.PATCH('/api/v1/workflows/{id}/metadata', {
+      params: { path: { id } },
+      body: metadata,
     });
   }
 
