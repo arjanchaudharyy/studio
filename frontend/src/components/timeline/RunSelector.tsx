@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
-import { ChevronDown, Clock, CheckCircle, XCircle, Loader2, Wifi, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { ChevronDown, Play, Clock, CheckCircle, XCircle, Loader2, Wifi, RefreshCw, Link2 } from 'lucide-react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -14,6 +15,7 @@ import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useRunStore, type ExecutionRun } from '@/store/runStore'
 import { cn } from '@/lib/utils'
+import { useToast } from '@/components/ui/use-toast'
 
 const STATUS_ICONS = {
   RUNNING: Loader2,
@@ -70,14 +72,19 @@ interface RunSelectorProps {
 
 export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   const [isOpen, setIsOpen] = useState(false)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { runId: routeRunId } = useParams<{ id?: string; runId?: string }>()
+  const { toast } = useToast()
   const {
     selectedRunId,
     playbackMode,
     selectRun,
+    switchToLiveMode,
   } = useExecutionTimelineStore()
-  const { id: workflowId, currentVersion: currentWorkflowVersion } = useWorkflowStore(
-    (state) => state.metadata
-  )
+  const workflowMetadata = useWorkflowStore((state) => state.metadata)
+  const workflowId = workflowMetadata.id
+  const currentWorkflowVersion = workflowMetadata.currentVersion
   const workflowCacheKey = workflowId ?? '__global__'
   const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
   const runs = scopedRuns ?? []
@@ -87,20 +94,46 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
 
   const {
     runId: currentLiveRunId,
-    status: _currentLiveStatus,
-    workflowId: _currentWorkflowId,
     monitorRun,
   } = useExecutionStore()
+
+  const navigateToRun = useCallback(
+    (runId?: string, options?: { replace?: boolean }) => {
+      if (!workflowId || workflowId === 'new') {
+        return
+      }
+      const basePath = `/workflows/${workflowId}`
+      const targetPath = runId ? `${basePath}/runs/${runId}` : basePath
+      if (location.pathname === targetPath) {
+        return
+      }
+      navigate(targetPath, { replace: options?.replace ?? false })
+    },
+    [workflowId, navigate, location.pathname],
+  )
+
   const filteredRuns = useMemo(() => {
     if (!workflowId) {
       return runs
     }
     return runs.filter((run) => run.workflowId === workflowId)
   }, [runs, workflowId])
+
   const liveRuns = useMemo(
     () =>
       filteredRuns
         .filter((run) => isRunLive(run))
+        .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()),
+    [filteredRuns],
+  )
+  const otherLiveRuns = useMemo(
+    () => liveRuns.filter((run) => run.id !== currentLiveRunId),
+    [liveRuns, currentLiveRunId],
+  )
+  const historicalRuns = useMemo(
+    () =>
+      filteredRuns
+        .filter((run) => !isRunLive(run))
         .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()),
     [filteredRuns],
   )
@@ -112,7 +145,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
 
   // Auto-load a live run if it exists and nothing is selected
   useEffect(() => {
-    if (selectedRunId) {
+    if (selectedRunId || routeRunId) {
       return
     }
     if (currentLiveRunId) {
@@ -123,18 +156,30 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
         if (liveRun && isRunLive(liveRun)) {
           monitorRun(currentLiveRunId, liveRun.workflowId)
         }
+        navigateToRun(currentLiveRunId, { replace: true })
         return
       }
     }
     if (liveRuns.length > 0) {
       void selectRun(liveRuns[0].id, 'live')
       monitorRun(liveRuns[0].id, liveRuns[0].workflowId)
+      navigateToRun(liveRuns[0].id, { replace: true })
     }
-  }, [currentLiveRunId, selectedRunId, selectRun, workflowId, runs, liveRuns, monitorRun])
+  }, [
+    currentLiveRunId,
+    selectedRunId,
+    selectRun,
+    workflowId,
+    runs,
+    liveRuns,
+    monitorRun,
+    navigateToRun,
+    routeRunId,
+  ])
 
   // Fallback to the most recent historical run when nothing is selected
   useEffect(() => {
-    if (selectedRunId || currentLiveRunId || filteredRuns.length === 0) {
+    if (selectedRunId || currentLiveRunId || filteredRuns.length === 0 || routeRunId) {
       return
     }
 
@@ -144,8 +189,9 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
 
     if (latestRun) {
       selectRun(latestRun.id)
+      navigateToRun(latestRun.id, { replace: true })
     }
-  }, [filteredRuns, selectedRunId, currentLiveRunId, selectRun])
+  }, [filteredRuns, selectedRunId, currentLiveRunId, selectRun, navigateToRun, routeRunId])
 
   useEffect(() => {
     if (!workflowId && !currentLiveRunId && liveRuns.length === 0) {
@@ -166,6 +212,15 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     typeof currentWorkflowVersion === 'number' &&
     selectedRunVersion !== currentWorkflowVersion
 
+  const currentLiveRun = runs.find(run => run.id === currentLiveRunId)
+  const currentLiveRunVersion = typeof currentLiveRun?.workflowVersion === 'number'
+    ? currentLiveRun.workflowVersion
+    : null
+  const currentLiveRunOlder =
+    currentLiveRunVersion !== null &&
+    typeof currentWorkflowVersion === 'number' &&
+    currentLiveRunVersion !== currentWorkflowVersion
+
   const getStatusIcon = (status: string) => {
     const IconComponent = STATUS_ICONS[status as keyof typeof STATUS_ICONS]
     return IconComponent ? <IconComponent className="h-4 w-4" /> : null
@@ -174,6 +229,32 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   const getStatusColor = (status: string) => {
     return STATUS_COLORS[status as keyof typeof STATUS_COLORS] || 'text-gray-500'
   }
+
+  const handleCopyLink = useCallback(
+    async (run: ExecutionRun) => {
+      const basePath = `/workflows/${run.workflowId}/runs/${run.id}`
+      const absoluteUrl = typeof window !== 'undefined' ? `${window.location.origin}${basePath}` : basePath
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(absoluteUrl)
+          toast({
+            title: 'Run link copied',
+            description: 'Share this URL to open the execution directly.',
+          })
+        } else {
+          throw new Error('Clipboard API is unavailable')
+        }
+      } catch (error) {
+        console.error('Failed to copy run link:', error)
+        toast({
+          variant: 'destructive',
+          title: 'Unable to copy link automatically',
+          description: absoluteUrl,
+        })
+      }
+    },
+    [toast],
+  )
 
   const handleSelectRun = (runId: string) => {
     const run = runs.find((r) => r.id === runId)
@@ -184,7 +265,17 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
       monitorRun(runId, run.workflowId)
     }
 
+    navigateToRun(runId)
     setIsOpen(false)
+  }
+
+  const handleSwitchToLive = () => {
+    if (currentLiveRunId) {
+      switchToLiveMode()
+      void selectRun(currentLiveRunId, 'live')
+      navigateToRun(currentLiveRunId)
+      setIsOpen(false)
+    }
   }
 
   const renderRunItem = (run: ExecutionRun) => {
@@ -243,6 +334,20 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
         </div>
 
         <div className="flex flex-col gap-2 items-end justify-between">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              handleCopyLink(run)
+            }}
+            title="Copy run link"
+            aria-label="Copy direct link to this run"
+          >
+            <Link2 className="h-4 w-4" />
+          </Button>
           {onRerun && (
             <Button
               variant="ghost"
@@ -306,14 +411,68 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
         </DropdownMenuTrigger>
 
         <DropdownMenuContent className="w-96" align="start">
+          {/* Current Live Run */}
+          {currentLiveRun && currentLiveRun.id !== selectedRunId && (
+            <>
+              <div className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Current Live Run
+              </div>
+              <DropdownMenuItem
+                onSelect={handleSwitchToLive}
+                className="flex items-center gap-3 p-3 cursor-pointer bg-blue-50 dark:bg-blue-950/20"
+              >
+                <div className={cn("flex-shrink-0", getStatusColor(currentLiveRun.status))}>
+                  {getStatusIcon(currentLiveRun.status)}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium truncate">{currentLiveRun.workflowName}</span>
+                    {currentLiveRunVersion !== null && (
+                      <Badge
+                        variant={currentLiveRunOlder ? 'destructive' : 'secondary'}
+                        className="text-[10px] uppercase tracking-wide"
+                      >
+                        v{currentLiveRunVersion}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs animate-pulse">
+                      <Wifi className="h-3 w-3 mr-1" />
+                      LIVE NOW
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                    <span>Run #{currentLiveRun.id.slice(-8)}</span>
+                    <span>{currentLiveRun.nodeCount} nodes</span>
+                    <span>{currentLiveRun.eventCount} events</span>
+                    <span>{formatRelativeTime(currentLiveRun.startTime)}</span>
+                    {currentLiveRunVersion !== null && (
+                      <span className={cn(currentLiveRunOlder ? 'text-amber-500' : undefined)}>
+                        v{currentLiveRunVersion}
+                        {currentLiveRunOlder && typeof currentWorkflowVersion === 'number'
+                          ? ` (current v${currentWorkflowVersion})`
+                          : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <Play className="h-4 w-4 text-blue-500" />
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+            </>
+          )}
+
           {/* Live Runs */}
-          {liveRuns.length > 0 && (
+          {otherLiveRuns.length > 0 && (
             <>
               <div className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Live Runs
               </div>
               <div className="max-h-48 overflow-y-auto">
-                {liveRuns.map(renderRunItem)}
+                {otherLiveRuns.map(renderRunItem)}
               </div>
               <DropdownMenuSeparator />
             </>
@@ -324,16 +483,13 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
             Historical Runs
           </div>
 
-          {filteredRuns.length === 0 ? (
+          {historicalRuns.length === 0 ? (
             <div className="px-3 py-6 text-center text-muted-foreground text-sm">
               {isLoadingRuns ? 'Loading runs…' : 'No previous runs found'}
             </div>
           ) : (
             <div className="max-h-64 overflow-y-auto">
-              {filteredRuns
-                .filter(run => !isRunLive(run))
-                .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
-                .map(renderRunItem)}
+              {historicalRuns.map(renderRunItem)}
             </div>
           )}
 
@@ -371,6 +527,19 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Playback Mode Toggle */}
+      {selectedRun && currentLiveRun && selectedRun.id !== currentLiveRun.id && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSwitchToLive}
+          className="flex items-center gap-2"
+        >
+          <Wifi className="h-4 w-4" />
+          Switch to Live
+        </Button>
+      )}
 
       {liveRuns.length > 0 && (
         <div className="text-xs text-muted-foreground">
