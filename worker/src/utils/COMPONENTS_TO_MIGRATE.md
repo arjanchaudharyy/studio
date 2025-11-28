@@ -89,13 +89,13 @@ await volume.initialize(files);
 
 ### 3. supabase-scanner (Medium Priority)
 
-**Status:** Needs investigation
+**Status:** Migrated — now uses `IsolatedContainerVolume` for config/output mounts (no host temp dirs).
 
 **Action Items:**
-- [ ] Check if component uses temp files
-- [ ] Determine if Docker runner or inline
-- [ ] Identify file dependencies
-- [ ] Create migration plan if needed
+- [x] Check if component uses temp files
+- [x] Determine if Docker runner or inline
+- [x] Identify file dependencies
+- [x] Create migration plan if needed
 
 ---
 
