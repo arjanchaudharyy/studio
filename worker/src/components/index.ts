@@ -22,6 +22,7 @@ import './core/file-writer';
 import './core/credentials-aws';
 import './core/destination-artifact';
 import './core/destination-s3';
+import './core/text-block';
 import './ai/openai-chat';
 import './ai/gemini-chat';
 import './ai/openrouter-chat';
