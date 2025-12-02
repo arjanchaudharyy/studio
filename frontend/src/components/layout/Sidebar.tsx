@@ -124,15 +124,17 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
 
   const allComponents = getAllComponents()
 
-  // Group components by backend-provided categories
-  const componentsByCategory = allComponents.reduce((acc, component) => {
-    const category = component.category
-    if (!acc[category]) {
-      acc[category] = []
-    }
-    acc[category].push(component)
-    return acc
-  }, {} as Record<string, ComponentMetadata[]>)
+  // Group components by backend-provided categories (memoized to prevent infinite loops)
+  const componentsByCategory = useMemo(() => {
+    return allComponents.reduce((acc, component) => {
+      const category = component.category
+      if (!acc[category]) {
+        acc[category] = []
+      }
+      acc[category].push(component)
+      return acc
+    }, {} as Record<string, ComponentMetadata[]>)
+  }, [allComponents])
 
   // Filter components based on search query
   const filteredComponentsByCategory = useMemo(() => {
@@ -174,17 +176,33 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
   // Track open accordion items (controlled)
   const [openAccordionItems, setOpenAccordionItems] = useState<string[]>([])
 
-  // Auto-expand all matching categories when searching
+  // Track whether we've initialized the accordion with the first category
+  const [hasInitialized, setHasInitialized] = useState(false)
+
+  // Initialize accordion to first category when components first load
+  useEffect(() => {
+    if (!hasInitialized && !searchQuery.trim()) {
+      const categories = Object.keys(filteredComponentsByCategory)
+      if (categories.length > 0) {
+        setOpenAccordionItems([categories[0]])
+        setHasInitialized(true)
+      }
+    }
+  }, [filteredComponentsByCategory, hasInitialized, searchQuery])
+
+  // Auto-expand all matching categories when search query changes
   useEffect(() => {
     if (searchQuery.trim()) {
       // When searching, open all categories that have matching components
       setOpenAccordionItems(Object.keys(filteredComponentsByCategory))
-    } else {
-      // When not searching, open only the first category
+    } else if (hasInitialized) {
+      // When clearing search, open only the first category
       const categories = Object.keys(filteredComponentsByCategory)
       setOpenAccordionItems(categories.length > 0 ? [categories[0]] : [])
     }
-  }, [searchQuery, filteredComponentsByCategory])
+    // Only depend on searchQuery - not filteredComponentsByCategory to avoid loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery])
 
   return (
     <div className="h-full w-full max-w-[320px] border-r bg-background flex flex-col">
