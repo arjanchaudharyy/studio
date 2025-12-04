@@ -207,6 +207,16 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
           )}
         </div>
 
+        <div className="border-b bg-background/60 flex-shrink-0">
+          {selectedRun ? (
+            <ExecutionTimeline />
+          ) : (
+            <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+              Select a run to scrub through execution timelines.
+            </div>
+          )}
+        </div>
+
         <div className="border-b bg-background/60 px-3 py-2">
           <div className="inline-flex rounded-md border bg-muted/60 p-1 text-xs font-medium">
             <Button
@@ -247,12 +257,7 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
         <div className="flex-1 min-h-0">
           {inspectorTab === 'events' && (
             <div className="flex flex-col h-full min-h-0">
-              <div className="flex-shrink-0 border-b bg-background/60">
-                <ExecutionTimeline />
-              </div>
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <EventInspector className="h-full" />
-              </div>
+              <EventInspector className="h-full" />
             </div>
           )}
 
