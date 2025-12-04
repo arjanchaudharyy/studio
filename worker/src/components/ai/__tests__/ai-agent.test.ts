@@ -159,9 +159,6 @@ describe('core.ai.agent component', () => {
         modelId: 'gpt-4o-mini',
       },
       modelApiKey: 'sk-openai-from-secret',
-      mcp: {
-        endpoint: '',
-      },
       systemPrompt: 'You are a concise assistant.',
       temperature: 0.2,
       maxTokens: 256,
@@ -391,7 +388,6 @@ describe('core.ai.agent component', () => {
         modelId: 'gpt-4o-mini',
       },
       modelApiKey: 'sk-openai-from-secret',
-      mcp: { endpoint: '' },
       systemPrompt: 'You are a biologist.',
       temperature: 0.2,
       maxTokens: 256,

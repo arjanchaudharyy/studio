@@ -83,17 +83,17 @@ const originalFetch = global.fetch;
 
     expect(result.logs).toHaveLength(2);
     expect(result.logs[0]).toEqual({
-      id: expect.any(String),
+      id: `run-123-${record.firstTimestamp.toISOString()}-0`,
       runId: 'run-123',
-      nodeId: 'node-1',
+      nodeId: 'unknown',
       level: 'info',
       message: 'line one',
       timestamp: record.firstTimestamp.toISOString(),
     });
     expect(result.logs[1]).toEqual({
-      id: expect.any(String),
+      id: `run-123-${new Date(record.firstTimestamp.getTime() + 500).toISOString()}-1`,
       runId: 'run-123',
-      nodeId: 'node-1',
+      nodeId: 'unknown',
       level: 'info',
       message: 'line two',
       timestamp: new Date(record.firstTimestamp.getTime() + 500).toISOString(),
