@@ -102,6 +102,7 @@ export const StreamRunQuerySchema = TemporalRunQuerySchema.extend({
     .min(1)
     .optional(),
   terminalCursor: z.string().trim().optional(),
+  logCursor: z.coerce.number().int().min(0).optional(),
 });
 
 export class StreamRunQueryDto extends createZodDto(StreamRunQuerySchema) {}
@@ -120,6 +121,14 @@ export const WorkflowLogsQuerySchema = z.object({
     .optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
   cursor: z
+    .string()
+    .datetime()
+    .optional(),
+  startTime: z
+    .string()
+    .datetime()
+    .optional(),
+  endTime: z
     .string()
     .datetime()
     .optional(),

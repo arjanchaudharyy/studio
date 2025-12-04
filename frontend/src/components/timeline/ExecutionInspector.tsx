@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { MessageModal } from '@/components/ui/MessageModal'
 import { StopCircle } from 'lucide-react'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
+import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowExecution } from '@/hooks/useWorkflowExecution'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { useWorkflowStore } from '@/store/workflowStore'
@@ -18,7 +19,6 @@ import type { ExecutionLog } from '@/schemas/execution'
 import { createPreview } from '@/utils/textPreview'
 import { RunArtifactsPanel } from '@/components/artifacts/RunArtifactsPanel'
 import { AgentTracePanel } from '@/components/timeline/AgentTracePanel'
-import { api } from '@/services/api'
 
 const formatTime = (timestamp: string) => {
   const date = new Date(timestamp)
@@ -74,13 +74,12 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
   const { status, runStatus, reset, runId: liveRunId } = useWorkflowExecution()
   const { inspectorTab, setInspectorTab } = useWorkflowUiStore()
   const fetchRunArtifacts = useArtifactStore((state) => state.fetchRunArtifacts)
+  const { getDisplayLogs, setLogMode } = useExecutionStore()
   const [logModal, setLogModal] = useState<{ open: boolean; message: string; title: string }>({
     open: false,
     message: '',
     title: '',
   })
-  const [fetchedLogs, setFetchedLogs] = useState<any[]>([])
-  const [logsLoading, setLogsLoading] = useState(false)
 
   const selectedRun = useMemo(() => (
     runs.find(run => run.id === selectedRunId)
@@ -93,31 +92,14 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
   }, [selectedRunId, inspectorTab, fetchRunArtifacts])
 
   useEffect(() => {
-    if (selectedRunId && inspectorTab === 'logs') {
-      setLogsLoading(true)
-      api.executions.getLogs(selectedRunId, { limit: 500 })
-        .then((response) => {
-          // Transform the response to match the expected ExecutionLog format
-          const transformedLogs: ExecutionLog[] = response.logs.map((log) => ({
-            id: log.id,
-            runId: log.runId,
-            nodeId: log.nodeId,
-            type: 'PROGRESS' as const,
-            level: log.level,
-            timestamp: log.timestamp,
-            message: log.message,
-          }))
-          setFetchedLogs(transformedLogs)
-        })
-        .catch((error) => {
-          console.error('Failed to fetch logs:', error)
-          setFetchedLogs([])
-        })
-        .finally(() => {
-          setLogsLoading(false)
-        })
+    // Switch log mode based on timeline playback mode
+    if (playbackMode === 'live') {
+      setLogMode('live')
+    } else if (playbackMode === 'replay') {
+      setLogMode('scrubbing')
     }
-  }, [selectedRunId, inspectorTab])
+  }, [playbackMode, setLogMode])
+
 
 
   const openLogModal = (fullMessage: string, log: ExecutionLog) => {
@@ -276,19 +258,19 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
             <div className="flex flex-col h-full min-h-0">
               <div className="flex items-center justify-between px-3 py-2 border-b bg-background/70 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <span>{logsLoading ? 'Loading logs...' : `${fetchedLogs.length} log entries`}</span>
+                  <span>{`${getDisplayLogs().length} log entries`}</span>
                 </div>
                 <span className={cn('font-medium', playbackMode === 'live' ? 'text-green-600' : 'text-blue-600')}>
                   {playbackMode === 'live' ? (isPlaying ? 'Live (following)' : 'Live paused') : 'Execution playback'}
                 </span>
               </div>
               <div className="flex-1 overflow-y-auto px-3 py-2 pb-20 space-y-2 text-xs font-mono bg-background/40">
-                {fetchedLogs.length === 0 && !logsLoading ? (
+                {getDisplayLogs().length === 0 ? (
                   <div className="text-muted-foreground text-center py-8">
                     No logs to display for this run.
                   </div>
                 ) : (
-                  fetchedLogs.map((log) => {
+                  getDisplayLogs().map((log) => {
                     const executionLog = log as ExecutionLog
                     const fullMessage = buildLogMessage(executionLog)
                     const preview = createPreview(fullMessage, { charLimit: 220, lineLimit: 4 })

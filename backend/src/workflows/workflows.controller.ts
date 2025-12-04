@@ -657,8 +657,12 @@ export class WorkflowsController {
 
     let lastSequence = Number.parseInt(query.cursor ?? '0', 10);
     let terminalCursor = query.terminalCursor;
+    let lastLogSequence = query.logCursor ?? 0;
     if (Number.isNaN(lastSequence) || lastSequence < 0) {
       lastSequence = 0;
+    }
+    if (lastLogSequence < 0) {
+      lastLogSequence = 0;
     }
 
     let active = true;
@@ -747,6 +751,13 @@ export class WorkflowsController {
         if (terminal.chunks.length > 0) {
           terminalCursor = terminal.cursor;
           send('terminal', { runId, ...terminal });
+        }
+
+        const newLogs = await this.logStreamService.fetchRecentLogs(runId, lastLogSequence);
+        if (newLogs.length > 0) {
+          const lastLog = newLogs[newLogs.length - 1];
+          lastLogSequence = lastLog.sequence;
+          send('logs', { logs: newLogs, cursor: lastLogSequence.toString() });
         }
       } catch (error) {
         send('error', { message: 'trace_fetch_failed', detail: String(error) });
@@ -892,6 +903,8 @@ export class WorkflowsController {
       level: query.level,
       limit: query.limit,
       cursor: query.cursor,
+      startTime: query.startTime,
+      endTime: query.endTime,
     });
   }
 

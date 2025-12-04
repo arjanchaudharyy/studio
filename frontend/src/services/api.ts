@@ -522,7 +522,7 @@ export const api = {
       return response.data
     },
 
-    getLogs: async (runId: string, options?: { nodeRef?: string; stream?: 'stdout' | 'stderr' | 'console'; level?: 'debug' | 'info' | 'warn' | 'error'; limit?: number; cursor?: string }) => {
+    getLogs: async (runId: string, options?: { nodeRef?: string; stream?: 'stdout' | 'stderr' | 'console'; level?: 'debug' | 'info' | 'warn' | 'error'; limit?: number; cursor?: string; startTime?: string; endTime?: string }) => {
       const client = createShipSecClient({
         baseUrl: API_BASE_URL,
         middleware: {
