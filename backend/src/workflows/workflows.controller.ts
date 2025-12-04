@@ -855,7 +855,30 @@ export class WorkflowsController {
 
   @Get('/runs/:runId/logs')
   @ApiOkResponse({
-    description: 'Log streams for a workflow run',
+    description: 'Logs for a workflow run',
+    schema: {
+      type: 'object',
+      properties: {
+        runId: { type: 'string' },
+        logs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              runId: { type: 'string' },
+              nodeId: { type: 'string' },
+              level: { type: 'string', enum: ['debug', 'info', 'warn', 'error'] },
+              message: { type: 'string' },
+              timestamp: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+        totalCount: { type: 'number' },
+        hasMore: { type: 'boolean' },
+        nextCursor: { type: 'string', nullable: true },
+      },
+    },
   })
   async logs(
     @Param('runId') runId: string,
@@ -866,7 +889,9 @@ export class WorkflowsController {
     return this.logStreamService.fetch(runId, auth, {
       nodeRef: query.nodeRef,
       stream: query.stream,
+      level: query.level,
       limit: query.limit,
+      cursor: query.cursor,
     });
   }
 

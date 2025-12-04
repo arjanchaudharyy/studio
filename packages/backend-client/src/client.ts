@@ -1916,8 +1916,10 @@ export interface operations {
         parameters: {
             query?: {
                 nodeRef?: string;
-                stream?: string;
+                stream?: "stdout" | "stderr" | "console";
+                level?: "debug" | "info" | "warn" | "error";
                 limit?: number;
+                cursor?: string;
             };
             header?: never;
             path: {
@@ -1927,12 +1929,29 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Log streams for a workflow run */
+            /** @description Logs for a workflow run */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        runId?: string;
+                        logs?: {
+                            id?: string;
+                            runId?: string;
+                            nodeId?: string;
+                            /** @enum {string} */
+                            level?: "debug" | "info" | "warn" | "error";
+                            message?: string;
+                            /** Format: date-time */
+                            timestamp?: string;
+                        }[];
+                        totalCount?: number;
+                        hasMore?: boolean;
+                        nextCursor?: string | null;
+                    };
+                };
             };
         };
     };

@@ -101,6 +101,7 @@ export function createExecutionContext(options: CreateContextOptions): Execution
     },
   }) as Logger;
 
+
   const emitProgress = (progress: ProgressEventInput | string) => {
     const normalized: ProgressEventInput =
       typeof progress === 'string' ? { message: progress, level: 'info' } : progress;
@@ -134,6 +135,51 @@ export function createExecutionContext(options: CreateContextOptions): Execution
     terminalCollector,
     metadata,
   };
+
+  // Override logger methods to use logCollector instead of trace.record
+  if (logCollector) {
+    const loggerWithCollector: Logger = Object.freeze({
+      info: (...args: unknown[]) => {
+        logCollector({
+          runId,
+          nodeRef: componentRef,
+          stream: 'stdout',
+          level: 'info',
+          message: format(...args),
+          timestamp: new Date().toISOString(),
+          metadata,
+        });
+        console.log(`[${componentRef}]`, ...args);
+      },
+      warn: (...args: unknown[]) => {
+        logCollector({
+          runId,
+          nodeRef: componentRef,
+          stream: 'stdout',
+          level: 'warn',
+          message: format(...args),
+          timestamp: new Date().toISOString(),
+          metadata,
+        });
+        console.warn(`[${componentRef}]`, ...args);
+      },
+      error: (...args: unknown[]) => {
+        logCollector({
+          runId,
+          nodeRef: componentRef,
+          stream: 'stderr',
+          level: 'error',
+          message: format(...args),
+          timestamp: new Date().toISOString(),
+          metadata,
+        });
+        console.error(`[${componentRef}]`, ...args);
+      },
+    }) as Logger;
+
+    // Replace the logger in context
+    (context as any).logger = loggerWithCollector;
+  }
 
   return Object.freeze(context) as ExecutionContext;
 }

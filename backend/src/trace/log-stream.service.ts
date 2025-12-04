@@ -7,12 +7,16 @@ import type { AuthContext } from '../auth/types';
 interface FetchLogsOptions {
   nodeRef?: string;
   stream?: string;
+  level?: 'debug' | 'info' | 'warn' | 'error';
   limit?: number;
+  cursor?: string; // ISO timestamp for pagination
 }
 
 interface LokiEntry {
   timestamp: string;
   message: string;
+  level?: string;
+  nodeId?: string;
 }
 
 @Injectable()
@@ -35,43 +39,36 @@ export class LogStreamService {
     }
 
     const organizationId = this.requireOrganizationId(auth);
-
     const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 2000) : 500;
-    const streamFilter =
-      options.stream && ['stdout', 'stderr', 'console'].includes(options.stream)
-        ? (options.stream as 'stdout' | 'stderr' | 'console')
-        : undefined;
-    const streams = await this.repository.listByRunId(
+
+    // Build Loki query selector
+    const selectorLabels: Record<string, string> = { run_id: runId };
+    if (options.nodeRef) selectorLabels.node = options.nodeRef;
+    if (options.stream) selectorLabels.stream = options.stream;
+    if (options.level) selectorLabels.level = options.level;
+
+    const selector = this.buildSelector(selectorLabels);
+
+    // Query Loki directly
+    const entries = await this.queryLokiRange(selector, limit, options.cursor);
+
+    // Transform to flat log list
+    const logs = entries.map((entry, index) => ({
+      id: `${runId}-${entry.timestamp}-${index}`,
       runId,
-      organizationId,
-      options.nodeRef,
-      streamFilter,
-    );
+      nodeId: entry.nodeId || 'unknown',
+      level: entry.level || 'info',
+      message: entry.message,
+      timestamp: entry.timestamp,
+    }));
 
-    const payload = [] as Array<{
-      nodeRef: string;
-      stream: string;
-      labels: Record<string, string>;
-      firstTimestamp: string;
-      lastTimestamp: string;
-      lineCount: number;
-      entries: LokiEntry[];
-    }>;
-
-    for (const record of streams) {
-      const entries = await this.queryLoki(record, limit);
-      payload.push({
-        nodeRef: record.nodeRef,
-        stream: record.stream,
-        labels: this.normalizeLabels(record.labels),
-        firstTimestamp: record.firstTimestamp.toISOString(),
-        lastTimestamp: record.lastTimestamp.toISOString(),
-        lineCount: record.lineCount,
-        entries,
-      });
-    }
-
-    return { runId, streams: payload };
+    return {
+      runId,
+      logs,
+      totalCount: logs.length,
+      hasMore: logs.length === limit,
+      nextCursor: logs.length > 0 ? logs[logs.length - 1].timestamp : undefined,
+    };
   }
 
   private async queryLoki(record: WorkflowLogStreamRecord, limit: number): Promise<LokiEntry[]> {
@@ -113,6 +110,59 @@ export class LogStreamService {
         });
       }
     }
+
+    return entries;
+  }
+
+  private async queryLokiRange(selector: string, limit: number, cursor?: string): Promise<LokiEntry[]> {
+    const params = new URLSearchParams({
+      query: selector,
+      direction: 'backward', // Most recent first
+      limit: limit.toString(),
+    });
+
+    if (cursor) {
+      // End time is the cursor (exclusive)
+      params.set('end', this.toNanoseconds(new Date(cursor)));
+    }
+
+    const response = await fetch(this.resolveUrl(`/loki/api/v1/query_range?${params.toString()}`), {
+      method: 'GET',
+      headers: this.buildHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new ServiceUnavailableException(
+        `Loki query failed: ${response.status} ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    const payload = (await response.json()) as {
+      data?: {
+        result?: Array<{
+          stream?: Record<string, string>;
+          values?: [string, string][];
+        }>;
+      };
+    };
+
+    const entries: LokiEntry[] = [];
+    const results = payload.data?.result ?? [];
+    for (const result of results) {
+      const streamLabels = result.stream ?? {};
+      for (const [timestamp, message] of result.values ?? []) {
+        entries.push({
+          timestamp: this.fromNanoseconds(timestamp),
+          message,
+          level: streamLabels.level,
+          nodeId: streamLabels.node,
+        });
+      }
+    }
+
+    // Sort by timestamp ascending (Loki returns descending)
+    entries.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
     return entries;
   }

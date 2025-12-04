@@ -176,6 +176,7 @@ services:
       - SHIPSEC_ENV=production
       - PORT=3211
       - DATABASE_URL=postgresql://shipsec:shipsec@postgres:5432/shipsec
+      - ENABLE_INGEST_SERVICES=true
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=shipsec-prod
       - TEMPORAL_TASK_QUEUE=shipsec-prod
@@ -189,6 +190,9 @@ services:
       - LOG_KAFKA_TOPIC=telemetry.logs
       - LOG_KAFKA_CLIENT_ID=shipsec-backend
       - LOG_KAFKA_GROUP_ID=shipsec-backend-log-consumer
+      - EVENT_KAFKA_TOPIC=telemetry.events
+      - EVENT_KAFKA_CLIENT_ID=shipsec-backend-events
+      - EVENT_KAFKA_GROUP_ID=shipsec-event-ingestor
       - AUTH_PROVIDER=local
       - CLERK_PUBLISHABLE_KEY=
       - CLERK_SECRET_KEY=
@@ -249,6 +253,7 @@ services:
       - NODE_ENV=production
       - SHIPSEC_ENV=production
       - DATABASE_URL=postgresql://shipsec:shipsec@postgres:5432/shipsec
+      - ENABLE_INGEST_SERVICES=true
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=shipsec-prod
       - TEMPORAL_TASK_QUEUE=shipsec-prod
@@ -259,6 +264,11 @@ services:
       - LOKI_URL=http://loki:3100
       - TERMINAL_REDIS_URL=redis://redis:6379
       - DOCKER_HOST=tcp://dind:2375
+      - LOG_KAFKA_BROKERS=redpanda:9092
+      - LOG_KAFKA_TOPIC=telemetry.logs
+      - LOG_KAFKA_CLIENT_ID=shipsec-worker
+      - EVENT_KAFKA_TOPIC=telemetry.events
+      - EVENT_KAFKA_CLIENT_ID=shipsec-worker-events
     depends_on:
       postgres:
         condition: service_healthy

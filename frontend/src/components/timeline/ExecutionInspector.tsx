@@ -18,6 +18,7 @@ import type { ExecutionLog } from '@/schemas/execution'
 import { createPreview } from '@/utils/textPreview'
 import { RunArtifactsPanel } from '@/components/artifacts/RunArtifactsPanel'
 import { AgentTracePanel } from '@/components/timeline/AgentTracePanel'
+import { api } from '@/services/api'
 
 const formatTime = (timestamp: string) => {
   const date = new Date(timestamp)
@@ -61,10 +62,8 @@ interface ExecutionInspectorProps {
 export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {}) {
   const {
     selectedRunId,
-    events,
     playbackMode,
     isPlaying,
-    nodeStates,
   } = useExecutionTimelineStore()
   const { id: workflowId, currentVersion: currentWorkflowVersion } = useWorkflowStore(
     (state) => state.metadata
@@ -72,7 +71,7 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
   const workflowCacheKey = workflowId ?? '__global__'
   const scopedRuns = useRunStore((state) => state.cache[workflowCacheKey]?.runs)
   const runs = scopedRuns ?? []
-  const { logs, status, runStatus, reset, runId: liveRunId } = useWorkflowExecution()
+  const { status, runStatus, reset, runId: liveRunId } = useWorkflowExecution()
   const { inspectorTab, setInspectorTab } = useWorkflowUiStore()
   const fetchRunArtifacts = useArtifactStore((state) => state.fetchRunArtifacts)
   const [logModal, setLogModal] = useState<{ open: boolean; message: string; title: string }>({
@@ -80,6 +79,8 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
     message: '',
     title: '',
   })
+  const [fetchedLogs, setFetchedLogs] = useState<any[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
 
   const selectedRun = useMemo(() => (
     runs.find(run => run.id === selectedRunId)
@@ -91,23 +92,33 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
     }
   }, [selectedRunId, inspectorTab, fetchRunArtifacts])
 
-  const displayLogs = events.length > 0 ? events : logs
-  const retrySummary = useMemo(() => {
-    const states = Object.values(nodeStates)
-    if (states.length === 0) {
-      return { totalRetries: 0, nodesWithRetries: 0 }
+  useEffect(() => {
+    if (selectedRunId && inspectorTab === 'logs') {
+      setLogsLoading(true)
+      api.executions.getLogs(selectedRunId, { limit: 500 })
+        .then((response) => {
+          // Transform the response to match the expected ExecutionLog format
+          const transformedLogs: ExecutionLog[] = response.logs.map((log) => ({
+            id: log.id,
+            runId: log.runId,
+            nodeId: log.nodeId,
+            type: 'PROGRESS' as const,
+            level: log.level,
+            timestamp: log.timestamp,
+            message: log.message,
+          }))
+          setFetchedLogs(transformedLogs)
+        })
+        .catch((error) => {
+          console.error('Failed to fetch logs:', error)
+          setFetchedLogs([])
+        })
+        .finally(() => {
+          setLogsLoading(false)
+        })
     }
-    return states.reduce(
-      (acc, state) => {
-        if (state.retryCount > 0) {
-          acc.totalRetries += state.retryCount
-          acc.nodesWithRetries += 1
-        }
-        return acc
-      },
-      { totalRetries: 0, nodesWithRetries: 0 }
-    )
-  }, [nodeStates])
+  }, [selectedRunId, inspectorTab])
+
 
   const openLogModal = (fullMessage: string, log: ExecutionLog) => {
     const titleParts = [
@@ -265,24 +276,19 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
             <div className="flex flex-col h-full min-h-0">
               <div className="flex items-center justify-between px-3 py-2 border-b bg-background/70 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <span>{displayLogs.length} log entries</span>
-                  {retrySummary.totalRetries > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-medium text-yellow-700">
-                      {retrySummary.totalRetries} retries across {retrySummary.nodesWithRetries} node{retrySummary.nodesWithRetries === 1 ? '' : 's'}
-                    </span>
-                  )}
+                  <span>{logsLoading ? 'Loading logs...' : `${fetchedLogs.length} log entries`}</span>
                 </div>
                 <span className={cn('font-medium', playbackMode === 'live' ? 'text-green-600' : 'text-blue-600')}>
                   {playbackMode === 'live' ? (isPlaying ? 'Live (following)' : 'Live paused') : 'Execution playback'}
                 </span>
               </div>
               <div className="flex-1 overflow-y-auto px-3 py-2 pb-20 space-y-2 text-xs font-mono bg-background/40">
-                {displayLogs.length === 0 ? (
+                {fetchedLogs.length === 0 && !logsLoading ? (
                   <div className="text-muted-foreground text-center py-8">
                     No logs to display for this run.
                   </div>
                 ) : (
-                  displayLogs.map((log) => {
+                  fetchedLogs.map((log) => {
                     const executionLog = log as ExecutionLog
                     const fullMessage = buildLogMessage(executionLog)
                     const preview = createPreview(fullMessage, { charLimit: 220, lineLimit: 4 })

@@ -521,6 +521,43 @@ export const api = {
       if (!response.data) throw new Error('Run not found')
       return response.data
     },
+
+    getLogs: async (runId: string, options?: { nodeRef?: string; stream?: 'stdout' | 'stderr' | 'console'; level?: 'debug' | 'info' | 'warn' | 'error'; limit?: number; cursor?: string }) => {
+      const client = createShipSecClient({
+        baseUrl: API_BASE_URL,
+        middleware: {
+          async onRequest({ request }) {
+            const headers = await getAuthHeaders()
+            if (headers['Authorization']) {
+              request.headers.set('Authorization', headers['Authorization'])
+            }
+            if (headers['X-Organization-Id']) {
+              request.headers.set('X-Organization-Id', headers['X-Organization-Id'])
+            }
+            return request
+          },
+        },
+      })
+
+      const response = await client.getWorkflowRunLogs(runId, options)
+      if (response.error) {
+        throw new Error('Failed to fetch logs')
+      }
+      return response.data as {
+        runId: string
+        logs: Array<{
+          id: string
+          runId: string
+          nodeId: string
+          level: 'debug' | 'info' | 'warn' | 'error'
+          message: string
+          timestamp: string
+        }>
+        totalCount: number
+        hasMore: boolean
+        nextCursor?: string
+      }
+    },
   },
 
   files: {

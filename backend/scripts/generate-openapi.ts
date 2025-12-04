@@ -10,6 +10,9 @@ import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from '../src/app.module';
 
 async function generateOpenApi() {
+  // Skip ingest services that require external connections during OpenAPI generation
+  process.env.SKIP_INGEST_SERVICES = 'true';
+
   const app = await NestFactory.create(AppModule, {
     logger: false,
   });

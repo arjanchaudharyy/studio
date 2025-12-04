@@ -9,13 +9,14 @@ import {
   type ISecretsService,
   type ITraceService,
 } from '@shipsec/component-sdk';
-import { TraceAdapter, RedisTerminalStreamAdapter } from '../../adapters';
+import { RedisTerminalStreamAdapter } from '../../adapters';
 import type {
   RunComponentActivityInput,
   RunComponentActivityOutput,
   WorkflowLogSink,
 } from '../types';
 import type { ArtifactServiceFactory } from '../artifact-factory';
+import { isTraceMetadataAware } from '../utils/trace-metadata';
 
 let globalStorage: IFileStorageService | undefined;
 let globalSecrets: ISecretsService | undefined;
@@ -45,7 +46,7 @@ export async function setRunMetadataActivity(input: {
   workflowId: string;
   organizationId?: string | null;
 }): Promise<void> {
-  if (globalTrace instanceof TraceAdapter) {
+  if (isTraceMetadataAware(globalTrace)) {
     globalTrace.setRunMetadata(input.runId, {
       workflowId: input.workflowId,
       organizationId: input.organizationId ?? null,
@@ -54,7 +55,7 @@ export async function setRunMetadataActivity(input: {
 }
 
 export async function finalizeRunActivity(input: { runId: string }): Promise<void> {
-  if (globalTrace instanceof TraceAdapter) {
+  if (isTraceMetadataAware(globalTrace) && typeof globalTrace.finalizeRun === 'function') {
     globalTrace.finalizeRun(input.runId);
   }
 }

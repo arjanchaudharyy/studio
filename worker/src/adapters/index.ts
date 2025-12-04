@@ -6,6 +6,7 @@
 export { FileStorageAdapter } from './file-storage.adapter';
 export { ArtifactAdapter } from './artifact.adapter';
 export { TraceAdapter } from './trace.adapter';
+export { KafkaTraceAdapter } from './kafka-trace.adapter';
 export {
   LokiLogAdapter,
   LokiLogClient,

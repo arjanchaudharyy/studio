@@ -17,7 +17,7 @@ import {
   finalizeRunActivity,
   initializeComponentActivityServices,
 } from '../activities/run-component.activity';
-import { ArtifactAdapter, FileStorageAdapter, SecretsAdapter, TraceAdapter, RedisTerminalStreamAdapter, KafkaLogAdapter } from '../../adapters';
+import { ArtifactAdapter, FileStorageAdapter, SecretsAdapter, RedisTerminalStreamAdapter, KafkaLogAdapter, KafkaTraceAdapter } from '../../adapters';
 import * as schema from '../../adapters/schema';
 
 // Load environment variables from .env file
@@ -86,7 +86,6 @@ async function main() {
   // Create service adapters (implementing SDK interfaces)
   const storageAdapter = new FileStorageAdapter(minioClient, db, minioBucketName);
   const artifactAdapter = new ArtifactAdapter(minioClient, db, minioBucketName);
-  const traceAdapter = new TraceAdapter(db);
   const secretsAdapter = new SecretsAdapter(db);
 
   const kafkaBrokerEnv = process.env.LOG_KAFKA_BROKERS;
@@ -97,6 +96,12 @@ async function main() {
   if (kafkaBrokers.length === 0) {
     throw new Error('LOG_KAFKA_BROKERS must be configured for workflow logging');
   }
+
+  const traceAdapter = new KafkaTraceAdapter({
+    brokers: kafkaBrokers,
+    topic: process.env.EVENT_KAFKA_TOPIC ?? 'telemetry.events',
+    clientId: process.env.EVENT_KAFKA_CLIENT_ID ?? 'shipsec-worker-events',
+  });
 
   let logAdapter: KafkaLogAdapter;
   try {

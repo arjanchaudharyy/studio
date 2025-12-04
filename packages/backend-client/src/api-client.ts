@@ -200,6 +200,27 @@ export class ShipSecApiClient {
     });
   }
 
+  async getWorkflowRunLogs(runId: string, options?: {
+    nodeRef?: string;
+    stream?: 'stdout' | 'stderr' | 'console';
+    level?: 'debug' | 'info' | 'warn' | 'error';
+    limit?: number;
+    cursor?: string;
+  }) {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/logs', {
+      params: {
+        path: { runId },
+        query: {
+          nodeRef: options?.nodeRef,
+          stream: options?.stream,
+          level: options?.level,
+          limit: options?.limit,
+          cursor: options?.cursor,
+        },
+      },
+    });
+  }
+
   async getWorkflowRunDataFlows(runId: string) {
     return this.client.GET('/api/v1/workflows/runs/{runId}/dataflows', {
       params: { path: { runId } },

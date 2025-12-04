@@ -113,11 +113,16 @@ export const WorkflowLogsQuerySchema = z.object({
     .min(1)
     .optional(),
   stream: z
-    .string()
-    .trim()
-    .min(1)
+    .enum(['stdout', 'stderr', 'console'])
     .optional(),
-  limit: z.coerce.number().int().min(1).max(500).optional(),
+  level: z
+    .enum(['debug', 'info', 'warn', 'error'])
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  cursor: z
+    .string()
+    .datetime()
+    .optional(),
 });
 
 export class WorkflowLogsQueryDto extends createZodDto(WorkflowLogsQuerySchema) {}
