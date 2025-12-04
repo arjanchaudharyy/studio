@@ -19,8 +19,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Workflow, AlertCircle, Trash2, Loader2 } from 'lucide-react'
+import { Workflow, AlertCircle, Trash2, Loader2, Info } from 'lucide-react'
 import { api } from '@/services/api'
 import {
   WorkflowMetadataSchema,
@@ -175,6 +181,7 @@ export function WorkflowList() {
       day: 'numeric',
       hour: 'numeric',
       minute: 'numeric',
+      timeZoneName: 'short',
     }).format(date)
   }
 
@@ -232,8 +239,36 @@ export function WorkflowList() {
                   <TableHead>Name</TableHead>
                   <TableHead>Nodes</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Last Run</TableHead>
-                  <TableHead>Last Updated</TableHead>
+                  <TableHead>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center gap-1 cursor-help">
+                            Last Run
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Times shown in your local timezone</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
+                  <TableHead>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center gap-1 cursor-help">
+                            Last Updated
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Times shown in your local timezone</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
                   {canManageWorkflows && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -293,8 +328,36 @@ export function WorkflowList() {
                   <TableHead>Name</TableHead>
                   <TableHead>Nodes</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Last Run</TableHead>
-                  <TableHead>Last Updated</TableHead>
+                  <TableHead>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center gap-1 cursor-help">
+                            Last Run
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Times shown in your local timezone</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
+                  <TableHead>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center gap-1 cursor-help">
+                            Last Updated
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Times shown in your local timezone</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
                   {canManageWorkflows && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -390,7 +453,12 @@ function WorkflowRowItem({
 
   const statusBadge = latestRun ? (
     <Badge
-      variant={latestRun.status === 'RUNNING' ? 'default' : latestRun.status === 'FAILED' ? 'destructive' : 'secondary'}
+      variant={
+        latestRun.status === 'RUNNING' ? 'default' :
+        latestRun.status === 'FAILED' ? 'destructive' :
+        latestRun.status === 'COMPLETED' ? 'success' :
+        'secondary'
+      }
       className="text-xs"
     >
       {latestRun.status}
