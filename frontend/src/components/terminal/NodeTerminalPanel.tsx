@@ -40,6 +40,7 @@ export function NodeTerminalPanel({
   onClose,
   timelineSync = false,
 }: NodeTerminalPanelProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -243,8 +244,31 @@ export function NodeTerminalPanel({
     setTerminalKey((key) => key + 1)
   }, [runId, nodeId])
 
+  // Prevent wheel events from bubbling up to ReactFlow canvas (prevents zoom on scroll)
+  // Use bubble phase so xterm can handle scrolling first, then we stop propagation to ReactFlow
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+
+    const handleWheel = (event: WheelEvent) => {
+      // Stop the event from bubbling up to ReactFlow's zoom handler
+      event.stopPropagation()
+    }
+
+    // Add listener in bubble phase (capture: false) so xterm handles scroll first
+    panel.addEventListener('wheel', handleWheel, { capture: false, passive: true })
+
+    return () => {
+      panel.removeEventListener('wheel', handleWheel, { capture: false })
+    }
+  }, [])
+
   return (
-    <div className="w-[520px] rounded-lg shadow-2xl border border-slate-200 overflow-hidden" style={{ backgroundColor: '#ffffff' }}>
+    <div
+      ref={panelRef}
+      className="w-[520px] rounded-lg shadow-2xl border border-slate-200 overflow-hidden"
+      style={{ backgroundColor: '#ffffff' }}
+    >
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200" style={{ backgroundColor: '#ffffff' }}>
         <div>
         <div className="text-xs uppercase tracking-wide text-slate-700">Live Logs • {nodeId}</div>
