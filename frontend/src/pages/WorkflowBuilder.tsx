@@ -686,6 +686,8 @@ function WorkflowBuilderContent() {
           // Use setTimeout to allow state updates to settle first
           setTimeout(() => setMode('execution'), 0)
         }
+        // Navigate to the new run URL so user can see and share it
+        navigate(`/workflows/${workflowId}/runs/${runId}`, { replace: true })
         // Timeline will be populated by live updates from execution store subscription
         toast({
           variant: 'success',
