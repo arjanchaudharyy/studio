@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
-import { Download, Loader2, PlugZap, Radio, X } from 'lucide-react'
+import { Copy, Download, Loader2, PlugZap, Radio, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTimelineTerminalStream } from '@/hooks/useTimelineTerminalStream'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
@@ -60,6 +60,24 @@ export function NodeTerminalPanel({
   })
 
   const session = useMemo(() => ({ chunks }), [chunks])
+
+  const copyToClipboard = useCallback(async () => {
+    if (!chunks.length) return
+    const decoded = chunks
+      .map((chunk) => {
+        try {
+          return atob(chunk.payload)
+        } catch {
+          return ''
+        }
+      })
+      .join('')
+    try {
+      await navigator.clipboard.writeText(decoded)
+    } catch (error) {
+      console.error('[NodeTerminalPanel] Failed to copy to clipboard', error)
+    }
+  }, [chunks])
 
   // Initialize terminal
   useEffect(() => {
@@ -226,24 +244,34 @@ export function NodeTerminalPanel({
   }, [runId, nodeId])
 
   return (
-    <div className="w-[520px] bg-slate-900 text-slate-100 rounded-lg shadow-2xl border border-slate-700 overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-950/70">
+    <div className="w-[520px] rounded-lg shadow-2xl border border-slate-200 overflow-hidden" style={{ backgroundColor: '#ffffff' }}>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200" style={{ backgroundColor: '#ffffff' }}>
         <div>
-        <div className="text-xs uppercase tracking-wide text-slate-300">Live Logs • {nodeId}</div>
+        <div className="text-xs uppercase tracking-wide text-slate-700">Live Logs • {nodeId}</div>
           {streamBadge}
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
-            className="text-xs text-slate-100"
+            className="text-xs text-slate-700"
+            onClick={copyToClipboard}
+            disabled={!chunks.length}
+          >
+            <Copy className="h-3 w-3 mr-1" />
+            Copy
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-slate-700"
             onClick={() => exportText()}
             disabled={!chunks.length}
           >
             <Download className="h-3 w-3 mr-1" />
             Export
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-300" onClick={onClose}>
+          <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-500" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -258,7 +286,7 @@ export function NodeTerminalPanel({
         <div ref={containerRef} className="h-[360px] w-full" />
         {!session?.chunks?.length && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-xs text-slate-200 space-y-2 text-center p-4">
+            <div className="text-sm text-white space-y-2 text-center p-4">
               <div>{isHydrating || isFetchingTimeline ? 'Loading output…' : 'Waiting for terminal output…'}</div>
               <div className="font-mono text-[10px] opacity-50">
                 {nodeId} • pty
