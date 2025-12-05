@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { AnsiUp } from 'ansi_up'
 import { RunSelector } from '@/components/timeline/RunSelector'
 import { ExecutionTimeline } from '@/components/timeline/ExecutionTimeline'
@@ -6,12 +6,13 @@ import { EventInspector } from '@/components/timeline/EventInspector'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { MessageModal } from '@/components/ui/MessageModal'
-import { StopCircle } from 'lucide-react'
+import { StopCircle, Link2 } from 'lucide-react'
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
 import { useWorkflowExecution } from '@/hooks/useWorkflowExecution'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useArtifactStore } from '@/store/artifactStore'
+import { useToast } from '@/components/ui/use-toast'
 import { useRunStore } from '@/store/runStore'
 import { cn } from '@/lib/utils'
 import type { ExecutionLog } from '@/schemas/execution'
@@ -79,10 +80,35 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
     message: '',
     title: '',
   })
+  const { toast } = useToast()
 
   const selectedRun = useMemo(() => (
     runs.find(run => run.id === selectedRunId)
   ), [runs, selectedRunId])
+
+  const handleCopyLink = useCallback(async () => {
+    if (!selectedRun) return
+    const basePath = `/workflows/${selectedRun.workflowId}/runs/${selectedRun.id}`
+    const absoluteUrl = typeof window !== 'undefined' ? `${window.location.origin}${basePath}` : basePath
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(absoluteUrl)
+        toast({
+          title: 'Run link copied',
+          description: 'Share this URL to open the execution directly.',
+        })
+      } else {
+        throw new Error('Clipboard API is unavailable')
+      }
+    } catch (error) {
+      console.error('Failed to copy run link:', error)
+      toast({
+        variant: 'destructive',
+        title: 'Unable to copy link automatically',
+        description: absoluteUrl,
+      })
+    }
+  }, [selectedRun, toast])
 
   useEffect(() => {
     if (selectedRunId && inspectorTab === 'artifacts') {
@@ -184,6 +210,16 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
               <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold text-sm truncate">{selectedRun.workflowName}</span>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={handleCopyLink}
+                    title="Copy run link"
+                    aria-label="Copy direct link to this run"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                  </Button>
                   {versionBadge}
                   {statusBadge}
                 </div>
