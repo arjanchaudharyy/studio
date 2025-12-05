@@ -1,6 +1,6 @@
 {
   "name": "Nuclei Vulnerability Scanner - Test Workflow",
-  "description": "Test workflow demonstrating nuclei component with template IDs, tags, severity filters, and custom templates",
+  "description": "Test workflow demonstrating nuclei component with template IDs and custom templates",
   "nodes": [
     {
       "id": "trigger-1",
@@ -25,8 +25,8 @@
               "required": true,
               "options": [
                 { "label": "Quick Scan (Specific CVEs)", "value": "quick" },
-                { "label": "Tag-Based Scan", "value": "tags" },
-                { "label": "Severity-Based Scan", "value": "severity" },
+                { "label": "Template IDs Scan", "value": "templateIds" },
+                { "label": "Custom Template Scan", "value": "custom" },
                 { "label": "Comprehensive Scan", "value": "comprehensive" }
               ],
               "default": "quick"
@@ -49,13 +49,11 @@
             "git-config",
             "wordpress-login-exposure"
           ],
-          "tags": ["cves", "lfi", "sqli"],
-          "severity": ["critical", "high"],
           "rateLimit": 150,
           "concurrency": 25,
           "timeout": 10,
           "retries": 1,
-          "updateTemplates": true,
+          "updateTemplates": false,
           "includeRaw": false
         }
       }

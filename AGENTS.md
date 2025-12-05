@@ -145,12 +145,22 @@ CORE Memory preserves project context, so every CORE-enabled session must follow
 
 ### 8. Component Development (CRITICAL: Read Before Creating Components)
 
-**When creating or modifying Docker-based components, you MUST follow the file system access patterns documented below.**
+**⚠️ ALWAYS READ EXISTING DOCUMENTATION FIRST ⚠️**
+
+Before creating ANY Docker component:
+1. **READ `docs/component-development.md` COMPLETELY** — Contains critical PTY compatibility requirements and patterns
+2. **CHECK existing components** — Look at similar components (dnsx, nuclei, httpx) for reference patterns
+3. **NEVER assume patterns** — Docker/PTY behavior is counterintuitive; documented patterns prevent hours of debugging
+
+**Common mistake:** Skipping documentation and implementing direct patterns that hang or buffer in PTY mode. This wastes significant time debugging issues that are already solved and documented.
+
+**When creating or modifying Docker-based components, you MUST follow the file system access patterns and PTY compatibility guidelines documented below.**
 
 #### Required Reading (in order)
-1. **`.ai/component-sdk.md`** — Authoritative component interface, runner config, and **File System Access Pattern** section
-2. **`docs/component-development.md`** — Complete development guide with security requirements and patterns
-3. **`worker/src/components/security/dnsx.ts:615-662`** — Reference implementation of isolated volumes
+1. **`docs/component-development.md`** — **START HERE!** PTY compatibility patterns (shell wrapper vs direct binary), Docker entrypoint requirements, and decision tree
+2. **`.ai/component-sdk.md`** — Authoritative component interface, runner config, and **File System Access Pattern** section
+3. **`worker/src/components/security/dnsx.ts:615-662`** — Reference implementation: shell wrapper pattern + isolated volumes
+4. **`worker/src/components/security/nuclei.ts`** — Reference implementation: direct binary + `-stream` flag (distroless pattern)
 
 #### MANDATORY Pattern: IsolatedContainerVolume
 

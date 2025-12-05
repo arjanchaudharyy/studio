@@ -165,11 +165,19 @@ const definition: ComponentDefinition<Input, Output> = {
   category: 'security',
   runner: {
     kind: 'docker',
+    // Using custom ShipSecAI image instead of projectdiscovery/nuclei:latest because:
+    // 1. Pre-installed templates: Avoids 100MB+ download on every scan (templates cached in image)
+    // 2. Distroless base: Smaller attack surface, no shell (security hardening)
+    // 3. Non-root user: Runs as 'nonroot' user with minimal permissions (UID 65532)
+    // 4. ARM64 support: Built for multi-architecture (amd64 + arm64) for M1/M2 Macs
+    // 5. Verified -stream flag: Tested and confirmed working for PTY real-time output
+    // Image source: github.com/ShipSecAI/docker-images/nuclei
     image: 'ghcr.io/shipsecai/nuclei:latest',
-    entrypoint: '/usr/local/bin/nuclei',
+    entrypoint: 'nuclei',
     network: 'bridge',
     timeoutSeconds: dockerTimeoutSeconds,
-    // ✅ Direct nuclei execution (no shell wrapper needed)
+    // Direct binary execution (distroless image has no shell)
+    // PTY compatibility achieved via -stream flag (prevents buffering)
     command: [],
     env: {
       HOME: '/home/nonroot', // Custom image runs as nonroot user
@@ -196,7 +204,7 @@ const definition: ComponentDefinition<Input, Output> = {
     isLatest: true,
     deprecated: false,
     example:
-      '`nuclei -l targets.txt -tags cves -severity critical,high -stream` - Scan targets for critical CVEs using built-in templates with real-time streaming.',
+      '`nuclei -l targets.txt -t CVE-2024-1234 -t http-missing-headers -stream` - Scan targets for specific vulnerabilities using template IDs with real-time streaming.',
     inputs: [
       {
         id: 'targets',
@@ -248,7 +256,7 @@ const definition: ComponentDefinition<Input, Output> = {
       },
     ],
     examples: [
-      'Quick CVE scan: Use built-in templates filtered by tags=["cves"] and severity=["critical","high"]',
+      'Specific CVE scan: Use templateIds=["CVE-2024-1234", "CVE-2024-5678"] to scan for known vulnerabilities',
       'Custom template testing: Paste YAML directly into customTemplateYaml for rapid iteration',
       'Bulk custom scan: Upload zip archive via Manual Trigger → File Loader → Nuclei',
       'Comprehensive scan: Combine custom archive + built-in templates for complete coverage',
@@ -335,6 +343,7 @@ const definition: ComponentDefinition<Input, Output> = {
       const args: string[] = [
         '-duc',            // Disable update check (templates pre-installed in image)
         '-jsonl',          // JSONL output format (nuclei v3.6.0+)
+        '-stream',         // Stream mode: prevents buffering, required for PTY compatibility
         '-verbose',        // Show findings in terminal (overrides silent mode)
         '-l', '/inputs/targets.txt',  // Targets file
       ];

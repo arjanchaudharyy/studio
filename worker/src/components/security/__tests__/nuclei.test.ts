@@ -34,7 +34,7 @@ describe('Nuclei Component', () => {
     test('should require at least one target', () => {
       const input = {
         targets: [],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
       };
 
       expect(() => nucleiComponent.inputSchema.parse(input)).toThrow();
@@ -61,25 +61,7 @@ describe('Nuclei Component', () => {
       expect(parsed.templateIds).toEqual(['CVE-2024-1234']);
     });
 
-    test('should accept tags as template source', () => {
-      const input = {
-        targets: ['https://example.com'],
-        tags: ['cves', 'lfi'],
-      };
-
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.tags).toEqual(['cves', 'lfi']);
-    });
-
-    test('should accept severity as template source', () => {
-      const input = {
-        targets: ['https://example.com'],
-        severity: ['critical', 'high'],
-      };
-
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.severity).toEqual(['critical', 'high']);
-    });
+    // Tags and severity parameters were removed - use templateIds or custom templates instead
 
     test('should accept customTemplateYaml as template source', () => {
       const input = {
@@ -104,21 +86,19 @@ describe('Nuclei Component', () => {
     test('should accept multiple template sources', () => {
       const input = {
         targets: ['https://example.com'],
-        templateIds: ['CVE-2024-1234'],
-        tags: ['cves'],
-        severity: ['critical'],
+        templateIds: ['CVE-2024-1234', 'CVE-2024-5678'],
+        customTemplateYaml: 'id: test\ninfo:\n  name: Test',
       };
 
       const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.templateIds).toEqual(['CVE-2024-1234']);
-      expect(parsed.tags).toEqual(['cves']);
-      expect(parsed.severity).toEqual(['critical']);
+      expect(parsed.templateIds).toEqual(['CVE-2024-1234', 'CVE-2024-5678']);
+      expect(parsed.customTemplateYaml).toBeDefined();
     });
 
     test('should apply default values for scan configuration', () => {
       const input = {
         targets: ['https://example.com'],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
       };
 
       const parsed = nucleiComponent.inputSchema.parse(input);
@@ -128,22 +108,16 @@ describe('Nuclei Component', () => {
       expect(parsed.retries).toBe(1);
       expect(parsed.includeRaw).toBe(false);
       expect(parsed.followRedirects).toBe(false);
-      expect(parsed.updateTemplates).toBe(true);
+      expect(parsed.updateTemplates).toBe(false);
+      expect(parsed.disableHttpx).toBe(true);
     });
 
-    test('should validate severity enum values', () => {
-      const input = {
-        targets: ['https://example.com'],
-        severity: ['invalid-severity'] as any,
-      };
-
-      expect(() => nucleiComponent.inputSchema.parse(input)).toThrow();
-    });
+    // Severity parameter removed - use specific template IDs instead
 
     test('should enforce rateLimit max value', () => {
       const input = {
         targets: ['https://example.com'],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
         rateLimit: 2000, // exceeds max of 1000
       };
 
@@ -153,7 +127,7 @@ describe('Nuclei Component', () => {
     test('should enforce concurrency max value', () => {
       const input = {
         targets: ['https://example.com'],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
         concurrency: 150, // exceeds max of 100
       };
 
@@ -447,7 +421,7 @@ describe('Nuclei Integration', () => {
     const component = componentRegistry.get('shipsec.nuclei.scan');
     expect(component.runner.kind).toBe('docker');
     if (component.runner.kind === 'docker') {
-      expect(component.runner.image).toBe('projectdiscovery/nuclei:latest');
+      expect(component.runner.image).toBe('ghcr.io/shipsecai/nuclei:latest');
       expect(component.runner.network).toBe('bridge');
       expect(component.runner.timeoutSeconds).toBeGreaterThan(0);
     }
@@ -465,11 +439,7 @@ describe('Nuclei Integration', () => {
     expect(templateIdsInput).toBeDefined();
     expect(templateIdsInput?.required).toBe(false);
 
-    const tagsInput = inputs.find((i) => i.id === 'tags');
-    expect(tagsInput).toBeDefined();
-
-    const severityInput = inputs.find((i) => i.id === 'severity');
-    expect(severityInput).toBeDefined();
+    // tags and severity parameters removed - use templateIds instead
   });
 
   test('should have documented outputs', () => {

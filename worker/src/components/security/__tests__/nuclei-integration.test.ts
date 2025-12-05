@@ -90,13 +90,11 @@ describe('Nuclei Integration Tests', () => {
             info: {
               name: 'Critical Vulnerability',
               severity: 'critical',
-              tags: ['cve', 'rce'],
             },
             'matched-at': 'https://example.com',
             timestamp: '2024-12-04T10:00:00Z',
           },
         ],
-        raw: '{"template-id":"CVE-2024-1234","info":{"name":"Critical Vulnerability","severity":"critical","tags":["cve","rce"]},"matched-at":"https://example.com","timestamp":"2024-12-04T10:00:00Z"}',
         stderr: '[INF] 2 templates loaded, 1 requests sent, finished in 2.5s',
         exitCode: 0,
       };
@@ -108,17 +106,15 @@ describe('Nuclei Integration Tests', () => {
       expect(input.templateIds).toEqual(['CVE-2024-1234', 'http-missing-security-headers']);
     });
 
-    test('should combine template IDs with severity filter', async () => {
+    test('should combine multiple template IDs', async () => {
       const input: NucleiInput = {
         targets: ['https://example.com', 'https://test.com'],
-        templateIds: ['CVE-2024-1234'],
-        severity: ['critical', 'high'],
-        rateLimit: 150,
+        templateIds: ['CVE-2024-1234', 'CVE-2024-5678'],
+        rateLimit: 50,
       };
 
       const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.templateIds).toEqual(['CVE-2024-1234']);
-      expect(parsed.severity).toEqual(['critical', 'high']);
+      expect(parsed.templateIds).toEqual(['CVE-2024-1234', 'CVE-2024-5678']);
       expect(parsed.targets).toHaveLength(2);
     });
   });
@@ -130,7 +126,6 @@ info:
   name: Custom Test Template
   severity: medium
   author: test-user
-  tags: [custom, test]
 http:
   - method: GET
     path:
@@ -199,29 +194,7 @@ exec:
   });
 
   describe('Built-in Templates', () => {
-    test('should scan with tags filter', async () => {
-      const input: NucleiInput = {
-        targets: ['https://example.com'],
-        tags: ['cves', 'exposures'],
-        severity: ['critical', 'high'],
-      };
-
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.tags).toEqual(['cves', 'exposures']);
-      expect(parsed.severity).toEqual(['critical', 'high']);
-    });
-
-    test('should scan with severity filter only', async () => {
-      const input: NucleiInput = {
-        targets: ['https://example.com'],
-        severity: ['critical'],
-        updateTemplates: true,
-      };
-
-      const parsed = nucleiComponent.inputSchema.parse(input);
-      expect(parsed.severity).toEqual(['critical']);
-      expect(parsed.updateTemplates).toBe(true);
-    });
+    // Tags and severity filters removed - use specific template IDs instead
 
     test('should scan with template paths', async () => {
       const input: NucleiInput = {
@@ -238,7 +211,7 @@ exec:
     test('should respect rate limiting', async () => {
       const input: NucleiInput = {
         targets: ['https://example.com'],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
         rateLimit: 50, // Low rate
       };
 
@@ -249,7 +222,7 @@ exec:
     test('should respect concurrency settings', async () => {
       const input: NucleiInput = {
         targets: ['https://example.com'],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
         concurrency: 5,
       };
 
@@ -260,7 +233,7 @@ exec:
     test('should configure timeout and retries', async () => {
       const input: NucleiInput = {
         targets: ['https://example.com'],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
         timeout: 30,
         retries: 3,
       };
@@ -273,7 +246,7 @@ exec:
     test('should enable raw HTTP output', async () => {
       const input: NucleiInput = {
         targets: ['https://example.com'],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
         includeRaw: true,
       };
 
@@ -284,7 +257,7 @@ exec:
     test('should enable redirect following', async () => {
       const input: NucleiInput = {
         targets: ['https://example.com'],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
         followRedirects: true,
       };
 
@@ -295,7 +268,7 @@ exec:
     test('should disable template updates', async () => {
       const input: NucleiInput = {
         targets: ['https://example.com'],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
         updateTemplates: false,
       };
 
@@ -306,9 +279,9 @@ exec:
 
   describe('Output Parsing', () => {
     test('should parse nuclei JSONL output correctly', () => {
-      const jsonlOutput = `{"template-id":"CVE-2024-1234","info":{"name":"Apache Log4j RCE","severity":"critical","tags":["cve","rce","apache"]},"matched-at":"https://example.com/admin","host":"example.com","ip":"1.2.3.4","timestamp":"2024-12-04T10:00:00Z"}
-{"template-id":"http-missing-security-headers","info":{"name":"Missing Security Headers","severity":"low","tags":["headers","misconfig"]},"matched-at":"https://example.com","timestamp":"2024-12-04T10:01:00Z"}
-{"template-id":"xss-reflected","info":{"name":"Reflected XSS","severity":"high","tags":["xss","injection"]},"matched-at":"https://example.com/search?q=test","extracted-results":["<script>alert(1)</script>"],"timestamp":"2024-12-04T10:02:00Z"}`;
+      const jsonlOutput = `{"template-id":"CVE-2024-1234","info":{"name":"Test CVE","severity":"critical","tags":["cve","rce"]},"matched-at":"https://example.com","timestamp":"2024-12-04T10:00:00Z"}
+{"template-id":"http-missing-headers","info":{"name":"Missing Headers","severity":"low","tags":["headers"]},"matched-at":"https://test.com","timestamp":"2024-12-04T10:01:00Z"}
+{"template-id":"xss-reflected","info":{"name":"XSS Vulnerability","severity":"high","tags":["xss"]},"matched-at":"https://vulnerable.com","timestamp":"2024-12-04T10:02:00Z","extracted-results":["<script>alert(1)</script>"]}`;
 
       const lines = jsonlOutput.split('\n');
       expect(lines).toHaveLength(3);
@@ -385,8 +358,7 @@ this is not json
           'https://test.com',
           'https://demo.com',
         ],
-        tags: ['cves'],
-        severity: ['critical', 'high'],
+        templateIds: ['CVE-2024-1234'],
       };
 
       const parsed = nucleiComponent.inputSchema.parse(input);
@@ -400,7 +372,7 @@ this is not json
           'https://example.com', // duplicate
           'https://test.com',
         ],
-        tags: ['cves'],
+        templateIds: ['CVE-2024-1234'],
       };
 
       // Nuclei handles deduplication internally
@@ -425,8 +397,7 @@ this is not json
 
       const nucleiInput: NucleiInput = {
         targets: httpxOutput.results.map((r) => r.url),
-        tags: ['cves', 'exposures'],
-        severity: ['critical', 'high'],
+        templateIds: ['CVE-2024-1234'],
       };
 
       const parsed = nucleiComponent.inputSchema.parse(nucleiInput);

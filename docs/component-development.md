@@ -5,6 +5,7 @@ This guide provides best practices and required patterns for developing ShipSec 
 ## Table of Contents
 
 - [Component Basics](#component-basics)
+- [Docker Component Requirements (CRITICAL)](#docker-component-requirements-critical)
 - [UI-Only Components](#ui-only-components)
 - [File System Access (REQUIRED)](#file-system-access-required)
 - [Security Requirements](#security-requirements)
@@ -52,6 +53,425 @@ const definition: ComponentDefinition<Input, Output> = {
 
 componentRegistry.register(definition);
 ```
+
+---
+
+## Docker Component Requirements (CRITICAL)
+
+### ⚠️ MANDATORY: PTY-Compatible Pattern
+
+**All Docker-based components run with PTY (pseudo-terminal) enabled by default in workflows.** This means your component MUST be tested and designed for PTY mode from the start.
+
+### The SDK Behavior
+
+When your component runs in a workflow, the SDK executes Docker with different flags depending on the mode:
+
+**PTY Mode (default for all workflows):**
+```bash
+docker run --rm -t your-image:latest  # TTY only, no stdin (-i flag removed by SDK)
+```
+
+**Non-PTY Mode (batch/testing only):**
+```bash
+docker run --rm -i your-image:latest  # Interactive stdin for JSON input
+```
+
+**Key SDK Feature:** The SDK automatically removes the `-i` (interactive stdin) flag in PTY mode to prevent tools from hanging while waiting for stdin input. This allows direct binary execution for distroless images.
+
+### Two Valid Patterns
+
+Choose based on your Docker image type:
+
+#### Pattern 1: Shell Wrapper (Preferred for images with shell)
+
+**Use when:** Your image has `/bin/sh` or `/bin/bash` available
+
+```typescript
+✅ CORRECT - Shell Wrapper Pattern:
+const definition: ComponentDefinition<Input, Output> = {
+  id: 'shipsec.tool.scan',
+  runner: {
+    kind: 'docker',
+    image: 'tool:latest',
+    entrypoint: 'sh',                      // ✅ Shell wrapper
+    command: ['-c', 'tool "$@"', '--'],    // ✅ Wraps CLI execution
+    network: 'bridge',
+  },
+  async execute(input, context) {
+    const args = ['-json', '-output', '/data/results.json'];
+
+    const config: DockerRunnerConfig = {
+      ...this.runner,
+      command: [...(this.runner.command ?? []), ...args],
+      // Final command: sh -c 'tool "$@"' -- -json -output /data/results.json
+    };
+
+    return runComponentWithRunner(config, input, context);
+  }
+};
+```
+
+**Benefits:**
+- ✅ Shell handles closed stdin gracefully (won't wait for input)
+- ✅ Shell manages TTY signals properly (SIGTERM, SIGHUP)
+- ✅ Shell exits cleanly when the tool finishes
+- ✅ Works identically in both PTY and non-PTY modes
+
+**Examples:** dnsx, subfinder (ProjectDiscovery tools with full base images)
+
+#### Pattern 2: Direct Binary + Stream Flag (For distroless images)
+
+**Use when:** Your image is distroless (no shell available) OR tool has buffering issues
+
+```typescript
+✅ CORRECT - Direct Binary with Streaming:
+const definition: ComponentDefinition<Input, Output> = {
+  id: 'shipsec.nuclei.scan',
+  runner: {
+    kind: 'docker',
+    image: 'ghcr.io/shipsecai/nuclei:latest',
+    entrypoint: 'nuclei',          // ✅ Direct binary (distroless, no shell)
+    command: [],
+    network: 'bridge',
+  },
+  async execute(input, context) {
+    const args = [
+      '-jsonl',
+      '-stream',                   // ✅ Prevents output buffering
+      '-l', '/inputs/targets.txt',
+    ];
+
+    const config: DockerRunnerConfig = {
+      ...this.runner,
+      command: args,
+    };
+
+    return runComponentWithRunner(config, input, context);
+  }
+};
+```
+
+**Requirements:**
+- ✅ SDK removes `-i` flag automatically (prevents stdin hanging)
+- ✅ Tool must have `-stream` or similar flag to prevent output buffering
+- ✅ Tool must not wait for stdin input when none is provided
+
+**Benefits:**
+- ✅ Works with distroless images (smaller, more secure)
+- ✅ SDK handles stdin issue automatically
+- ✅ `-stream` flag prevents output buffering
+
+**Examples:** nuclei, httpx (ProjectDiscovery tools with distroless images)
+
+#### Pattern 3: Distroless Without Stream Flag
+
+**Use when:** Image has no shell AND tool has no `-stream` flag
+
+```typescript
+✅ FALLBACK - Rely on SDK stdin handling:
+const definition: ComponentDefinition<Input, Output> = {
+  id: 'shipsec.tool.scan',
+  runner: {
+    kind: 'docker',
+    image: 'distroless/tool:latest',
+    entrypoint: 'tool',            // Direct binary (no choice)
+    command: [],
+    network: 'bridge',
+  },
+  async execute(input, context) {
+    const args = ['-json', '-output', '/data/results.json'];
+
+    const config: DockerRunnerConfig = {
+      ...this.runner,
+      command: args,
+    };
+
+    return runComponentWithRunner(config, input, context);
+  }
+};
+```
+
+**Limitations:**
+- ⚠️ May experience output buffering (results appear delayed)
+- ⚠️ SDK removes `-i` flag to prevent stdin hanging (helps but not perfect)
+- ⚠️ Consider requesting upstream to add `-stream` flag or use full base image
+
+**Workarounds if buffering is an issue:**
+- Rebuild image with shell: `FROM your-distroless-image` → `FROM alpine` + copy binary
+- Use `stdbuf -oL tool` if the image includes GNU coreutils
+- Request upstream maintainer to add streaming flag
+
+### Anti-Pattern (Will Cause Issues)
+
+```typescript
+❌ WRONG - Direct binary without considering PTY:
+const definition: ComponentDefinition<Input, Output> = {
+  runner: {
+    kind: 'docker',
+    image: 'tool:latest',
+    entrypoint: 'tool',                    // ❌ No shell wrapper
+    command: ['-read-stdin', '-output'],   // ❌ Expects stdin input
+  }
+};
+```
+
+**Why this fails:**
+1. Container starts with TTY attached (`-t` flag)
+2. SDK removes `-i` flag (stdin immediately closed)
+3. Tool tries to read from stdin → gets EOF or blocks
+4. **May hang or produce unexpected results**
+
+**Fix:** Use file-based input instead of stdin, or add shell wrapper
+
+### Testing Requirements
+
+**Before deploying any Docker component, you MUST test it with PTY flags:**
+
+```bash
+# Step 1: Test with PTY mode (this is what workflows use)
+docker run --rm -t your-image:latest sh -c 'tool "$@"' -- -flag value
+
+# Expected: Tool runs and exits cleanly within expected time
+# If it hangs: Your entrypoint needs the shell wrapper pattern
+
+# Step 2: Verify it doesn't wait for stdin
+echo "" | docker run --rm -t -i your-image:latest sh -c 'tool "$@"' -- -flag value
+
+# Expected: Same behavior as step 1
+
+# Step 3: Test without PTY (for comparison)
+docker run --rm your-image:latest sh -c 'tool "$@"' -- -flag value
+
+# Expected: Should also work (no visual differences without TTY)
+```
+
+### Common Mistakes
+
+1. **Using direct binary without shell or stream flag**
+   ```typescript
+   // ❌ WRONG - Will experience buffering or hanging
+   entrypoint: 'tool',
+   command: ['-flag', 'value']
+
+   // ✅ CORRECT - Shell wrapper (if shell available)
+   entrypoint: 'sh',
+   command: ['-c', 'tool "$@"', '--', '-flag', 'value']
+
+   // ✅ CORRECT - Direct binary + stream flag (distroless)
+   entrypoint: 'tool',
+   command: ['-stream', '-flag', 'value']
+   ```
+
+2. **Assuming stdin will be available**
+   ```typescript
+   // ❌ WRONG - SDK closes stdin in PTY mode
+   command: ['tool', '--read-from-stdin']
+
+   // ✅ CORRECT - Use file-based input
+   command: ['tool', '--input-file', '/data/input.txt']
+   ```
+
+3. **Not testing with PTY flags before deployment**
+   ```bash
+   # ❌ WRONG - Only testing without PTY
+   docker run --rm your-image:latest tool -flag value
+
+   # ✅ CORRECT - Test with -t flag (what workflows use)
+   docker run --rm -t your-image:latest tool -flag value
+   ```
+
+### Summary: Quick Decision Tree
+
+```
+Does your Docker image have a shell (/bin/sh)?
+├─ YES → Use Pattern 1 (Shell Wrapper)
+│         entrypoint: 'sh', command: ['-c', 'tool "$@"', '--']
+│
+└─ NO (Distroless) → Does your tool have a -stream flag?
+   ├─ YES → Use Pattern 2 (Direct Binary + Stream)
+   │         entrypoint: 'tool', command: ['-stream', ...]
+   │
+   └─ NO → Use Pattern 3 (SDK stdin handling)
+             entrypoint: 'tool', command: [...]
+             Note: May have buffering issues, consider rebuilding image
+```
+
+### Exception: Pre-wrapped Images
+
+**You can skip the shell wrapper ONLY if:**
+- The Docker image's ENTRYPOINT is already a shell script
+- You've verified the image handles closed stdin + TTY correctly
+- You've tested with `docker run --rm -t` (no `-i`)
+
+**Example of a pre-wrapped image:**
+```dockerfile
+# Image Dockerfile
+ENTRYPOINT ["/bin/sh", "-c", "my-tool \"$@\"", "--"]
+```
+
+If the image has this entrypoint, you can use:
+```typescript
+runner: {
+  kind: 'docker',
+  image: 'pre-wrapped:latest',
+  command: ['-flag', 'value'],  // Goes after the '--' in ENTRYPOINT
+}
+```
+
+### Verification Checklist
+
+Before submitting your Docker component:
+
+- [ ] Used `entrypoint: 'sh'` with `command: ['-c', 'tool "$@"', '--']`
+- [ ] Tested with `docker run --rm -t` (PTY mode)
+- [ ] Container exits cleanly without hanging
+- [ ] No stdin-dependent operations in the tool
+- [ ] Tool arguments are appended after `'--'` in command array
+- [ ] Workflow run completes successfully in Studio
+
+### Real-World Example: Nuclei
+
+```typescript
+const definition: ComponentDefinition<Input, Output> = {
+  id: 'shipsec.nuclei.scan',
+  runner: {
+    kind: 'docker',
+    image: 'ghcr.io/shipsecai/nuclei:latest',
+    entrypoint: '/usr/local/bin/nuclei',  // ❌ WRONG - direct binary
+    // This caused nuclei to hang for 300s waiting for stdin in PTY mode
+  }
+};
+
+// Fixed version:
+const definition: ComponentDefinition<Input, Output> = {
+  id: 'shipsec.nuclei.scan',
+  runner: {
+    kind: 'docker',
+    image: 'ghcr.io/shipsecai/nuclei:latest',
+    entrypoint: 'sh',                          // ✅ Shell wrapper
+    command: ['-c', 'nuclei "$@"', '--'],      // ✅ Wraps nuclei execution
+  },
+  async execute(input, context) {
+    const args = ['-duc', '-jsonl', '-verbose', '-l', '/inputs/targets.txt'];
+    const config: DockerRunnerConfig = {
+      ...this.runner,
+      command: [...(this.runner.command ?? []), ...args],
+    };
+    return runComponentWithRunner(config, input, context);
+  }
+};
+```
+
+### What If the Tool Doesn't Work Well With TTY?
+
+**PTY mode is always enabled in workflows and cannot be disabled at the component level.** However, some tools behave differently when a TTY is attached (colored output, progress bars, interactive prompts, etc.). Here's how to handle them:
+
+#### Solution 1: Use Tool Flags to Disable TTY Features
+
+Most modern CLI tools detect TTY and change behavior. Disable those features explicitly:
+
+```typescript
+const args = [
+  '--no-color',        // Disable ANSI color codes
+  '--no-progress',     // Disable progress bars
+  '--plain',           // Plain output mode
+  '--batch',           // Non-interactive batch mode
+  '-q',                // Quiet mode (no prompts)
+];
+
+// Examples:
+// git: ['--no-pager', '--no-color']
+// npm: ['--no-color', '--no-progress']
+// terraform: ['-no-color']
+// docker: ['--no-color']
+```
+
+#### Solution 2: Redirect stderr to stdout
+
+Some tools output diagnostics to stderr when TTY is detected:
+
+```typescript
+runner: {
+  kind: 'docker',
+  image: 'tool:latest',
+  entrypoint: 'sh',
+  command: ['-c', 'tool "$@" 2>&1', '--'],  // Merge stderr into stdout
+}
+```
+
+#### Solution 3: Control Output Buffering
+
+If the tool buffers output unexpectedly with TTY:
+
+```typescript
+runner: {
+  kind: 'docker',
+  image: 'tool:latest',
+  entrypoint: 'sh',
+  command: ['-c', 'stdbuf -oL -eL tool "$@"', '--'],
+}
+// -oL: Line-buffered stdout
+// -eL: Line-buffered stderr
+```
+
+#### Solution 4: Full TTY Emulation (Last Resort)
+
+For tools that absolutely require a real TTY session:
+
+```typescript
+runner: {
+  kind: 'docker',
+  image: 'tool:latest',
+  entrypoint: 'sh',
+  command: ['-c', 'script -q -c "tool \\"$@\\"" /dev/null', '--'],
+}
+// script command provides full TTY emulation
+```
+
+#### Testing for TTY Compatibility
+
+```bash
+# Step 1: Does the tool detect TTY?
+docker run --rm -t tool:latest sh -c 'tool --version "$@"' --
+
+# Step 2: Does it behave differently?
+docker run --rm tool:latest sh -c 'tool --version "$@"' --
+# Compare output - if different, use flags to normalize
+
+# Step 3: Does it hang or wait for input?
+timeout 5 docker run --rm -t tool:latest sh -c 'tool "$@"' -- --help
+# If times out, the tool has TTY/stdin issues
+```
+
+#### Example: Tool with TTY Detection
+
+```typescript
+// Tool outputs colored JSON when TTY is detected
+const definition: ComponentDefinition<Input, Output> = {
+  runner: {
+    kind: 'docker',
+    image: 'tool:latest',
+    entrypoint: 'sh',
+    command: ['-c', 'tool "$@"', '--'],
+  },
+  async execute(input, context) {
+    const args = [
+      '--json',           // JSON output
+      '--no-color',       // ✅ Disable TTY-specific coloring
+      '--output', '/data/results.json'
+    ];
+
+    const config: DockerRunnerConfig = {
+      ...this.runner,
+      command: [...(this.runner.command ?? []), ...args],
+    };
+
+    return runComponentWithRunner(config, input, context);
+  }
+};
+```
+
+**Key Principle:** Always test with `docker run --rm -t` to see how the tool behaves with TTY, then use tool-specific flags to ensure consistent, parseable output regardless of TTY detection.
 
 ---
 
