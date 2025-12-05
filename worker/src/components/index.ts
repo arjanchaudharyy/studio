@@ -34,6 +34,7 @@ import './security/amass';
 import './security/naabu';
 import './security/dnsx';
 import './security/httpx';
+import './security/nuclei';
 import './security/supabase-scanner';
 import './security/notify';
 import './security/prowler-scan';
