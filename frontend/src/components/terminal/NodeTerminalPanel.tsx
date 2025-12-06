@@ -16,6 +16,11 @@ interface NodeTerminalPanelProps {
    * When enabled, terminal will update based on timeline position.
    */
   timelineSync?: boolean
+  /**
+   * Called when the panel is focused (clicked/interacted with).
+   * Used for bringing the panel to the front in z-index stacking.
+   */
+  onFocus?: () => void
 }
 
 const decodePayload = (payload: string): Uint8Array => {
@@ -39,6 +44,7 @@ export function NodeTerminalPanel({
   runId,
   onClose,
   timelineSync = false,
+  onFocus,
 }: NodeTerminalPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -259,6 +265,26 @@ export function NodeTerminalPanel({
       panel.removeEventListener('wheel', handleWheel, { capture: false })
     }
   }, [])
+
+  // Handle focus for z-index stacking - listen at document level to catch all clicks
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel || !onFocus) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      // Check if the click is within this panel
+      if (panel.contains(event.target as Node)) {
+        onFocus()
+      }
+    }
+
+    // Listen at document level with capture phase to intercept before any element handles it
+    document.addEventListener('pointerdown', handlePointerDown, { capture: true })
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, { capture: true })
+    }
+  }, [onFocus])
 
   return (
     <div
