@@ -11,9 +11,9 @@
         "config": {
           "runtimeInputs": [
             { "id": "label", "label": "Stream Label", "type": "text", "required": true, "defaultValue": "Live Run Diagnostics" },
-            { "id": "durationSeconds", "label": "Duration (seconds)", "type": "number", "required": false, "defaultValue": 300 },
-            { "id": "intervalSeconds", "label": "Interval (seconds)", "type": "number", "required": false, "defaultValue": 5 },
-            { "id": "notes", "label": "Annotations", "type": "textarea", "required": false }
+            { "id": "durationSeconds", "label": "Duration (seconds)", "type": "number", "required": false, "defaultValue": 60 },
+            { "id": "intervalSeconds", "label": "Interval (seconds)", "type": "number", "required": false, "defaultValue": 2 },
+            { "id": "notes", "label": "Annotations", "type": "text", "required": false }
           ]
         }
       }
@@ -26,8 +26,8 @@
         "label": "Live Event Heartbeat",
         "config": {
           "label": "Live Run Diagnostics",
-          "durationSeconds": 300,
-          "intervalSeconds": 5,
+          "durationSeconds": 60,
+          "intervalSeconds": 2,
           "annotations": {
             "source": "Live Event Playground",
             "notes": "{{inputs.notes}}"

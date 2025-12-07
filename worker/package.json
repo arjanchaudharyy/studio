@@ -31,6 +31,7 @@
     "@temporalio/common": "^1.13.1",
     "@temporalio/worker": "^1.11.3",
     "@temporalio/workflow": "^1.11.3",
+    "kafkajs": "^2.2.4",
     "adm-zip": "^0.5.16",
     "ai": "^6.0.0-beta.68",
     "dotenv": "^17.2.3",
