@@ -1,0 +1,235 @@
+---
+title: "IT Automation"
+description: "User lifecycle management for Okta, Google Workspace, and GitHub"
+---
+
+IT automation components handle user offboarding, license management, and access revocation.
+
+---
+
+## Okta User Offboard
+
+Offboards users from Okta by deactivating or deleting their accounts.
+
+| Input | Type | Description |
+|-------|------|-------------|
+| `user_email` | String | Email of user to offboard |
+| `okta_domain` | String | Your Okta organization domain |
+| `apiToken` | Secret | Okta API token via Secret Loader |
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `action` | Select | `deactivate` or `delete` |
+| `dry_run` | Boolean | Preview without making changes |
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `success` | Boolean | Operation result |
+| `audit` | Object | Detailed audit log |
+| `userDeactivated` | Boolean | Deactivation status |
+| `userDeleted` | Boolean | Deletion status |
+
+**Example use cases:**
+- Automate employee offboarding
+- Revoke Okta access when users leave
+- Generate audit trails for compliance
+
+<Note>
+  Use `dry_run: true` to preview changes before executing. The audit output shows exactly what would be modified.
+</Note>
+
+---
+
+## Google Workspace License Unassign
+
+Removes Google Workspace licenses from users to free up seats.
+
+| Input | Type | Description |
+|-------|------|-------------|
+| `user_email` | String | User to unassign licenses from |
+| `credentials` | Secret | Google service account credentials |
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `licenseType` | Select | Specific license to remove, or `all` |
+| `dry_run` | Boolean | Preview without making changes |
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `success` | Boolean | Operation result |
+| `licensesRemoved` | Array | Licenses that were unassigned |
+
+**Use case:** Automatically reclaim licenses during offboarding workflows.
+
+---
+
+## GitHub Remove Org Membership
+
+Removes users from GitHub organizations and teams to recover seats.
+
+| Input | Type | Description |
+|-------|------|-------------|
+| `organization` | String | GitHub org login (e.g., shipsecai) |
+| `userIdentifier` | String | GitHub username or email |
+| `connectionId` | String | GitHub OAuth connection ID |
+| `teamSlug` | String | Optional team to remove from first |
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `resolvedLogin` | String | GitHub username |
+| `removedFromTeam` | Boolean | Team removal result |
+| `removedFromOrganization` | Boolean | Org removal result |
+
+**Example use cases:**
+- Offboard employees from GitHub organization
+- Clean up inactive contractor access
+- Automate seat recovery for cost optimization
+
+---
+
+## GitHub Connection Provider
+
+Provides GitHub OAuth tokens for other GitHub components.
+
+| Input | Type | Description |
+|-------|------|-------------|
+| `connectionId` | String | GitHub OAuth connection ID |
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `token` | Secret | GitHub access token |
+| `login` | String | Authenticated GitHub username |
+
+<Note>
+  GitHub connections are managed in Settings → Connections. The connection must have appropriate organization permissions.
+</Note>
+
+---
+
+## Complete Offboarding Workflow
+
+Combine IT automation components for full user offboarding:
+
+```
+Manual Trigger (email input)
+    ↓
+┌───┴───┐
+│       │
+Okta    GitHub
+Offboard Remove
+│       │
+└───┬───┘
+    ↓
+Google License
+Unassign
+    ↓
+Webhook (notify HR)
+```
+
+This workflow:
+1. Accepts user email as input
+2. Deactivates Okta account
+3. Removes GitHub organization access
+4. Reclaims Google Workspace license
+5. Notifies HR via webhook
+
+### Building the Workflow
+
+<Steps>
+  <Step title="Create Manual Trigger">
+    Add a Manual Trigger with a runtime input for `user_email` (type: text).
+  </Step>
+  
+  <Step title="Add Okta Offboard">
+    Connect the trigger output to Okta Offboard. Configure:
+    - `okta_domain`: Your Okta domain
+    - `apiToken`: Select from Secret Loader
+    - `action`: deactivate
+  </Step>
+  
+  <Step title="Add GitHub Remove">
+    Add GitHub Remove Org Membership in parallel:
+    - `organization`: Your GitHub org
+    - `connectionId`: Select GitHub connection
+  </Step>
+  
+  <Step title="Add Google License Unassign">
+    After both complete, add Google Workspace License Unassign:
+    - `credentials`: Service account JSON from Secret Loader
+  </Step>
+  
+  <Step title="Add Webhook Notification">
+    Finally, add a Webhook to notify HR:
+    - `url`: Your HR system webhook
+    - `payload`: Include offboarding summary
+  </Step>
+</Steps>
+
+---
+
+## Audit & Compliance
+
+All IT automation components generate detailed audit logs:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "action": "user_deactivated",
+  "target": "john.doe@company.com",
+  "actor": "workflow:offboarding-v1",
+  "details": {
+    "okta_user_id": "00u123abc",
+    "previous_status": "ACTIVE",
+    "new_status": "DEPROVISIONED"
+  }
+}
+```
+
+These logs are stored in workflow artifacts and can be:
+- Exported to SIEM systems via Webhook
+- Stored in S3 for compliance archives
+- Sent to Slack for real-time notifications
+
+---
+
+## Best Practices
+
+### Dry Run First
+
+Always test offboarding workflows with `dry_run: true` before production use:
+
+```typescript
+{
+  action: "deactivate",
+  dry_run: true  // Preview changes without executing
+}
+```
+
+### Parallel Execution
+
+IT automation components can run in parallel for faster offboarding:
+
+```
+         ┌─→ Okta Offboard
+Trigger ─┼─→ GitHub Remove
+         └─→ Google Unassign
+               ↓
+           Webhook (wait for all)
+```
+
+### Error Handling
+
+Components gracefully handle common errors:
+- **User not found**: Returns success with `userNotFound: true`
+- **Already deactivated**: Returns success with `alreadyDeactivated: true`
+- **Permission denied**: Fails with clear error message
+
+### Secret Management
+
+Store all API tokens and credentials in the Secrets Manager:
+
+| Secret | Description |
+|--------|-------------|
+| `okta-api-token` | Okta API token with user management permissions |
+| `google-service-account` | Google Workspace service account JSON |
+| `github-connection` | GitHub OAuth connection (managed in Connections) |
