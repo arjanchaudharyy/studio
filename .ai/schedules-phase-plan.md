@@ -48,11 +48,11 @@ This document captures the phase-by-phase rollout for introducing Workflow Entry
 - [x] Add inline “Manage schedules” panel on workflow detail (Design tab) referencing the global page.
 
 ## Phase 6 – Schedule Editor + Entry Point UX
-- [ ] Implement `ScheduleEditorDrawer` accessible from both the Schedules page and workflow CTA (basics, cadence builder, runtime input preview, node override diff).
+- [x] Implement `ScheduleEditorDrawer` accessible from both the Schedules page and workflow CTA (basics, cadence builder, runtime input preview, node override diff).
   - [x] Wire the drawer into the global Schedules page with runtime inputs + node overrides.
-  - [ ] Hook workflow-level CTA so designers can open the drawer without leaving the workflow.
-- [ ] Add per-workflow CTA (“Create schedule”) that opens the drawer pre-filtered for the current workflow.
-- [ ] Entry Point inspector lists existing schedules (chips with status & quick actions) and links to edit/pause/run now.
+  - [x] Hook workflow-level CTA so designers can open the drawer without leaving the workflow.
+- [x] Add per-workflow CTA (“Create schedule”) that opens the drawer pre-filtered for the current workflow.
+- [x] Entry Point inspector lists existing schedules (chips with status & quick actions) and links to edit/pause/run now.
 
 ## Phase 7 – Execution Surfaces
 - [ ] Propagate trigger metadata to UI components (`RunSelector`, `ExecutionTimeline`, `ExecutionInspector`, dashboard cards) with badges (🕐 scheduled, 👤 manual) and labels.

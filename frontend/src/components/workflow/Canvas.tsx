@@ -26,6 +26,7 @@ import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import type { NodeData } from '@/schemas/node'
 import { useToast } from '@/components/ui/use-toast'
+import type { WorkflowSchedule } from '@shipsec/shared'
 
 const nodeTypes = {
   workflow: WorkflowNode,
@@ -63,6 +64,14 @@ interface CanvasProps {
   setEdges: Dispatch<SetStateAction<Edge[]>>
   onNodesChange: (changes: NodeChange[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
+  workflowId?: string | null
+  workflowSchedules?: WorkflowSchedule[]
+  schedulesLoading?: boolean
+  scheduleError?: string | null
+  onScheduleCreate?: () => void
+  onScheduleEdit?: (schedule: WorkflowSchedule) => void
+  onScheduleAction?: (schedule: WorkflowSchedule, action: 'pause' | 'resume' | 'run') => Promise<void> | void
+  onViewSchedules?: () => void
 }
 
 export function Canvas({
@@ -73,6 +82,14 @@ export function Canvas({
   setEdges,
   onNodesChange,
   onEdgesChange,
+  workflowId,
+  workflowSchedules,
+  schedulesLoading,
+  scheduleError,
+  onScheduleCreate,
+  onScheduleEdit,
+  onScheduleAction,
+  onViewSchedules,
 }: CanvasProps) {
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null)
   const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null)
@@ -666,6 +683,14 @@ export function Canvas({
             selectedNode={selectedNode}
             onClose={() => setSelectedNode(null)}
             onUpdateNode={handleUpdateNode}
+            workflowId={workflowId}
+            workflowSchedules={workflowSchedules}
+            schedulesLoading={schedulesLoading}
+            scheduleError={scheduleError}
+            onScheduleCreate={onScheduleCreate}
+            onScheduleEdit={onScheduleEdit}
+            onScheduleAction={onScheduleAction}
+            onViewSchedules={onViewSchedules}
           />
         )}
       </div>

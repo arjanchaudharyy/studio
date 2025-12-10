@@ -1,4 +1,4 @@
-import { X, ExternalLink } from 'lucide-react'
+import { X, ExternalLink, Loader2 } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -26,6 +26,7 @@ import {
 } from '@/utils/portUtils'
 import { API_BASE_URL } from '@/services/api'
 import { useWorkflowStore } from '@/store/workflowStore'
+import type { WorkflowSchedule } from '@shipsec/shared'
 
 const ENTRY_COMPONENT_ID = 'core.workflow.entrypoint'
 
@@ -33,6 +34,14 @@ interface ConfigPanelProps {
   selectedNode: Node<NodeData> | null
   onClose: () => void
   onUpdateNode?: (nodeId: string, data: Partial<NodeData>) => void
+  workflowId?: string | null
+  workflowSchedules?: WorkflowSchedule[]
+  schedulesLoading?: boolean
+  scheduleError?: string | null
+  onScheduleCreate?: () => void
+  onScheduleEdit?: (schedule: WorkflowSchedule) => void
+  onScheduleAction?: (schedule: WorkflowSchedule, action: 'pause' | 'resume' | 'run') => Promise<void> | void
+  onViewSchedules?: () => void
 }
 
 const formatManualValue = (value: unknown): string => {
@@ -82,6 +91,31 @@ const normalizeRuntimeInputs = (value: unknown) => {
     }
   }
   return []
+}
+
+const formatScheduleTimestamp = (value?: string | null) => {
+  if (!value) return 'Not scheduled'
+  try {
+    const date = new Date(value)
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      timeZoneName: 'short',
+    }).format(date)
+  } catch {
+    return value
+  }
+}
+
+const scheduleStatusVariant: Record<
+  WorkflowSchedule['status'],
+  'default' | 'secondary' | 'destructive'
+> = {
+  active: 'default',
+  paused: 'secondary',
+  error: 'destructive',
 }
 
 interface ManualListChipsInputProps {
@@ -207,9 +241,22 @@ function ManualListChipsInput({
  *
  * Shows component information and allows editing node parameters
  */
-export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanelProps) {
+export function ConfigPanel({
+  selectedNode,
+  onClose,
+  onUpdateNode,
+  workflowId: workflowIdProp,
+  workflowSchedules,
+  schedulesLoading,
+  scheduleError,
+  onScheduleCreate,
+  onScheduleEdit,
+  onScheduleAction,
+  onViewSchedules,
+}: ConfigPanelProps) {
   const { getComponent, loading } = useComponentStore()
-  const workflowId = useWorkflowStore((state) => state.metadata.id)
+  const fallbackWorkflowId = useWorkflowStore((state) => state.metadata.id)
+  const workflowId = workflowIdProp ?? fallbackWorkflowId
   const navigate = useNavigate()
 
   const handleParameterChange = (paramId: string, value: any) => {
@@ -286,13 +333,55 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
     ...(component.examples ?? []),
   ].filter((value): value is string => Boolean(value && value.trim().length > 0))
   const manualParameters = (nodeData.parameters ?? {}) as Record<string, unknown>
-  const handleManageSchedules = useCallback(() => {
+  const [scheduleActionState, setScheduleActionState] = useState<Record<string, 'pause' | 'resume' | 'run'>>({})
+  const handleNavigateSchedules = useCallback(() => {
     if (!workflowId) {
       navigate('/schedules')
       return
     }
     navigate(`/schedules?workflowId=${workflowId}`)
   }, [navigate, workflowId])
+  const viewSchedules = onViewSchedules ?? handleNavigateSchedules
+  const handleCreateSchedule = useCallback(() => {
+    if (schedulesDisabled) {
+      viewSchedules()
+      return
+    }
+    if (onScheduleCreate) {
+      onScheduleCreate()
+    } else {
+      viewSchedules()
+    }
+  }, [onScheduleCreate, schedulesDisabled, viewSchedules])
+  const handleEditSchedule = useCallback(
+    (schedule: WorkflowSchedule) => {
+      if (onScheduleEdit) {
+        onScheduleEdit(schedule)
+      } else {
+        viewSchedules()
+      }
+    },
+    [onScheduleEdit, viewSchedules],
+  )
+  const handleScheduleActionClick = useCallback(
+    async (schedule: WorkflowSchedule, action: 'pause' | 'resume' | 'run') => {
+      if (!onScheduleAction) {
+        viewSchedules()
+        return
+      }
+      setScheduleActionState((state) => ({ ...state, [schedule.id]: action }))
+      try {
+        await onScheduleAction(schedule, action)
+      } finally {
+        setScheduleActionState((state) => {
+          const next = { ...state }
+          delete next[schedule.id]
+          return next
+        })
+      }
+    },
+    [onScheduleAction, viewSchedules],
+  )
   const isEntryPointComponent = component.id === ENTRY_COMPONENT_ID
   const runtimeInputDefinitions = normalizeRuntimeInputs(manualParameters.runtimeInputs)
   const entryPointPayload = {
@@ -702,25 +791,133 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                 </div>
               </div>
               <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                <div>
-                  <h5 className="text-sm font-semibold text-foreground">
-                    Schedules
-                  </h5>
-                  <p className="text-xs text-muted-foreground">
-                    {workflowId
-                      ? 'View, pause, or create Temporal schedules for this workflow.'
-                      : 'Save this workflow to start managing schedules.'}
-                  </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h5 className="text-sm font-semibold text-foreground">
+                      Schedules
+                    </h5>
+                    <p className="text-xs text-muted-foreground">
+                      {workflowId
+                        ? 'Create recurring runs and manage Temporal schedules for this workflow.'
+                        : 'Save this workflow to start managing schedules.'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleCreateSchedule}
+                      disabled={schedulesDisabled}
+                    >
+                      Create schedule
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={viewSchedules}
+                    >
+                      View all
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleManageSchedules}
-                  disabled={schedulesDisabled}
-                >
-                  Manage schedules
-                </Button>
+                {schedulesDisabled ? (
+                  <div className="rounded border border-dashed bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                    Save this workflow to configure schedules.
+                  </div>
+                ) : schedulesLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Loading schedules…
+                  </div>
+                ) : scheduleError ? (
+                  <div className="rounded border border-dashed border-destructive/50 bg-background/60 px-3 py-2 text-xs text-destructive">
+                    {scheduleError}
+                  </div>
+                ) : workflowSchedules && workflowSchedules.length > 0 ? (
+                  <div className="space-y-3">
+                    {workflowSchedules.map((schedule) => {
+                      const actionLabel =
+                        schedule.status === 'active' ? 'Pause' : 'Resume'
+                      const actionKey =
+                        schedule.status === 'active' ? 'pause' : 'resume'
+                      const pendingAction = scheduleActionState[schedule.id]
+                      return (
+                        <div
+                          key={schedule.id}
+                          className="rounded-lg border bg-background px-3 py-2 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold">
+                                  {schedule.name}
+                                </span>
+                                <Badge
+                                  variant={scheduleStatusVariant[schedule.status]}
+                                  className="text-[11px] capitalize"
+                                >
+                                  {schedule.status}
+                                </Badge>
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                Next: {formatScheduleTimestamp(schedule.nextRunAt)}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={Boolean(pendingAction)}
+                                onClick={() =>
+                                  handleScheduleActionClick(
+                                    schedule,
+                                    actionKey as 'pause' | 'resume',
+                                  )
+                                }
+                              >
+                                {pendingAction === 'pause' ||
+                                pendingAction === 'resume' ? (
+                                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                ) : null}
+                                {actionLabel}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={Boolean(pendingAction)}
+                                onClick={() =>
+                                  handleScheduleActionClick(schedule, 'run')
+                                }
+                              >
+                                Run now
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleEditSchedule(schedule)}
+                              >
+                                Edit
+                              </Button>
+                            </div>
+                          </div>
+                          {schedule.description && (
+                            <p className="text-xs text-muted-foreground">
+                              {schedule.description}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded border border-dashed bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                    No schedules yet.
+                  </div>
+                )}
               </div>
             </div>
           )}

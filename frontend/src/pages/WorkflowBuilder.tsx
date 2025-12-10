@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 import {
   ReactFlowProvider,
   useNodesState,
@@ -15,6 +15,7 @@ import { ExecutionInspector } from '@/components/timeline/ExecutionInspector'
 import { RunWorkflowDialog } from '@/components/workflow/RunWorkflowDialog'
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useComponentStore } from '@/store/componentStore'
@@ -37,6 +38,8 @@ import { useAuthStore } from '@/store/authStore'
 import { hasAdminRole } from '@/utils/auth'
 import { WorkflowImportSchema, DEFAULT_WORKFLOW_VIEWPORT } from '@/schemas/workflow'
 import { track, Events } from '@/features/analytics/events'
+import { ScheduleEditorDrawer, type WorkflowOption } from '@/components/schedules/ScheduleEditorDrawer'
+import type { WorkflowSchedule } from '@shipsec/shared'
 
 const ENTRY_COMPONENT_ID = 'core.workflow.entrypoint'
 const ENTRY_COMPONENT_SLUG = 'entry-point'
@@ -162,6 +165,31 @@ function formatErrorMessage(message: string): string {
   return formatted
 }
 
+const formatScheduleTimestamp = (value?: string | null) => {
+  if (!value) return 'Not scheduled'
+  try {
+    const date = new Date(value)
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      timeZoneName: 'short',
+    }).format(date)
+  } catch {
+    return value
+  }
+}
+
+const scheduleStatusVariant: Record<
+  WorkflowSchedule['status'],
+  'default' | 'secondary' | 'destructive'
+> = {
+  active: 'default',
+  paused: 'secondary',
+  error: 'destructive',
+}
+
 function WorkflowBuilderContent() {
   const { id, runId: routeRunId } = useParams<{ id: string; runId?: string }>()
   const navigate = useNavigate()
@@ -181,8 +209,121 @@ function WorkflowBuilderContent() {
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState([])
   const { toast } = useToast()
   const mode = useWorkflowUiStore((state) => state.mode)
+  const workflowId = metadata.id
+  const workflowName = metadata.name || 'Untitled workflow'
+  const [workflowSchedules, setWorkflowSchedules] = useState<WorkflowSchedule[]>([])
+  const [workflowSchedulesLoading, setWorkflowSchedulesLoading] = useState(false)
+  const [workflowSchedulesError, setWorkflowSchedulesError] = useState<string | null>(null)
+  const [scheduleEditorOpen, setScheduleEditorOpen] = useState(false)
+  const [scheduleEditorMode, setScheduleEditorMode] = useState<'create' | 'edit'>('create')
+  const [editingSchedule, setEditingSchedule] = useState<WorkflowSchedule | null>(null)
+  const scheduleWorkflowOptions = useMemo<WorkflowOption[]>(() => {
+    if (!workflowId) return []
+    return [
+      {
+        id: workflowId,
+        name: workflowName,
+      },
+    ]
+  }, [workflowId, workflowName])
 
   // Wrap change handlers to mark workflow as dirty
+  const navigateToSchedules = useCallback(() => {
+    if (workflowId) {
+      navigate(`/schedules?workflowId=${workflowId}`)
+    } else {
+      navigate('/schedules')
+    }
+  }, [navigate, workflowId])
+
+  const refreshWorkflowSchedules = useCallback(async () => {
+    if (!workflowId) {
+      setWorkflowSchedules([])
+      setWorkflowSchedulesError(null)
+      return
+    }
+    setWorkflowSchedulesLoading(true)
+    try {
+      const list = await api.schedules.list({ workflowId })
+      setWorkflowSchedules(list)
+      setWorkflowSchedulesError(null)
+    } catch (error) {
+      console.error('Failed to load workflow schedules', error)
+      setWorkflowSchedulesError(
+        error instanceof Error ? error.message : 'Failed to load schedules',
+      )
+    } finally {
+      setWorkflowSchedulesLoading(false)
+    }
+  }, [workflowId])
+
+  useEffect(() => {
+    if (!workflowId) {
+      setWorkflowSchedules([])
+      return
+    }
+    void refreshWorkflowSchedules()
+  }, [workflowId, refreshWorkflowSchedules])
+
+  const openScheduleDrawer = useCallback(
+    (mode: 'create' | 'edit', schedule?: WorkflowSchedule | null) => {
+      if (!workflowId) {
+        toast({
+          title: 'Save workflow to manage schedules',
+          description: 'Schedules can be created after the workflow has an ID.',
+          variant: 'destructive',
+        })
+        return
+      }
+      setScheduleEditorMode(mode)
+      setEditingSchedule(schedule ?? null)
+      setScheduleEditorOpen(true)
+    },
+    [toast, workflowId],
+  )
+
+  const handleScheduleSaved = useCallback(
+    (schedule: WorkflowSchedule, _mode: 'create' | 'edit') => {
+      setScheduleEditorOpen(false)
+      setEditingSchedule(null)
+      // Optimistically update list
+      setWorkflowSchedules((prev) => {
+        const exists = prev.find((item) => item.id === schedule.id)
+        if (exists) {
+          return prev.map((item) => (item.id === schedule.id ? schedule : item))
+        }
+        return [...prev, schedule]
+      })
+      void refreshWorkflowSchedules()
+    },
+    [refreshWorkflowSchedules],
+  )
+
+  const handleScheduleAction = useCallback(
+    async (schedule: WorkflowSchedule, action: 'pause' | 'resume' | 'run') => {
+      try {
+        if (action === 'pause') {
+          await api.schedules.pause(schedule.id)
+          toast({ title: 'Schedule paused', description: schedule.name })
+        } else if (action === 'resume') {
+          await api.schedules.resume(schedule.id)
+          toast({ title: 'Schedule resumed', description: schedule.name })
+        } else {
+          await api.schedules.runNow(schedule.id)
+          toast({ title: 'Schedule triggered', description: schedule.name })
+        }
+        void refreshWorkflowSchedules()
+      } catch (error) {
+        toast({
+          title: 'Schedule action failed',
+          description: error instanceof Error ? error.message : 'Please try again.',
+          variant: 'destructive',
+        })
+      }
+    },
+    [refreshWorkflowSchedules, toast],
+  )
+
   const onNodesChange = useCallback((changes: any[]) => {
     if (changes.length === 0) {
       return
@@ -1525,6 +1666,15 @@ function WorkflowBuilderContent() {
         onExport={handleExportWorkflow}
         canManageWorkflows={canManageWorkflows}
       />
+      {workflowId && (
+        <WorkflowSchedulesBanner
+          schedules={workflowSchedules}
+          isLoading={workflowSchedulesLoading}
+          error={workflowSchedulesError}
+          onCreate={() => openScheduleDrawer('create')}
+          onManage={navigateToSchedules}
+        />
+      )}
       <div ref={layoutRef} className="flex flex-1 overflow-hidden relative">
         {/* Show components button - anchored to layout when tray is hidden */}
         {mode === 'design' && !isLibraryVisible && (
@@ -1594,6 +1744,14 @@ function WorkflowBuilderContent() {
             setEdges={setEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            workflowId={workflowId}
+            workflowSchedules={workflowSchedules}
+            schedulesLoading={workflowSchedulesLoading}
+            scheduleError={workflowSchedulesError}
+            onScheduleCreate={() => openScheduleDrawer('create')}
+            onScheduleEdit={(schedule) => openScheduleDrawer('edit', schedule)}
+            onScheduleAction={handleScheduleAction}
+            onViewSchedules={navigateToSchedules}
           />
           {isInspectorVisible && (
             <aside
@@ -1614,6 +1772,18 @@ function WorkflowBuilderContent() {
 
       {/* Bottom panel removed in favor of contextual inspectors */}
 
+      {workflowId && (
+        <ScheduleEditorDrawer
+          open={scheduleEditorOpen}
+          mode={scheduleEditorMode}
+          schedule={editingSchedule}
+          defaultWorkflowId={workflowId}
+          workflowOptions={scheduleWorkflowOptions}
+          onClose={() => setScheduleEditorOpen(false)}
+          onSaved={handleScheduleSaved}
+        />
+      )}
+
       <RunWorkflowDialog
         open={runDialogOpen}
         onOpenChange={setRunDialogOpen}
@@ -1630,5 +1800,70 @@ export function WorkflowBuilder() {
     <ReactFlowProvider>
       <WorkflowBuilderContent />
     </ReactFlowProvider>
+  )
+}
+
+interface WorkflowSchedulesBannerProps {
+  schedules: WorkflowSchedule[]
+  isLoading: boolean
+  error?: string | null
+  onCreate: () => void
+  onManage: () => void
+}
+
+function WorkflowSchedulesBanner({
+  schedules,
+  isLoading,
+  error,
+  onCreate,
+  onManage,
+}: WorkflowSchedulesBannerProps) {
+  const topSchedules = schedules.slice(0, 3)
+  return (
+    <div className="border-b bg-muted/30 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-foreground">Schedules</p>
+          {isLoading ? (
+            <p className="text-xs text-muted-foreground">Loading schedules…</p>
+          ) : error ? (
+            <p className="text-xs text-destructive">{error}</p>
+          ) : topSchedules.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No schedules yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {topSchedules.map((schedule) => (
+                <Badge
+                  key={schedule.id}
+                  variant={scheduleStatusVariant[schedule.status]}
+                  className="text-xs font-medium"
+                >
+                  {schedule.name}
+                  {schedule.nextRunAt && (
+                    <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+                      Next: {formatScheduleTimestamp(schedule.nextRunAt)}
+                    </span>
+                  )}
+                </Badge>
+              ))}
+              {schedules.length > topSchedules.length && (
+                <Badge variant="outline" className="text-xs font-medium">
+                  +{schedules.length - topSchedules.length} more
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={onCreate}>
+            <Plus className="mr-1 h-4 w-4" />
+            Create schedule
+          </Button>
+          <Button size="sm" variant="outline" onClick={onManage}>
+            View all
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
