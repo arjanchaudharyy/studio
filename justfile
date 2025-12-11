@@ -8,6 +8,31 @@ default:
 
 # === Development (recommended for contributors) ===
 
+# Initialize environment files from examples
+init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔧 Setting up ShipSec Studio..."
+
+    # Install dependencies if needed
+    if [ ! -d "node_modules" ]; then
+        echo "📦 Installing dependencies..."
+        bun install
+        echo "✅ Dependencies installed"
+    else
+        echo "✅ Dependencies already installed"
+    fi
+
+    # Copy env files if they don't exist
+    [ ! -f "backend/.env" ] && cp backend/.env.example backend/.env && echo "✅ Created backend/.env"
+    [ ! -f "worker/.env" ] && cp worker/.env.example worker/.env && echo "✅ Created worker/.env"
+    [ ! -f "frontend/.env" ] && cp frontend/.env.example frontend/.env && echo "✅ Created frontend/.env"
+
+    echo ""
+    echo "🎉 Setup complete!"
+    echo "   Edit the .env files to configure your environment"
+    echo "   Then run: just dev"
+
 # Start development environment with hot-reload
 dev action="start":
     #!/usr/bin/env bash
@@ -16,15 +41,22 @@ dev action="start":
         start)
             echo "🚀 Starting development environment..."
 
+            # Check for required env files
+            if [ ! -f "backend/.env" ] || [ ! -f "worker/.env" ] || [ ! -f "frontend/.env" ]; then
+                echo "❌ Environment files not found!"
+                echo ""
+                echo "   Run this first: just init"
+                echo ""
+                echo "   This will create .env files from the example templates."
+                exit 1
+            fi
+
             # Start infrastructure
             docker compose -f docker/docker-compose.infra.yml up -d
 
             # Wait for Postgres
             echo "⏳ Waiting for infrastructure..."
             timeout 30s bash -c 'until docker exec shipsec-postgres pg_isready -U shipsec >/dev/null 2>&1; do sleep 1; done' || true
-
-            # Install dependencies if needed
-            [ ! -d "node_modules" ] && bun install
 
             # Update git SHA and start PM2
             ./scripts/set-git-sha.sh || true
@@ -38,6 +70,10 @@ dev action="start":
             echo ""
             echo "💡 just dev logs   - View application logs"
             echo "💡 just dev stop   - Stop everything"
+            echo ""
+
+            # Version check
+            bun backend/scripts/version-check-summary.ts 2>/dev/null || true
             ;;
         stop)
             echo "🛑 Stopping development environment..."
@@ -72,6 +108,10 @@ prod action="start":
             echo "   Frontend:    http://localhost:8090"
             echo "   Backend:     http://localhost:3211"
             echo "   Temporal UI: http://localhost:8081"
+            echo ""
+
+            # Version check
+            bun backend/scripts/version-check-summary.ts 2>/dev/null || true
             ;;
         stop)
             docker compose -f docker/docker-compose.full.yml down
@@ -83,6 +123,10 @@ prod action="start":
             echo "✅ Production built and started"
             echo "   Frontend: http://localhost:8090"
             echo "   Backend:  http://localhost:3211"
+            echo ""
+
+            # Version check
+            bun backend/scripts/version-check-summary.ts 2>/dev/null || true
             ;;
         logs)
             docker compose -f docker/docker-compose.full.yml logs -f
@@ -165,6 +209,9 @@ build:
 
 help:
     @echo "ShipSec Studio"
+    @echo ""
+    @echo "Getting Started:"
+    @echo "  just init       Set up dependencies and environment files"
     @echo ""
     @echo "Development (hot-reload):"
     @echo "  just dev        Start development environment"
