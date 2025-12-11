@@ -226,7 +226,11 @@ describe('SchedulesService', () => {
 
   beforeEach(() => {
     repository = new InMemoryScheduleRepository();
-    service = new SchedulesService(repository as ScheduleRepository, workflowsService, temporalService);
+    service = new SchedulesService(
+      repository as unknown as ScheduleRepository,
+      workflowsService,
+      temporalService,
+    );
     ensureWorkflowAdminAccessCalls.length = 0;
     getCompiledWorkflowContextCalls.length = 0;
     prepareRunPayloadCalls.length = 0;
@@ -245,6 +249,7 @@ describe('SchedulesService', () => {
       description: 'Morning cadence',
       cronExpression: '0 9 * * *',
       timezone: 'UTC',
+      catchupWindowSeconds: 0,
       overlapPolicy: 'skip',
       inputPayload: {
         runtimeInputs: { domain: 'acme.com' },
@@ -280,6 +285,8 @@ describe('SchedulesService', () => {
         name: 'Invalid',
         cronExpression: '0 10 * * *',
         timezone: 'UTC',
+        overlapPolicy: 'skip',
+        catchupWindowSeconds: 0,
         inputPayload: {
           runtimeInputs: {},
           nodeOverrides: {},
@@ -296,6 +303,8 @@ describe('SchedulesService', () => {
       name: 'Nightly',
       cronExpression: '0 2 * * *',
       timezone: 'UTC',
+      overlapPolicy: 'skip',
+      catchupWindowSeconds: 0,
       inputPayload: {
         runtimeInputs: { domain: 'acme.com' },
         nodeOverrides: {},
@@ -330,6 +339,8 @@ describe('SchedulesService', () => {
       name: 'Adhoc',
       cronExpression: '*/5 * * * *',
       timezone: 'UTC',
+      overlapPolicy: 'skip',
+      catchupWindowSeconds: 0,
       inputPayload: {
         runtimeInputs: { domain: 'acme.com' },
         nodeOverrides: { scanner: { depth: 1 } },

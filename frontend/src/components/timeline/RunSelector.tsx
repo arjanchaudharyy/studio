@@ -17,7 +17,7 @@ import { useRunStore, type ExecutionRun } from '@/store/runStore'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/use-toast'
 import { getTriggerDisplay } from '@/utils/triggerDisplay'
-import { formatStartTime, formatDuration } from '@/utils/timeFormat'
+import { formatDuration } from '@/utils/timeFormat'
 import { RunInfoDisplay } from '@/components/timeline/RunInfoDisplay'
 
 const STATUS_ICONS = {
@@ -30,16 +30,6 @@ const STATUS_ICONS = {
   QUEUED: Clock,
 } as const
 
-const STATUS_COLORS = {
-  RUNNING: 'text-blue-500',
-  COMPLETED: 'text-green-500',
-  FAILED: 'text-red-500',
-  CANCELLED: 'text-gray-500',
-  TERMINATED: 'text-gray-500',  // User-initiated stop - same as CANCELLED
-  TIMED_OUT: 'text-orange-500',
-  QUEUED: 'text-yellow-500',
-} as const
-
 const TERMINAL_STATUSES: ExecutionRun['status'][] = ['COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'TIMED_OUT']
 
 const isRunLive = (run?: ExecutionRun | null) => {
@@ -50,25 +40,6 @@ const isRunLive = (run?: ExecutionRun | null) => {
     return true
   }
   return !TERMINAL_STATUSES.includes(run.status)
-}
-
-const formatRelativeTime = (timestamp: string): string => {
-  const now = Date.now()
-  const then = new Date(timestamp).getTime()
-  const diffMs = now - then
-
-  if (diffMs < 60000) return 'just now'
-  if (diffMs < 3600000) return `${Math.floor(diffMs / 60000)}m ago`
-  if (diffMs < 86400000) return `${Math.floor(diffMs / 3600000)}h ago`
-  return `${Math.floor(diffMs / 86400000)}d ago`
-}
-
-const formatTimeOfDay = (timestamp: string): string => {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  })
 }
 
 type TriggerFilter = 'all' | 'manual' | 'schedule'
@@ -231,26 +202,12 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     : null
 
   const currentLiveRun = runs.find(run => run.id === currentLiveRunId)
-  const currentLiveRunVersion = typeof currentLiveRun?.workflowVersion === 'number'
-    ? currentLiveRun.workflowVersion
-    : null
-  const currentLiveRunOlder =
-    currentLiveRunVersion !== null &&
-    typeof currentWorkflowVersion === 'number' &&
-    currentLiveRunVersion !== currentWorkflowVersion
   const isCurrentLiveSelected =
     currentLiveRun ? selectedRunId === currentLiveRun.id : false
-  const currentLiveTrigger = currentLiveRun
-    ? getTriggerDisplay(currentLiveRun.triggerType, currentLiveRun.triggerLabel)
-    : null
 
   const getStatusIcon = (status: string) => {
     const IconComponent = STATUS_ICONS[status as keyof typeof STATUS_ICONS]
     return IconComponent ? <IconComponent className="h-4 w-4" /> : null
-  }
-
-  const getStatusColor = (status: string) => {
-    return STATUS_COLORS[status as keyof typeof STATUS_COLORS] || 'text-gray-500'
   }
 
   const handleCopyLink = useCallback(

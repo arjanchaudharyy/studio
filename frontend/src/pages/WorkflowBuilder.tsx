@@ -1840,7 +1840,6 @@ function WorkflowSchedulesSummaryBar({
   onExpand,
   onViewAll,
 }: WorkflowSchedulesSummaryBarProps) {
-  const summarySchedules = schedules.slice(0, 8)
   const countActive = schedules.filter((s) => s.status === 'active').length
   const countPaused = schedules.filter((s) => s.status === 'paused').length
   const countError = schedules.filter((s) => s.status === 'error').length

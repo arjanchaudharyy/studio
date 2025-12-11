@@ -314,10 +314,12 @@ export class SchedulesService {
     scheduleName: string;
     payload: ScheduleInputPayload;
   }): ScheduleTriggerWorkflowArgs {
+    const hasVersionId = Boolean(options.workflowVersionId);
+
     return {
       workflowId: options.workflowId,
-      workflowVersionId: options.workflowVersionId ?? undefined,
-      workflowVersion: options.workflowVersion ?? undefined,
+      workflowVersionId: hasVersionId ? options.workflowVersionId ?? undefined : undefined,
+      workflowVersion: hasVersionId ? undefined : options.workflowVersion ?? undefined,
       organizationId: options.organizationId ?? null,
       scheduleId: options.scheduleId,
       scheduleName: options.scheduleName,

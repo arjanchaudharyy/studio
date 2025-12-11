@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -73,7 +73,6 @@ const getWorkflowName = (
 }
 
 export function SchedulesPage() {
-  const navigate = useNavigate()
   const { toast } = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [workflowOptions, setWorkflowOptions] = useState<WorkflowOption[]>([])

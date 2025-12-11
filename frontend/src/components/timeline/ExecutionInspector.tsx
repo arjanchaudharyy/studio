@@ -26,26 +26,6 @@ const formatTime = (timestamp: string) => {
   return date.toLocaleTimeString()
 }
 
-const formatRelativeTime = (timestamp: string): string => {
-  const now = Date.now()
-  const then = new Date(timestamp).getTime()
-  const diffMs = now - then
-
-  if (diffMs < 60_000) return 'just now'
-  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`
-  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`
-  return `${Math.floor(diffMs / 86_400_000)}d ago`
-}
-
-const formatTimeOfDay = (timestamp: string): string => {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
-
 const formatStructured = (value: Record<string, unknown>) => {
   try {
     return JSON.stringify(value, null, 2)
