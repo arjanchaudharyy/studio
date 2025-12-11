@@ -1,4 +1,4 @@
-import { X, ExternalLink } from 'lucide-react'
+import { X, ExternalLink, ChevronDown, ChevronRight, Circle, CheckCircle2, AlertCircle } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,46 @@ import {
   inputSupportsManualValue,
   isListOfTextPortDataType,
 } from '@/utils/portUtils'
+
+interface CollapsibleSectionProps {
+  title: string
+  count?: number
+  defaultOpen?: boolean
+  children: React.ReactNode
+}
+
+function CollapsibleSection({ title, count, defaultOpen = true, children }: CollapsibleSectionProps) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+  
+  return (
+    <div className="border rounded-lg overflow-hidden bg-card">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-accent/50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+          <span className="text-sm font-semibold">{title}</span>
+        </div>
+        {count !== undefined && (
+          <Badge variant="secondary" className="text-xs px-2 py-0.5">
+            {count}
+          </Badge>
+        )}
+      </button>
+      {isOpen && (
+        <div className="px-4 pb-4 pt-1 border-t bg-background/50">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface ConfigPanelProps {
   selectedNode: Node<NodeData> | null
@@ -205,15 +245,15 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
   if (!component) {
     if (loading) {
       return (
-        <div className="w-[360px] border-l bg-background flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b">
-            <h3 className="font-semibold">Configuration</h3>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+        <div className="config-panel w-[380px] border-l bg-background flex flex-col h-full">
+          <div className="flex items-center justify-between px-5 py-4 border-b bg-card">
+            <h3 className="font-semibold text-base">Configuration</h3>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-accent" onClick={onClose}>
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex-1 p-4">
-            <div className="text-sm text-muted-foreground">
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="text-sm text-muted-foreground animate-pulse">
               Loading component metadata…
             </div>
           </div>
@@ -221,16 +261,18 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
       )
     }
     return (
-      <div className="w-[360px] border-l bg-background flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="font-semibold">Configuration</h3>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+      <div className="config-panel w-[380px] border-l bg-background flex flex-col h-full">
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-card">
+          <h3 className="font-semibold text-base">Configuration</h3>
+          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-accent" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex-1 p-4">
-          <div className="text-sm text-red-600">
-            Component not found: {componentRef ?? 'unknown'}
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center">
+            <AlertCircle className="h-10 w-10 text-destructive mx-auto mb-3" />
+            <p className="text-sm text-destructive font-medium">Component not found</p>
+            <p className="text-xs text-muted-foreground mt-1">{componentRef ?? 'unknown'}</p>
           </div>
         </div>
       </div>
@@ -250,24 +292,24 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
   const manualParameters = (nodeData.parameters ?? {}) as Record<string, unknown>
 
   return (
-    <div className="config-panel w-[400px] border-l bg-background flex flex-col h-full overflow-hidden">
+    <div className="config-panel w-[380px] border-l bg-background flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <h3 className="font-semibold">Configuration</h3>
-        <Button variant="ghost" size="icon" onClick={onClose}>
+      <div className="flex items-center justify-between px-5 py-4 border-b bg-card">
+        <h3 className="font-semibold text-base">Configuration</h3>
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-accent" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>
 
       {/* Component Info */}
-      <div className="p-4 border-b bg-muted/30">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-background border">
+      <div className="px-5 py-4 border-b">
+        <div className="flex items-start gap-4">
+          <div className="p-2.5 rounded-xl bg-accent/50 border flex-shrink-0">
             {component.logo ? (
               <img 
                 src={component.logo} 
                 alt={component.name}
-                className="h-6 w-6 object-contain"
+                className="h-7 w-7 object-contain"
                 onError={(e) => {
                   // Fallback to icon if image fails to load
                   e.currentTarget.style.display = 'none'
@@ -276,13 +318,13 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
               />
             ) : null}
             <IconComponent className={cn(
-              "h-6 w-6",
+              "h-7 w-7 text-primary",
               component.logo && "hidden"
             )} />
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="font-semibold text-sm truncate mb-1">{component.name}</h4>
-            <p className="text-xs text-muted-foreground mb-2">
+            <h4 className="font-semibold text-base mb-1">{component.name}</h4>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               {component.description}
             </p>
           </div>
@@ -291,12 +333,11 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4 space-y-6">
+        <div className="p-5 space-y-4">
           {/* Inputs Section */}
           {componentInputs.length > 0 && (
-            <div>
-              <h5 className="text-sm font-semibold mb-3 text-foreground">Inputs</h5>
-              <div className="space-y-3">
+            <CollapsibleSection title="Inputs" count={componentInputs.length} defaultOpen={true}>
+              <div className="space-y-3 mt-3">
                 {componentInputs.map((input) => {
                   const connection = nodeData.inputs?.[input.id]
                   const hasConnection = Boolean(connection)
@@ -341,29 +382,34 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                   return (
                     <div
                       key={input.id}
-                      className="p-3 rounded-lg border bg-background"
+                      className="p-4 rounded-lg border bg-card/50 hover:bg-card transition-colors"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium">{input.label}</span>
-                        {input.required && (
-                          <span className="text-xs text-red-500">*required</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-2">
-                        Type: <span className="font-mono">{typeLabel}</span>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{input.label}</span>
+                          {input.required && (
+                            <span className="text-[10px] text-destructive font-medium px-1.5 py-0.5 bg-destructive/10 rounded">
+                              required
+                            </span>
+                          )}
+                        </div>
+                        <Badge variant="outline" className="text-[10px] font-mono px-2">
+                          {typeLabel}
+                        </Badge>
                       </div>
                       {input.description && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground leading-relaxed mb-2">
                           {input.description}
                         </p>
                       )}
 
                       {inputSupportsManualValue(input) && (
-                        <div className="mt-2 space-y-1">
+                        <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
                           <label
                             htmlFor={`manual-${input.id}`}
-                            className="text-xs font-medium text-muted-foreground"
+                            className="text-xs font-medium text-muted-foreground flex items-center gap-2"
                           >
+                            <Circle className="h-2 w-2" />
                             Manual value
                           </label>
                           {useSecretSelect ? (
@@ -470,66 +516,43 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                         </div>
                       )}
 
-                      {/* Connection status */}
-                      <div className="mt-2 pt-2 border-t">
-                        <div className="text-xs space-y-1">
+                      {/* Connection status - simplified */}
+                      <div className="mt-3 pt-3 border-t border-border/50">
+                        <div className="text-xs">
                           {manualValueProvided ? (
-                            <>
-                              <div className="text-blue-600 flex items-center gap-1">
-                                • <span className="font-medium">Manual value in use</span>
+                            <div className="flex items-start gap-2">
+                              <Circle className="h-3 w-3 text-primary mt-0.5 fill-primary" />
+                              <div className="space-y-1">
+                                <span className="font-medium text-primary">Manual value set</span>
+                                {manualValuePreview && (
+                                  <p className="text-muted-foreground font-mono text-[11px] break-all bg-muted/50 px-2 py-1 rounded">
+                                    {manualValuePreview.length > 100 ? manualValuePreview.slice(0, 100) + '...' : manualValuePreview}
+                                  </p>
+                                )}
                               </div>
-                              {inputSupportsManualValue(input) && manualValuePreview && (
-                                <div className="text-muted-foreground break-words">
-                                  Value:{' '}
-                                  <span className="font-mono text-blue-600">
-                                    {manualValuePreview}
-                                  </span>
-                                </div>
-                              )}
-                              {hasConnection ? (
-                                <div className="text-muted-foreground">
-                                  Manual override active even though a port is connected. Clear the manual value to use{' '}
-                                  <span className="font-mono text-blue-600">
-                                    {connection?.source}.{connection?.output}
-                                  </span>.
-                                </div>
-                              ) : (
-                                <div className="text-muted-foreground">
-                                  No connection required while a manual value is set.
-                                </div>
-                              )}
-                            </>
+                            </div>
                           ) : hasConnection ? (
-                            <div className="space-y-1">
-                              <div className="text-green-600 flex items-center gap-1">
-                                ✓ <span className="font-medium">Connected</span>
-                              </div>
-                              <div className="text-muted-foreground">
-                                Source:{' '}
-                                <span className="font-mono text-blue-600">
-                                  {connection?.source}
-                                </span>
-                              </div>
-                              <div className="text-muted-foreground">
-                                Output:{' '}
-                                <span className="font-mono text-blue-600">
-                                  {connection?.output}
-                                </span>
-                              </div>
-                              <div className="text-muted-foreground">
-                                Port input overrides manual values while connected.
+                            <div className="flex items-start gap-2">
+                              <CheckCircle2 className="h-3 w-3 text-green-500 mt-0.5" />
+                              <div>
+                                <span className="font-medium text-green-600 dark:text-green-400">Connected</span>
+                                <p className="text-muted-foreground mt-0.5">
+                                  From <span className="font-mono text-primary">{connection?.source}</span>
+                                </p>
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-start gap-2">
                               {input.required ? (
-                                <span className="text-red-500">
-                                  ⚠ <span className="font-medium">Required but not connected</span>
-                                </span>
+                                <>
+                                  <AlertCircle className="h-3 w-3 text-destructive mt-0.5" />
+                                  <span className="text-destructive font-medium">Required – needs connection or value</span>
+                                </>
                               ) : (
-                                <span className="text-muted-foreground">
-                                  Optional input – connect a port or provide a manual value.
-                                </span>
+                                <>
+                                  <Circle className="h-3 w-3 text-muted-foreground mt-0.5" />
+                                  <span className="text-muted-foreground">Optional – connect or set value</span>
+                                </>
                               )}
                             </div>
                           )}
@@ -539,43 +562,39 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                   )
                 })}
               </div>
-            </div>
+            </CollapsibleSection>
           )}
 
           {/* Outputs Section */}
           {componentOutputs.length > 0 && (
-            <div>
-              <h5 className="text-sm font-semibold mb-3 text-foreground">Outputs</h5>
-              <div className="space-y-3">
+            <CollapsibleSection title="Outputs" count={componentOutputs.length} defaultOpen={false}>
+              <div className="space-y-3 mt-3">
                 {componentOutputs.map((output) => (
                   <div
                     key={output.id}
-                    className="p-3 rounded-lg border bg-background"
+                    className="p-4 rounded-lg border bg-card/50"
                   >
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">{output.label}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mb-2">
-                      Type: <span className="font-mono">{describePortDataType(output.dataType)}</span>
+                      <Badge variant="outline" className="text-[10px] font-mono px-2">
+                        {describePortDataType(output.dataType)}
+                      </Badge>
                     </div>
                     {output.description && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
                         {output.description}
                       </p>
                     )}
                   </div>
                 ))}
               </div>
-            </div>
+            </CollapsibleSection>
           )}
 
           {/* Parameters Section */}
           {componentParameters.length > 0 && (
-            <div>
-              <h5 className="text-sm font-semibold mb-3 text-foreground">
-                Parameters
-              </h5>
-              <div className="space-y-3">
+            <CollapsibleSection title="Parameters" count={componentParameters.length} defaultOpen={true}>
+              <div className="space-y-3 mt-3">
                 {/* Sort parameters: select types first, then others */}
                 {componentParameters
                   .slice()
@@ -600,16 +619,13 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                     />
                   ))}
               </div>
-            </div>
+            </CollapsibleSection>
           )}
 
           {/* Examples */}
           {exampleItems.length > 0 && (
-            <div>
-              <h5 className="text-sm font-semibold mb-3 text-foreground">
-                Examples
-              </h5>
-              <div className="space-y-3">
+            <CollapsibleSection title="Examples" count={exampleItems.length} defaultOpen={false}>
+              <div className="space-y-3 mt-3">
                 {exampleItems.map((exampleText, index) => {
                   const commandMatch = exampleText.match(/`([^`]+)`/)
                   const command = commandMatch?.[1]?.trim()
@@ -623,15 +639,15 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                   return (
                     <div
                       key={`${exampleText}-${index}`}
-                      className="p-3 rounded-lg border bg-muted/40"
+                      className="p-3 rounded-lg bg-accent/30"
                     >
                       <div className="flex items-start gap-3">
-                        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border bg-background text-[11px] font-medium text-muted-foreground">
+                        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
                           {index + 1}
                         </span>
                         <div className="flex-1 space-y-2">
                           {command && (
-                            <code className="block w-full overflow-x-auto rounded border bg-background px-2 py-1 text-[11px] font-mono text-foreground">
+                            <code className="block w-full overflow-x-auto rounded bg-background border px-2 py-1.5 text-[11px] font-mono text-foreground">
                               {command}
                             </code>
                           )}
@@ -646,58 +662,48 @@ export function ConfigPanel({ selectedNode, onClose, onUpdateNode }: ConfigPanel
                   )
                 })}
               </div>
-            </div>
+            </CollapsibleSection>
           )}
 
           {/* Documentation */}
           {(component.documentation || component.documentationUrl) && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h5 className="text-sm font-semibold text-foreground">
-                  Documentation
-                </h5>
+            <CollapsibleSection title="Documentation" defaultOpen={false}>
+              <div className="space-y-3 mt-3">
                 {component.documentationUrl && (
                   <a
                     href={component.documentationUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                    className="flex items-center gap-3 p-3 rounded-lg border bg-card/50 text-sm hover:bg-accent/50 transition-colors group"
                   >
-                    <span>View docs</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
-              <div className="space-y-2">
-                {component.documentationUrl && (
-                  <a
-                    href={component.documentationUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-2 p-3 rounded-lg border bg-muted/50 text-xs text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    <span className="break-all text-left">{component.documentationUrl}</span>
-                    <ExternalLink className="h-3 w-3 shrink-0" />
+                    <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
+                    <span className="text-muted-foreground group-hover:text-foreground truncate">
+                      View documentation
+                    </span>
                   </a>
                 )}
                 {component.documentation && (
-                  <div className="p-3 rounded-lg border bg-muted/50">
-                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                  <div className="p-3 rounded-lg bg-accent/30">
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
                       {component.documentation}
                     </p>
                   </div>
                 )}
               </div>
-            </div>
+            </CollapsibleSection>
           )}
         </div>
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t bg-muted/30">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Node ID: {selectedNode.id}</span>
-          <span>{component.slug}</span>
+      <div className="px-5 py-3 border-t bg-card">
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <span className="font-mono truncate max-w-[140px]" title={selectedNode.id}>
+            {selectedNode.id}
+          </span>
+          <Badge variant="outline" className="text-[10px] font-mono px-2">
+            {component.slug}
+          </Badge>
         </div>
       </div>
     </div>
