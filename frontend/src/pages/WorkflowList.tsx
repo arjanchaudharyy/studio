@@ -473,7 +473,7 @@ function WorkflowRowItem({
     <TableRow
       key={workflow.id}
       onClick={onRowClick}
-      className="cursor-pointer hover:bg-muted/50"
+      className="cursor-pointer transition-colors duration-150 hover:bg-accent/50 dark:hover:bg-accent/30"
     >
       <TableCell className="font-medium">{workflow.name}</TableCell>
       <TableCell>

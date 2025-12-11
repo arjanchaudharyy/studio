@@ -175,3 +175,17 @@ textarea {
 .dark .bg-status-info {
   background-color: rgb(23 37 84 / 0.3); /* blue-950/30 */
 }
+
+/* Enhanced table row hover effects */
+table tbody tr {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+table tbody tr:hover {
+  background-color: hsl(var(--accent) / 0.5);
+}
+
+.dark table tbody tr:hover {
+  background-color: hsl(var(--accent) / 0.3);
+  box-shadow: inset 3px 0 0 0 hsl(var(--primary));
+}
