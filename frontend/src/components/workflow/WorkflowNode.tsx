@@ -196,6 +196,37 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   // Cast to access extended frontend fields (componentId, componentSlug, status, etc.)
   const nodeData = data as any
 
+  // Get component metadata
+  const componentRef: string | undefined = nodeData.componentId ?? nodeData.componentSlug
+  const component = getComponent(componentRef)
+  const isTextBlock = component?.id === 'core.ui.text'
+
+  // Always call useEffect hooks in the same order (Rules of Hooks)
+  // These hooks must be called BEFORE any early returns to maintain consistent hook order
+  useEffect(() => {
+    if (!isTextBlock) return
+    const uiSize = (nodeData as any)?.ui?.size as { width?: number; height?: number } | undefined
+    if (!uiSize) return
+    setTextSize((current) => {
+      const nextWidth = uiSize.width ?? current.width
+      const nextHeight = uiSize.height ?? current.height
+      const clamped = {
+        width: Math.max(MIN_TEXT_WIDTH, Math.min(MAX_TEXT_WIDTH, nextWidth)),
+        height: Math.max(MIN_TEXT_HEIGHT, Math.min(MAX_TEXT_HEIGHT, nextHeight)),
+      }
+      if (current.width === clamped.width && current.height === clamped.height) {
+        return current
+      }
+      return clamped
+    })
+  }, [isTextBlock, nodeData])
+
+  useEffect(() => {
+    if (isTextBlock) {
+      updateNodeInternals(id)
+    }
+  }, [id, isTextBlock, textSize.width, textSize.height, updateNodeInternals])
+
   // Get timeline visual state for this node
   const visualState: NodeVisualState = nodeStates[id] || {
     status: 'idle',
@@ -207,9 +238,6 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
     dataFlow: { input: [], output: [] }
   }
 
-  // Get component metadata
-  const componentRef: string | undefined = nodeData.componentId ?? nodeData.componentSlug
-  const component = getComponent(componentRef)
   const supportsLiveLogs = component?.runner?.kind === 'docker'
 
   if (!component) {
@@ -247,33 +275,6 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   // Enhanced styling for timeline visualization
   const isTimelineActive = mode === 'execution' && selectedRunId && visualState.status !== 'idle'
   const hasEvents = isTimelineActive && visualState.eventCount > 0
-
-  const isTextBlock = component?.id === 'core.ui.text'
-
-  // Always call useEffect hooks in the same order (Rules of Hooks)
-  useEffect(() => {
-    if (!isTextBlock) return
-    const uiSize = (nodeData as any)?.ui?.size as { width?: number; height?: number } | undefined
-    if (!uiSize) return
-    setTextSize((current) => {
-      const nextWidth = uiSize.width ?? current.width
-      const nextHeight = uiSize.height ?? current.height
-      const clamped = {
-        width: Math.max(MIN_TEXT_WIDTH, Math.min(MAX_TEXT_WIDTH, nextWidth)),
-        height: Math.max(MIN_TEXT_HEIGHT, Math.min(MAX_TEXT_HEIGHT, nextHeight)),
-      }
-      if (current.width === clamped.width && current.height === clamped.height) {
-        return current
-      }
-      return clamped
-    })
-  }, [isTextBlock, nodeData])
-
-  useEffect(() => {
-    if (isTextBlock) {
-      updateNodeInternals(id)
-    }
-  }, [id, isTextBlock, textSize.width, textSize.height, updateNodeInternals])
   const textBlockContent = typeof nodeData.parameters?.content === 'string'
     ? nodeData.parameters.content
     : ''
