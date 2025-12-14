@@ -17,7 +17,7 @@ import { useRunStore, type ExecutionRun } from '@/store/runStore'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/use-toast'
 import { getTriggerDisplay } from '@/utils/triggerDisplay'
-import { formatDuration } from '@/utils/timeFormat'
+import { formatDuration, formatStartTime } from '@/utils/timeFormat'
 import { RunInfoDisplay } from '@/components/timeline/RunInfoDisplay'
 
 const STATUS_ICONS = {
@@ -280,8 +280,8 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
       >
         <div className="w-full px-3 py-3 space-y-2">
           <div className="flex items-start gap-3">
-            <p className="font-semibold text-sm truncate flex-1 min-w-0">
-              {run.workflowName}
+            <p className="font-semibold text-sm truncate flex-1 min-w-0 font-mono" title={run.id}>
+              {run.id.split('-').slice(0, 3).join('-')}
             </p>
             <div className="flex items-center gap-1">
               <Button
@@ -333,28 +333,11 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
           >
             <span className="truncate">
               {selectedRun ? (
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(selectedRun.status)}
-                  <span className="truncate">{selectedRun.workflowName}</span>
-                  {selectedTriggerDisplay && (
-                    <Badge variant={selectedTriggerDisplay.variant} className="text-[10px] gap-1 max-w-[120px] truncate">
-                      <span aria-hidden="true">{selectedTriggerDisplay.icon}</span>
-                      <span className="truncate">{selectedTriggerDisplay.label}</span>
-                    </Badge>
-                  )}
-                  {selectedRunVersion !== null && (
-                    <Badge
-                      variant={selectedRunOlder ? 'destructive' : 'secondary'}
-                      className="text-[10px] uppercase tracking-wide"
-                    >
-                      v{selectedRunVersion}
-                    </Badge>
-                  )}
-                  {isRunLive(selectedRun) && (
-                    <Badge variant="outline" className="text-xs animate-pulse">
-                      LIVE
-                    </Badge>
-                  )}
+                <div className="flex flex-col items-start min-w-0 w-full">
+                  <span className="truncate text-sm font-medium" title={selectedRun.id}>{selectedRun.id.split('-').slice(0, 3).join('-')}</span>
+                  <span className="text-xs text-muted-foreground truncate">
+                    {formatStartTime(selectedRun.startTime)}
+                  </span>
                 </div>
               ) : (
                 <span className="text-muted-foreground">Select a run...</span>
