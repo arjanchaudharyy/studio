@@ -225,7 +225,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
     if (isTextBlock) {
       updateNodeInternals(id)
     }
-  }, [id, isTextBlock, textSize.width, textSize.height, updateNodeInternals])
+  }, [id, isTextBlock, updateNodeInternals])
 
   // Get timeline visual state for this node
   const visualState: NodeVisualState = nodeStates[id] || {
@@ -328,7 +328,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
     return true
   }
 
-  const hasUnfilledRequired = 
+  const hasUnfilledRequired =
     // Check unfilled required parameters
     requiredParams.some(param => {
       const value = nodeData.parameters?.[param.id]
@@ -367,7 +367,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
         ? clampPercent((events / totalEvents) * 100)
         : undefined
     const fallbackWidth = isRunning ? 5 : 0
-    
+
     // Calculate width - prefer normalizedFromEvents for accurate event-based progress
     // This ensures the bar shows the actual event progress (e.g., 4/10 = 40%)
     let calculatedWidth: number
@@ -386,15 +386,15 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       // Fall back to minimum width
       calculatedWidth = fallbackWidth
     }
-    
+
     // Ensure width is clamped between 0 and 100, and is always a valid number
-    const width = Number.isFinite(calculatedWidth) 
+    const width = Number.isFinite(calculatedWidth)
       ? Math.max(0, Math.min(100, calculatedWidth))
       : 0
     const eventLabel = totalEvents > 0
       ? `${events}/${totalEvents} events`
       : `${events} ${events === 1 ? 'event' : 'events'}`
-    
+
     // Determine bar color based on status
     // IMPORTANT: Only show green when status is 'success', otherwise use blue for progress visibility
     const getBarColor = () => {
@@ -411,7 +411,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       }
       return 'bg-blue-500'
     }
-    
+
     // Ensure width is always a string with % for the style
     const widthStyle = `${width}%`
 
@@ -427,7 +427,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
               'absolute left-0 top-0 h-full rounded-full transition-all duration-500',
               getBarColor(),
             )}
-            style={{ 
+            style={{
               width: widthStyle,
               minWidth: width > 0 ? '2px' : '0px', // Ensure minimum 2px for visibility
             }}
@@ -459,18 +459,18 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       nodes.map((node) =>
         node.id === id
           ? {
-              ...node,
-              data: {
-                ...(node.data as any),
-                ui: {
-                  ...(node.data as any).ui,
-                  size: {
-                    width: clampedWidth,
-                    height: clampedHeight,
-                  },
+            ...node,
+            data: {
+              ...(node.data as any),
+              ui: {
+                ...(node.data as any).ui,
+                size: {
+                  width: clampedWidth,
+                  height: clampedHeight,
                 },
               },
-            }
+            },
+          }
           : node
       )
     )
@@ -478,20 +478,32 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
     markDirty()
   }
 
+  const isResizing = useRef(false)
+
+  const handleResizeStart = () => {
+    isResizing.current = true
+  }
+
   const handleResize = (_evt: unknown, params: { width: number; height: number }) => {
     const clampedWidth = clampWidth(params.width)
     const clampedHeight = clampHeight(params.height)
-    setTextSize({ width: clampedWidth, height: clampedHeight })
+
+    // Direct DOM update for performance to avoid re-renders during drag
+    if (nodeRef.current) {
+      nodeRef.current.style.width = `${clampedWidth}px`
+      nodeRef.current.style.minHeight = `${clampedHeight}px`
+    }
   }
 
   const handleResizeEnd = (_evt: unknown, params: { width: number; height: number }) => {
+    isResizing.current = false
     persistSize(params.width, params.height)
   }
 
   return (
     <div
       className={cn(
-        'shadow-lg rounded-lg border-2 transition-all relative',
+        'shadow-lg rounded-lg border-2 transition-[box-shadow,background-color,border-color,transform] relative',
         isTextBlock ? 'min-w-[240px] max-w-none flex flex-col' : 'min-w-[240px] max-w-[280px]',
         // Enhanced border styling for timeline
         isTimelineActive && effectiveStatus === 'running' && 'border-blue-400',
@@ -509,7 +521,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
         // Selected state: blue gradient shadow highlight (pure glow, no border)
         selected && 'shadow-[0_0_15px_rgba(59,130,246,0.4),0_0_30px_rgba(59,130,246,0.3)]',
         selected && 'hover:shadow-[0_0_25px_rgba(59,130,246,0.6),0_0_45px_rgba(59,130,246,0.4)]',
-        
+
         // Validation styling removed - now shown in ValidationDock
 
         // Interactive states - use CSS hover to avoid re-renders
@@ -522,9 +534,9 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       style={
         isTextBlock
           ? {
-              width: Math.max(MIN_TEXT_WIDTH, textSize.width ?? DEFAULT_TEXT_WIDTH),
-              minHeight: Math.max(MIN_TEXT_HEIGHT, textSize.height ?? DEFAULT_TEXT_HEIGHT),
-            }
+            width: Math.max(MIN_TEXT_WIDTH, textSize.width ?? DEFAULT_TEXT_WIDTH),
+            minHeight: Math.max(MIN_TEXT_HEIGHT, textSize.height ?? DEFAULT_TEXT_HEIGHT),
+          }
           : undefined
       }
     >
@@ -537,6 +549,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
           isVisible
           handleClassName="text-node-resize-handle"
           lineClassName="text-node-resize-line"
+          onResizeStart={handleResizeStart}
           onResize={handleResize}
           onResizeEnd={handleResizeEnd}
         />
@@ -750,8 +763,8 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
 
               const manualDisplay =
                 manualValueProvided &&
-                inputSupportsManualValue(input) &&
-                typeof manualCandidate === 'string'
+                  inputSupportsManualValue(input) &&
+                  typeof manualCandidate === 'string'
                   ? manualCandidate.trim()
                   : ''
               const previewText =

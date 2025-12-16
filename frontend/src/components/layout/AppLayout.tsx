@@ -1,3 +1,4 @@
+import { ThemeTransition } from '@/components/ui/ThemeTransition'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarItem } from '@/components/ui/sidebar'
 import { AppTopBar } from '@/components/layout/AppTopBar'
@@ -41,7 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { isAuthenticated } = useAuth()
   const authProvider = useAuthProvider()
   const showUserButton = isAuthenticated || authProvider.name === 'clerk'
-  const { theme, toggleTheme } = useThemeStore()
+  const { theme, startTransition } = useThemeStore()
 
   // Get git SHA for version display (monorepo - same for frontend and backend)
   const gitSha = env.VITE_GIT_SHA
@@ -140,102 +141,117 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <SidebarContext.Provider value={sidebarContextValue}>
+      <ThemeTransition />
       <div className="flex h-screen bg-background">
         {/* Sidebar */}
         <Sidebar
-          className={`fixed md:relative z-40 h-full transition-all duration-300 ${
-            sidebarOpen ? 'w-64' : 'w-0 md:w-16'
-          }`}
+          className={`fixed md:relative z-40 h-full transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-0 md:w-16'
+            }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-        <SidebarHeader className="flex items-center justify-between p-4 border-b">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex-shrink-0">
-              <img
-                src="/favicon.ico"
-                alt="ShipSec Studio"
-                className="w-6 h-6"
-                onError={(e) => {
-                  // Fallback to text if image fails to load
-                  e.currentTarget.style.display = 'none'
-                  e.currentTarget.nextElementSibling?.classList.remove('hidden')
-                }}
-              />
-              <span className="hidden text-sm font-bold">SS</span>
-            </div>
-            <span
-              className={`font-bold text-xl transition-all duration-300 whitespace-nowrap overflow-hidden ${
-                sidebarOpen
+          <SidebarHeader className="flex items-center justify-between p-4 border-b">
+            <Link to="/" className="flex items-center gap-2">
+              <div className="flex-shrink-0">
+                <img
+                  src="/favicon.ico"
+                  alt="ShipSec Studio"
+                  className="w-6 h-6"
+                  onError={(e) => {
+                    // Fallback to text if image fails to load
+                    e.currentTarget.style.display = 'none'
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                  }}
+                />
+                <span className="hidden text-sm font-bold">SS</span>
+              </div>
+              <span
+                className={`font-bold text-xl transition-all duration-300 whitespace-nowrap overflow-hidden ${sidebarOpen
                   ? 'opacity-100 max-w-48'
                   : 'opacity-0 max-w-0'
-              }`}
-              style={{
-                transitionDelay: sidebarOpen ? '150ms' : '0ms',
-                transitionProperty: 'opacity, max-width'
-              }}
-            >
-              ShipSec Studio
-            </span>
-          </Link>
-        </SidebarHeader>
+                  }`}
+                style={{
+                  transitionDelay: sidebarOpen ? '150ms' : '0ms',
+                  transitionProperty: 'opacity, max-width'
+                }}
+              >
+                ShipSec Studio
+              </span>
+            </Link>
+          </SidebarHeader>
 
-        <SidebarContent>
-          <div className="space-y-1 px-2 mt-4">
-            {navigationItems.map((item) => {
-              const Icon = item.icon
-              const active = isActive(item.href)
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  onClick={() => {
-                    // Keep sidebar open when navigating to non-workflow routes
-                    if (!item.href.startsWith('/workflows')) {
-                      setSidebarOpen(true)
-                      setWasExplicitlyOpened(true)
-                    }
-                  }}
-                >
-                  <SidebarItem
-                    isActive={active}
-                    className="flex items-center gap-3 justify-center md:justify-start"
+          <SidebarContent>
+            <div className="space-y-1 px-2 mt-4">
+              {navigationItems.map((item) => {
+                const Icon = item.icon
+                const active = isActive(item.href)
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    onClick={() => {
+                      // Keep sidebar open when navigating to non-workflow routes
+                      if (!item.href.startsWith('/workflows')) {
+                        setSidebarOpen(true)
+                        setWasExplicitlyOpened(true)
+                      }
+                    }}
                   >
-                    <Icon className="h-5 w-5 flex-shrink-0" />
-                    <span
-                      className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${
-                        sidebarOpen
+                    <SidebarItem
+                      isActive={active}
+                      className="flex items-center gap-3 justify-center md:justify-start"
+                    >
+                      <Icon className="h-5 w-5 flex-shrink-0" />
+                      <span
+                        className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${sidebarOpen
                           ? 'opacity-100 max-w-32'
                           : 'opacity-0 max-w-0'
-                      }`}
-                      style={{
-                        transitionDelay: sidebarOpen ? '200ms' : '0ms',
-                        transitionProperty: 'opacity, max-width'
-                      }}
-                    >
-                      {item.name}
-                    </span>
-                  </SidebarItem>
-                </Link>
-              )
-            })}
-          </div>
-        </SidebarContent>
+                          }`}
+                        style={{
+                          transitionDelay: sidebarOpen ? '200ms' : '0ms',
+                          transitionProperty: 'opacity, max-width'
+                        }}
+                      >
+                        {item.name}
+                      </span>
+                    </SidebarItem>
+                  </Link>
+                )
+              })}
+            </div>
+          </SidebarContent>
 
-        <SidebarFooter className="border-t">
-          <div className="flex flex-col gap-2 p-2">
-            {/* Auth components - UserButton includes organization switching */}
-            {showUserButton && (
-              <div className={`flex items-center gap-2 ${sidebarOpen ? 'justify-between' : 'justify-center'}`}>
-                <UserButton
-                  className={sidebarOpen ? 'flex-1' : 'w-auto'}
-                  sidebarCollapsed={!sidebarOpen}
-                />
-                {/* Dark mode toggle */}
-                {sidebarOpen && (
+          <SidebarFooter className="border-t">
+            <div className="flex flex-col gap-2 p-2">
+              {/* Auth components - UserButton includes organization switching */}
+              {showUserButton && (
+                <div className={`flex items-center gap-2 ${sidebarOpen ? 'justify-between' : 'justify-center'}`}>
+                  <UserButton
+                    className={sidebarOpen ? 'flex-1' : 'w-auto'}
+                    sidebarCollapsed={!sidebarOpen}
+                  />
+                  {/* Dark mode toggle */}
+                  {sidebarOpen && (
+                    <button
+                      onClick={startTransition}
+                      className="p-2 rounded-lg transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground flex-shrink-0"
+                      aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                    >
+                      {theme === 'dark' ? (
+                        <Sun className="h-5 w-5 text-amber-500" />
+                      ) : (
+                        <Moon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
+              {/* Dark mode toggle when no user button */}
+              {!showUserButton && (
+                <div className={`flex ${sidebarOpen ? 'justify-end' : 'justify-center'}`}>
                   <button
-                    onClick={toggleTheme}
-                    className="p-2 rounded-lg transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground flex-shrink-0"
+                    onClick={startTransition}
+                    className="p-2 rounded-lg transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
                     aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                   >
                     {theme === 'dark' ? (
@@ -244,51 +260,33 @@ export function AppLayout({ children }: AppLayoutProps) {
                       <Moon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
                     )}
                   </button>
-                )}
-              </div>
-            )}
-            {/* Dark mode toggle when no user button */}
-            {!showUserButton && (
-              <div className={`flex ${sidebarOpen ? 'justify-end' : 'justify-center'}`}>
-                <button
-                  onClick={toggleTheme}
-                  className="p-2 rounded-lg transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
-                  aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-                >
-                  {theme === 'dark' ? (
-                    <Sun className="h-5 w-5 text-amber-500" />
-                  ) : (
-                    <Moon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                  )}
-                </button>
-              </div>
-            )}
-            
-            {/* Version info */}
-            <div className={`text-xs text-muted-foreground pt-2 border-t px-2 text-center transition-all duration-300 ${
-              sidebarOpen ? 'opacity-100' : 'opacity-0'
-            }`}>
-              version: {displayVersion}
-            </div>
-          </div>
-        </SidebarFooter>
-      </Sidebar>
+                </div>
+              )}
 
-      {/* Main content area */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Only show AppTopBar for non-workflow-builder pages */}
-        {!location.pathname.startsWith('/workflows') && (
-          <AppTopBar
-            sidebarOpen={sidebarOpen}
-            onSidebarToggle={handleToggle}
-            actions={getPageActions()}
-          />
-        )}
-        <div className="flex-1 overflow-auto">
-          {children}
-        </div>
-      </main>
-    </div>
+              {/* Version info */}
+              <div className={`text-xs text-muted-foreground pt-2 border-t px-2 text-center transition-all duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0'
+                }`}>
+                version: {displayVersion}
+              </div>
+            </div>
+          </SidebarFooter>
+        </Sidebar>
+
+        {/* Main content area */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {/* Only show AppTopBar for non-workflow-builder pages */}
+          {!location.pathname.startsWith('/workflows') && (
+            <AppTopBar
+              sidebarOpen={sidebarOpen}
+              onSidebarToggle={handleToggle}
+              actions={getPageActions()}
+            />
+          )}
+          <div className="flex-1 overflow-auto">
+            {children}
+          </div>
+        </main>
+      </div>
     </SidebarContext.Provider>
   )
 }
