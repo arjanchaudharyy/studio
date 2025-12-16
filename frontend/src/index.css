@@ -87,12 +87,13 @@
   * {
     border-color: hsl(var(--border));
   }
+
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
-  
+
   /* Disable all transitions during theme switching for instant color change */
   .theme-switching,
   .theme-switching *,
@@ -100,21 +101,28 @@
   .theme-switching *::after {
     transition: none !important;
   }
+  
+  /* Ensure theme transition overlay always has transitions enabled, even when theme-switching is active */
+  /* These rules come after .theme-switching * and have same specificity, so they override */
+  .theme-transition-overlay {
+    transition: opacity 300ms ease-in-out !important;
+  }
+  
+  .theme-transition-overlay svg {
+    transition: all 500ms ease-out, transform 500ms cubic-bezier(0.34,1.56,0.64,1) !important;
+  }
+  
+  .theme-transition-overlay span {
+    transition: all 500ms ease-out !important;
+  }
+  
+  /* Ensure all children of overlay also have transitions */
+  .theme-transition-overlay * {
+    transition: all 500ms ease-out, transform 500ms cubic-bezier(0.34,1.56,0.64,1), opacity 500ms ease-out !important;
+  }
 }
 
-/* Theme sweep animation overlay */
-.theme-sweep-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 99999;
-  pointer-events: none;
-  clip-path: circle(0% at 0% 100%);
-  transition: clip-path 500ms cubic-bezier(0.4, 0, 0.2, 1);
-}
 
-.theme-sweep-overlay.animate {
-  clip-path: circle(150% at 0% 100%);
-}
 
 /* Fix for React Flow pointer events - ensure interactive elements in config panel are clickable */
 .react-flow__panel {
@@ -122,11 +130,18 @@
 }
 
 /* Ensure all input elements and buttons have proper pointer events */
-input, textarea, select, button, label {
+input,
+textarea,
+select,
+button,
+label {
   pointer-events: auto !important;
 }
 
-button, label, input[type="checkbox"], select {
+button,
+label,
+input[type="checkbox"],
+select {
   cursor: pointer;
 }
 
@@ -161,7 +176,7 @@ textarea {
 }
 
 /* Smooth scrolling for config panel content */
-.config-panel > div {
+.config-panel>div {
   scroll-behavior: smooth;
 }
 
@@ -180,53 +195,74 @@ textarea {
 
 /* Status colors that adapt to theme */
 .status-success {
-  color: #16a34a; /* green-600 */
+  color: #16a34a;
+  /* green-600 */
 }
+
 .dark .status-success {
-  color: #4ADE80; /* Accent Success */
+  color: #4ADE80;
+  /* Accent Success */
 }
 
 .status-error {
-  color: #dc2626; /* red-600 */
+  color: #dc2626;
+  /* red-600 */
 }
+
 .dark .status-error {
-  color: #EF4444; /* Accent Error */
+  color: #EF4444;
+  /* Accent Error */
 }
 
 .status-info {
-  color: #2563eb; /* blue-600 */
+  color: #2563eb;
+  /* blue-600 */
 }
+
 .dark .status-info {
-  color: #3C82F6; /* Accent Blue */
+  color: #3C82F6;
+  /* Accent Blue */
 }
 
 .status-warning {
-  color: #d97706; /* amber-600 */
+  color: #d97706;
+  /* amber-600 */
 }
+
 .dark .status-warning {
-  color: #FACC15; /* Accent Warning */
+  color: #FACC15;
+  /* Accent Warning */
 }
 
 /* Background variants for status */
 .bg-status-success {
-  background-color: #f0fdf4; /* green-50 */
+  background-color: #f0fdf4;
+  /* green-50 */
 }
+
 .dark .bg-status-success {
-  background-color: rgb(20 83 45 / 0.3); /* green-950/30 */
+  background-color: rgb(20 83 45 / 0.3);
+  /* green-950/30 */
 }
 
 .bg-status-error {
-  background-color: #fef2f2; /* red-50 */
+  background-color: #fef2f2;
+  /* red-50 */
 }
+
 .dark .bg-status-error {
-  background-color: rgb(69 10 10 / 0.3); /* red-950/30 */
+  background-color: rgb(69 10 10 / 0.3);
+  /* red-950/30 */
 }
 
 .bg-status-info {
-  background-color: #eff6ff; /* blue-50 */
+  background-color: #eff6ff;
+  /* blue-50 */
 }
+
 .dark .bg-status-info {
-  background-color: rgb(23 37 84 / 0.3); /* blue-950/30 */
+  background-color: rgb(23 37 84 / 0.3);
+  /* blue-950/30 */
 }
 
 /* Enhanced table row hover effects */

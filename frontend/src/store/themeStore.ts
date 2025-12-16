@@ -5,95 +5,67 @@ type Theme = 'light' | 'dark'
 
 interface ThemeState {
   theme: Theme
+  isTransitioning: boolean
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
+  startTransition: () => void
+  endTransition: () => void
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
       theme: 'light',
+      isTransitioning: false,
       setTheme: (theme) => {
         set({ theme })
         applyTheme(theme)
       },
       toggleTheme: () => {
-        const newTheme = get().theme === 'light' ? 'dark' : 'light'
-        set({ theme: newTheme })
-        applyTheme(newTheme)
+        const current = get().theme
+        const next = current === 'light' ? 'dark' : 'light'
+        // If we want to use the transition, we should probably call startTransition from the UI
+        // But for backward compatibility, if toggleTheme is called directly, just switch
+        set({ theme: next })
+        applyTheme(next)
       },
+      startTransition: () => set({ isTransitioning: true }),
+      endTransition: () => set({ isTransitioning: false }),
     }),
     {
       name: 'shipsec-theme',
+      partialize: (state) => ({ theme: state.theme }), // Only persist theme, not isTransitioning
       onRehydrateStorage: () => (state) => {
-        // Apply theme when store is rehydrated from localStorage (no animation)
+        // Apply theme when store is rehydrated from localStorage
+        // Always reset isTransitioning to false on rehydrate to prevent stuck states
         if (state) {
-          applyTheme(state.theme, false)
+          state.isTransitioning = false
+          applyTheme(state.theme)
         }
       },
     }
   )
 )
 
-// Track if animation is in progress to prevent rapid toggling issues
-let isAnimating = false
-
-function applyTheme(theme: Theme, animate = true) {
+function applyTheme(theme: Theme) {
   const root = document.documentElement
   
-  // Skip animation on initial load or if already animating
-  if (!animate || isAnimating) {
-    if (theme === 'dark') {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
-    return
-  }
+  // Disable transitions during the prompt switch to prevent "jank"
+  // where different elements transition at different speeds.
+  root.classList.add('theme-switching')
   
-  isAnimating = true
-  
-  // Create the sweep overlay
-  const overlay = document.createElement('div')
-  overlay.className = 'theme-sweep-overlay'
-  
-  // Set the overlay color based on the TARGET theme
   if (theme === 'dark') {
-    overlay.style.backgroundColor = 'hsl(0 0% 11%)' // Dark background
+    root.classList.add('dark')
   } else {
-    overlay.style.backgroundColor = 'hsl(0 0% 100%)' // Light background
+    root.classList.remove('dark')
   }
   
-  document.body.appendChild(overlay)
+  // Force reflow to flush changes while transitions are disabled
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+  root.offsetHeight
   
-  // Trigger the animation
-  requestAnimationFrame(() => {
-    overlay.classList.add('animate')
-    
-    // Switch the actual theme when the overlay covers the screen (midpoint)
-    setTimeout(() => {
-      // Disable transitions during the actual theme switch
-      root.classList.add('theme-switching')
-      
-      if (theme === 'dark') {
-        root.classList.add('dark')
-      } else {
-        root.classList.remove('dark')
-      }
-      
-      // Force reflow
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      root.offsetHeight
-      
-      root.classList.remove('theme-switching')
-    }, 250) // Switch at midpoint of 500ms animation
-    
-    // Remove overlay after animation completes
-    setTimeout(() => {
-      overlay.remove()
-      isAnimating = false
-    }, 500)
-  })
+  // Re-enable transitions
+  root.classList.remove('theme-switching')
 }
 
 // Initialize theme on module load (handles initial page load)
@@ -103,7 +75,7 @@ export function initializeTheme() {
     try {
       const parsed = JSON.parse(stored)
       if (parsed?.state?.theme) {
-        applyTheme(parsed.state.theme, false) // No animation on initial load
+        applyTheme(parsed.state.theme) // No animation on initial load
       }
     } catch {
       // Invalid stored value, use default
