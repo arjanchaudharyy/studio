@@ -14,6 +14,7 @@ import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useRunStore, type ExecutionRun } from '@/store/runStore'
+import { useWorkflowUiStore } from '@/store/workflowUiStore'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/use-toast'
 import { formatDuration, formatStartTime } from '@/utils/timeFormat'
@@ -60,6 +61,8 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
   const fetchRuns = useRunStore((state) => state.fetchRuns)
   const isLoadingRuns =
     useRunStore((state) => state.cache[workflowCacheKey]?.isLoading) ?? false
+
+  const mode = useWorkflowUiStore((state) => state.mode)
 
   const {
     runId: currentLiveRunId,
@@ -129,6 +132,11 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
 
   // Auto-load a live run if it exists and nothing is selected
   useEffect(() => {
+    // Avoid auto-navigation when in design mode
+    if (mode !== 'execution') {
+      return
+    }
+
     // If we're mid-switch between workflows, avoid auto-selecting runs for the previous workflow
     if (routeWorkflowId && workflowId && workflowId !== routeWorkflowId) {
       return
@@ -167,38 +175,10 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     routeWorkflowId,
     targetWorkflowId,
     workflowId,
+    mode,
   ])
 
-  // Fallback to the most recent historical run when nothing is selected
-  useEffect(() => {
-    if (
-      selectedRunId ||
-      currentLiveRunId ||
-      filteredRuns.length === 0 ||
-      routeRunId ||
-      (routeWorkflowId && workflowId && workflowId !== routeWorkflowId)
-    ) {
-      return
-    }
 
-    const [latestRun] = [...filteredRuns].sort(
-      (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-    )
-
-    if (latestRun) {
-      selectRun(latestRun.id)
-      navigateToRun(latestRun.id, { replace: true })
-    }
-  }, [
-    filteredRuns,
-    selectedRunId,
-    currentLiveRunId,
-    selectRun,
-    navigateToRun,
-    routeRunId,
-    routeWorkflowId,
-    workflowId,
-  ])
 
   useEffect(() => {
     if (
@@ -208,10 +188,21 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
       return
     }
     const interval = window.setInterval(() => {
-      fetchRuns({ workflowId: targetWorkflowId, force: true }).catch(() => undefined)
+      // Poll runs while in execution mode; skip navigation churn in design
+      if (mode === 'execution') {
+        fetchRuns({ workflowId: targetWorkflowId, force: true }).catch(() => undefined)
+      }
     }, 10000)
     return () => window.clearInterval(interval)
-  }, [targetWorkflowId, currentLiveRunId, liveRuns.length, fetchRuns, routeWorkflowId, workflowId])
+  }, [
+    targetWorkflowId,
+    currentLiveRunId,
+    liveRuns.length,
+    fetchRuns,
+    routeWorkflowId,
+    workflowId,
+    mode,
+  ])
 
   const selectedRun =
     filteredRuns.find(run => run.id === selectedRunId) ??

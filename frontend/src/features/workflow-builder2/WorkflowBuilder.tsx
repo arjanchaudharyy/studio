@@ -395,56 +395,37 @@ function WorkflowBuilderContent() {
       // If both are empty, design state should already be populated by workflow loading
     }
   }, [mode, setDesignNodes, setDesignEdges, setExecutionNodes, setExecutionEdges])
-  // Set initial mode based on URL
-  useEffect(() => {
-    if (isNewWorkflow) {
-      // New workflows always open in design mode
-      setMode('design')
-    } else if (isRunsRoute || routeRunId) {
-      // If on /runs or /runs/:runId URL, set mode to execution
-      setMode('execution')
-    }
-  }, [isNewWorkflow, isRunsRoute, routeRunId, setMode])
+  // Track previous workflow ID to detect workflow switches
+  const prevIdForResetRef = useRef<string | undefined>(undefined)
 
-  // Sync URL with mode and selected run
-  useEffect(() => {
-    const activeWorkflowId = metadata.id ?? id
-
-    // Don't update URL for new workflows
-    if (!activeWorkflowId || isNewWorkflow) {
-      return
+  // CRITICAL: This useLayoutEffect runs BEFORE any useEffect
+  // It resets the timeline store and sets the correct mode based on URL
+  // This prevents the URL sync effect from using stale selectedRunId from a previous workflow
+  useLayoutEffect(() => {
+    const isWorkflowChanged = prevIdForResetRef.current !== id
+    if (isWorkflowChanged) {
+      prevIdForResetRef.current = id
+      // When landing on a workflow (not a run), clear any persisted run selection before URL sync
+      if (!isRunsRoute && !routeRunId) {
+        useExecutionTimelineStore.getState().reset()
+      }
     }
 
-    // When switching workflows, avoid redirecting back to the previous one until metadata catches up
-    if (id && metadata.id && metadata.id !== id) {
-      return
-    }
+    // Determine target mode based on URL
+    const targetMode = (isRunsRoute || routeRunId) ? 'execution' : 'design'
 
-    const currentPath = location.pathname
-    let targetPath: string
-
-    if (mode === 'design') {
-      targetPath = `${builderRoutePrefix}/${activeWorkflowId}`
-    } else if (selectedRunId) {
-      targetPath = `${builderRoutePrefix}/${activeWorkflowId}/runs/${selectedRunId}`
-    } else {
-      targetPath = `${builderRoutePrefix}/${activeWorkflowId}/runs`
+    // Only call setMode if the mode is actually different
+    // This prevents infinite re-renders from unnecessary state updates
+    const currentMode = useWorkflowUiStore.getState().mode
+    if (currentMode !== targetMode) {
+      setMode(targetMode)
     }
+  }, [id, isRunsRoute, routeRunId, setMode])
 
-    // Only update if the path is different (avoid unnecessary navigation)
-    if (currentPath !== targetPath) {
-      navigate(targetPath, { replace: true })
-    }
-  }, [
-    mode,
-    metadata.id,
-    id,
-    selectedRunId,
-    isNewWorkflow,
-    navigate,
-    builderRoutePrefix,
-    location.pathname,
-  ])
+  // NOTE: URL is the source of truth for mode
+  // - The useLayoutEffect above sets mode based on URL
+  // - Tab clicks should call navigate() to change URL, not setMode()
+  // - The URL change triggers useLayoutEffect which updates mode
 
   // Track previous workflow ID to prevent unnecessary reloads
   const prevWorkflowIdRef = useRef<string | null | undefined>(undefined)
@@ -470,7 +451,7 @@ function WorkflowBuilderContent() {
       const executionStore = useExecutionStore.getState()
       if (id && executionStore.workflowId !== id) {
         executionStore.reset()
-        useExecutionTimelineStore.getState().reset()
+        // Timeline store already reset synchronously above
       }
 
       if (isNewWorkflow) {
@@ -571,6 +552,9 @@ function WorkflowBuilderContent() {
         })
 
         // Check for active runs to resume monitoring
+        // Only auto-switch to live mode if we opened via a runs URL (execution mode)
+        // For design mode, just set up background monitoring without switching views
+        const openedInExecutionMode = Boolean(routeRunId) || isRunsRoute
         try {
           const { runs } = await api.executions.listRuns({
             workflowId: workflow.id,
@@ -584,16 +568,19 @@ function WorkflowBuilderContent() {
               if (isActive) {
                 console.log('[WorkflowBuilder] Found active run, resuming monitoring:', latestRun.id)
 
-                // Resume monitoring in execution store
+                // Resume monitoring in execution store (always - this is background work)
                 useExecutionStore.getState().monitorRun(latestRun.id, workflow.id)
 
-                // Switch timeline to live mode
-                useExecutionTimelineStore.getState().selectRun(latestRun.id, 'live')
+                // Only switch timeline to live mode if we opened via execution URL
+                // This prevents the jarring switch from design to execution when opening from workflow list
+                if (openedInExecutionMode) {
+                  useExecutionTimelineStore.getState().selectRun(latestRun.id, 'live')
 
-                toast({
-                  title: 'Resumed live monitoring',
-                  description: `Connected to active run ${latestRun.id.slice(-6)}`,
-                })
+                  toast({
+                    title: 'Resumed live monitoring',
+                    description: `Connected to active run ${latestRun.id.slice(-6)}`,
+                  })
+                }
               }
             }
           }
@@ -707,8 +694,6 @@ function WorkflowBuilderContent() {
     resolveRuntimeInputDefinitions,
     fetchRuns,
     markClean,
-    setMode,
-    mode,
     navigate,
     mostRecentRunId,
     setIsLoading,
@@ -769,6 +754,7 @@ function WorkflowBuilderContent() {
   const topBarNode = (
     <TopBar
       workflowId={id}
+      selectedRunId={selectedRunId}
       isNew={isNewWorkflow}
       onRun={handleRun}
       onSave={handleSave}

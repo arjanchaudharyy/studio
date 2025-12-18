@@ -77,7 +77,6 @@ export function AgentTracePanel({ runId }: AgentTracePanelProps) {
   const selectNode = useExecutionTimelineStore((state) => state.selectNode)
   const timelineEvents = useExecutionTimelineStore((state) => state.events)
   const setInspectorTab = useWorkflowUiStore((state) => state.setInspectorTab)
-  const setMode = useWorkflowUiStore((state) => state.setMode)
   const { runId: liveRunId, status: executionStatus } = useWorkflowExecution()
 
   useEffect(() => {
@@ -238,7 +237,6 @@ export function AgentTracePanel({ runId }: AgentTracePanelProps) {
             responseText={responseText}
             onFocus={() => {
               selectNode(nodeId)
-              setMode('execution')
               setInspectorTab('events')
             }}
           />
@@ -775,28 +773,28 @@ function useAgentTranscript(agentRunId: string | null): AgentTranscriptState {
         const data = await response.json()
         const parts: AgentTraceChunk[] = Array.isArray(data?.parts)
           ? data.parts
-              .map(
-                (entry: {
-                  sequence?: number | null
-                  timestamp?: string | null
-                  chunk?: UIMessageChunk | null
-                }) => {
-                  if (!entry?.chunk) {
-                    return null
-                  }
-                  return {
-                    sequence: typeof entry.sequence === 'number' ? entry.sequence : 0,
-                    timestamp:
-                      typeof entry.timestamp === 'string'
-                        ? entry.timestamp
-                        : new Date().toISOString(),
-                    chunk: entry.chunk,
-                  }
-                },
-              )
-              .filter(
-                (entry: AgentTraceChunk | null): entry is AgentTraceChunk => Boolean(entry),
-              )
+            .map(
+              (entry: {
+                sequence?: number | null
+                timestamp?: string | null
+                chunk?: UIMessageChunk | null
+              }) => {
+                if (!entry?.chunk) {
+                  return null
+                }
+                return {
+                  sequence: typeof entry.sequence === 'number' ? entry.sequence : 0,
+                  timestamp:
+                    typeof entry.timestamp === 'string'
+                      ? entry.timestamp
+                      : new Date().toISOString(),
+                  chunk: entry.chunk,
+                }
+              },
+            )
+            .filter(
+              (entry: AgentTraceChunk | null): entry is AgentTraceChunk => Boolean(entry),
+            )
           : []
         const chunks: UIMessageChunk[] = parts.map((entry) => entry.chunk)
         const messages = await chunksToMessages(chunks)
@@ -955,7 +953,7 @@ function deriveAgentSteps(parts: AgentTraceChunk[]): AgentDerivedStep[] {
   const markCompletion = (step: AgentDerivedStep) => {
     step.isComplete = Boolean(
       step.finishedAt ||
-        (step.finishReason && step.finishReason !== 'tool-calls'),
+      (step.finishReason && step.finishReason !== 'tool-calls'),
     )
   }
 

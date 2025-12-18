@@ -101,24 +101,24 @@
   .theme-switching *::after {
     transition: none !important;
   }
-  
+
   /* Ensure theme transition overlay always has transitions enabled, even when theme-switching is active */
   /* These rules come after .theme-switching * and have same specificity, so they override */
   .theme-transition-overlay {
     transition: opacity 300ms ease-in-out !important;
   }
-  
+
   .theme-transition-overlay svg {
-    transition: all 500ms ease-out, transform 500ms cubic-bezier(0.34,1.56,0.64,1) !important;
+    transition: all 500ms ease-out, transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
   }
-  
+
   .theme-transition-overlay span {
     transition: all 500ms ease-out !important;
   }
-  
+
   /* Ensure all children of overlay also have transitions */
   .theme-transition-overlay * {
-    transition: all 500ms ease-out, transform 500ms cubic-bezier(0.34,1.56,0.64,1), opacity 500ms ease-out !important;
+    transition: all 500ms ease-out, transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 500ms ease-out !important;
   }
 }
 
@@ -363,15 +363,35 @@ table tbody tr:hover {
   background-color: transparent !important;
 }
 
-/* React Flow Edges - Dark Theme */
+/* React Flow Edges - Use edge-specific colors for better visibility */
+.react-flow__edge-path {
+  stroke: hsl(var(--edge-default));
+  stroke-width: 2;
+}
+
 .dark .react-flow__edge-path {
-  stroke: hsl(var(--border));
+  stroke: hsl(var(--edge-default));
+  stroke-width: 2;
 }
 
 .dark .react-flow__edge.selected .react-flow__edge-path,
 .dark .react-flow__edge:focus .react-flow__edge-path,
 .dark .react-flow__edge:focus-visible .react-flow__edge-path {
   stroke: hsl(var(--primary));
+  stroke-width: 2.5;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path,
+.react-flow__edge:focus-visible .react-flow__edge-path {
+  stroke: hsl(var(--primary));
+  stroke-width: 2.5;
+}
+
+/* Edge markers (arrows) - match edge color */
+.react-flow__edge markerEnd path,
+.react-flow__edge marker path {
+  fill: hsl(var(--edge-default));
 }
 
 /* React Flow Handles - Dark Theme */

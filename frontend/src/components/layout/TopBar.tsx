@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 
 interface TopBarProps {
   workflowId?: string
+  selectedRunId?: string | null
   isNew?: boolean
   onRun?: () => void
   onSave: () => Promise<void> | void
@@ -31,6 +32,8 @@ interface TopBarProps {
 const DEFAULT_WORKFLOW_NAME = 'Untitled Workflow'
 
 export function TopBar({
+  workflowId,
+  selectedRunId,
   onRun,
   onSave,
   onImport,
@@ -47,7 +50,7 @@ export function TopBar({
   const titleInputRef = useRef<HTMLInputElement | null>(null)
 
   const { metadata, isDirty, setWorkflowName } = useWorkflowStore()
-  const { mode, setMode } = useWorkflowUiStore()
+  const mode = useWorkflowUiStore((state) => state.mode)
   const canEdit = Boolean(canManageWorkflows)
 
   const handleChangeWorkflowName = () => {
@@ -161,8 +164,9 @@ export function TopBar({
         size="sm"
         className="h-9 px-3 gap-2 rounded-none"
         onClick={() => {
-          if (!canEdit) return
-          setMode('design')
+          if (!canEdit || !workflowId) return
+          // Navigate to design URL - this triggers mode update via useLayoutEffect
+          navigate(`/workflows/${workflowId}`)
         }}
         disabled={!canEdit}
         aria-pressed={mode === 'design'}
@@ -184,7 +188,15 @@ export function TopBar({
         variant={mode === 'execution' ? 'default' : 'ghost'}
         size="sm"
         className="h-9 px-3 gap-2 rounded-none border-l border-border/50"
-        onClick={() => setMode('execution')}
+        onClick={() => {
+          if (!workflowId) return
+          // Navigate to execution URL - this triggers mode update via useLayoutEffect
+          // If a run is selected, navigate to that specific run
+          const executionPath = selectedRunId
+            ? `/workflows/${workflowId}/runs/${selectedRunId}`
+            : `/workflows/${workflowId}/runs`
+          navigate(executionPath)
+        }}
         aria-pressed={mode === 'execution'}
       >
         <MonitorPlay className="h-4 w-4" />

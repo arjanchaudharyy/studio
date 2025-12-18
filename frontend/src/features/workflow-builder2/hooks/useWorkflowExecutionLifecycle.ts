@@ -95,6 +95,8 @@ export function useWorkflowExecutionLifecycle({
   const prevRunIdRef = useRef<string | null>(null)
   const prevVersionIdRef = useRef<string | null>(null)
   const latestTargetRunIdRef = useRef<string | null>(null)
+  // Track the last routeRunId we processed to prevent re-processing the same run
+  const lastProcessedRouteRunIdRef = useRef<string | null>(null)
   const selectRun = useExecutionTimelineStore((state) => state.selectRun)
 
   const mostRecentRunId = useMemo(
@@ -106,6 +108,7 @@ export function useWorkflowExecutionLifecycle({
     setHistoricalVersionId(null)
     prevRunIdRef.current = null
     prevVersionIdRef.current = null
+    lastProcessedRouteRunIdRef.current = null
   }, [])
 
   useEffect(() => {
@@ -118,7 +121,19 @@ export function useWorkflowExecutionLifecycle({
   }, [fetchRuns, metadata.id])
 
   useEffect(() => {
-    if (!metadata.id || !routeRunId || selectedRunId === routeRunId) {
+    if (!metadata.id || !routeRunId) {
+      return
+    }
+
+    // Check if we already processed this routeRunId to prevent loops
+    if (lastProcessedRouteRunIdRef.current === routeRunId) {
+      return
+    }
+
+    // Check directly from store (not the prop which may be stale due to render timing)
+    const currentSelectedRunId = useExecutionTimelineStore.getState().selectedRunId
+    if (currentSelectedRunId === routeRunId) {
+      lastProcessedRouteRunIdRef.current = routeRunId
       return
     }
 
@@ -165,6 +180,9 @@ export function useWorkflowExecutionLifecycle({
         return
       }
 
+      // Mark as processed BEFORE calling selectRun to prevent loops
+      lastProcessedRouteRunIdRef.current = routeRunId
+
       try {
         await selectRun(routeRunId, isRunLive(targetRun) ? 'live' : 'replay')
         setMode('execution')
@@ -187,7 +205,6 @@ export function useWorkflowExecutionLifecycle({
     navigate,
     refreshRuns,
     routeRunId,
-    selectedRunId,
     getRunById,
     upsertRun,
     toast,

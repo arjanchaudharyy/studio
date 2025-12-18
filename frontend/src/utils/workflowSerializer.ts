@@ -180,8 +180,8 @@ export function deserializeEdges(workflow: { graph: { edges: BackendEdge[] } }):
       animated: false, // Default for ReactFlow, backend doesn't store this
       markerEnd: {
         type: MarkerType.Arrow,
-        width: 30,
-        height: 30,
+        width: 22,
+        height: 22,
       },
     }
   })

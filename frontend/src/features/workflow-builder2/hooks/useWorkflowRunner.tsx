@@ -33,8 +33,6 @@ interface UseWorkflowRunnerOptions {
   resolveRuntimeInputDefinitions: () => any[]
   fetchRuns: (params: { workflowId: string; force?: boolean }) => Promise<unknown>
   markClean: () => void
-  setMode: (mode: 'design' | 'execution') => void
-  mode: 'design' | 'execution'
   navigate: (path: string, options?: { replace?: boolean }) => void
   mostRecentRunId: string | null
   setIsLoading: (value: boolean) => void
@@ -63,8 +61,6 @@ export function useWorkflowRunner({
   resolveRuntimeInputDefinitions,
   fetchRuns,
   markClean,
-  setMode,
-  mode,
   navigate,
   mostRecentRunId,
   setIsLoading,
@@ -125,9 +121,7 @@ export function useWorkflowRunner({
             isLiveFollowing: true,
             isPlaying: false,
           })
-          if (mode === 'design') {
-            setTimeout(() => setMode('execution'), 0)
-          }
+          // Navigate to run URL - this triggers mode update via useLayoutEffect
           navigate(`${workflowRoutePrefix}/${workflowId}/runs/${runId}`, { replace: true })
           toast({
             variant: 'success',
@@ -157,8 +151,6 @@ export function useWorkflowRunner({
       pendingVersionId,
       fetchRuns,
       markClean,
-      setMode,
-      mode,
       navigate,
       toast,
       setNodes,
@@ -387,10 +379,10 @@ function handleExecutionError(
             ...node.style,
             ...(node.id === failedComponentId
               ? {
-                  outline: '3px solid #ef4444',
-                  outlineOffset: '2px',
-                  animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                }
+                outline: '3px solid #ef4444',
+                outlineOffset: '2px',
+                animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              }
               : {}),
           },
         })),
