@@ -14,8 +14,6 @@ import {
   Loader2,
   Pencil,
   MoreHorizontal,
-  FileDown,
-  FileUp,
 } from 'lucide-react'
 import {
   DropdownMenu,
