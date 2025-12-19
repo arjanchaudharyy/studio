@@ -261,6 +261,9 @@ install-latest:
     
     LATEST_TAG=$(curl -s https://api.github.com/repos/ShipSecAI/studio/releases | jq -r '.[0].tag_name')
     
+    # Strip leading 'v' if present (v0.1-rc2 -> 0.1-rc2)
+    LATEST_TAG="${LATEST_TAG#v}"
+    
     if [ "$LATEST_TAG" == "null" ] || [ -z "$LATEST_TAG" ]; then
         echo "❌ Could not find any releases. Please check the repository at https://github.com/ShipSecAI/studio/releases"
         exit 1
