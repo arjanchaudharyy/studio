@@ -246,6 +246,46 @@ prod-images action="start":
             ;;
     esac
 
+# === Release Management ===
+
+# Install and run the latest release from GitHub using prebuilt images
+install-latest:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    echo "🔍 Fetching latest release information from GitHub API..."
+    if ! command -v curl &> /dev/null || ! command -v jq &> /dev/null; then
+        echo "❌ curl or jq is not installed. Please install them first."
+        exit 1
+    fi
+    
+    LATEST_TAG=$(curl -s https://api.github.com/repos/ShipSecAI/studio/releases/latest | jq -r .tag_name)
+    
+    if [ "$LATEST_TAG" == "null" ] || [ -z "$LATEST_TAG" ]; then
+        echo "❌ Could not find latest release tag. Please check the repository at https://github.com/ShipSecAI/studio/releases"
+        exit 1
+    fi
+    
+    echo "📦 Found latest release: $LATEST_TAG"
+    
+    echo "📥 Pulling matching images from GHCR..."
+    docker pull ghcr.io/shipsecai/studio-backend:$LATEST_TAG
+    docker pull ghcr.io/shipsecai/studio-frontend:$LATEST_TAG
+    docker pull ghcr.io/shipsecai/studio-worker:$LATEST_TAG
+    
+    echo "🚀 Starting production environment with version $LATEST_TAG..."
+    export SHIPSEC_TAG=$LATEST_TAG
+    docker compose -f docker/docker-compose.full.yml up -d
+    
+    echo ""
+    echo "✅ ShipSec Studio $LATEST_TAG ready"
+    echo "   Frontend:    http://localhost:8090"
+    echo "   Backend:     http://localhost:3211"
+    echo "   Temporal UI: http://localhost:8081"
+    echo ""
+    echo "💡 Note: Using images tagged as $LATEST_TAG"
+
+
 # === Infrastructure Only ===
 
 # Manage infrastructure containers separately
@@ -325,6 +365,7 @@ help:
     @echo "Production (Docker):"
     @echo "  just prod          Start with cached images"
     @echo "  just prod build    Rebuild and start"
+    @echo "  just install-latest Download latest release and pull GHCR images"
     @echo "  just prod stop     Stop production"
     @echo "  just prod logs     View production logs"
     @echo "  just prod status   Check production status"
