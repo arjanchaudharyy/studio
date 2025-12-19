@@ -259,10 +259,10 @@ install-latest:
         exit 1
     fi
     
-    LATEST_TAG=$(curl -s https://api.github.com/repos/ShipSecAI/studio/releases/latest | jq -r .tag_name)
+    LATEST_TAG=$(curl -s https://api.github.com/repos/ShipSecAI/studio/releases | jq -r '.[0].tag_name')
     
     if [ "$LATEST_TAG" == "null" ] || [ -z "$LATEST_TAG" ]; then
-        echo "❌ Could not find latest release tag. Please check the repository at https://github.com/ShipSecAI/studio/releases"
+        echo "❌ Could not find any releases. Please check the repository at https://github.com/ShipSecAI/studio/releases"
         exit 1
     fi
     
