@@ -11,6 +11,7 @@ import { useSecretStore } from '@/store/secretStore'
 import { useIntegrationStore } from '@/store/integrationStore'
 import { getCurrentUserId } from '@/lib/currentUser'
 import { useArtifactStore } from '@/store/artifactStore'
+import { env } from '@/config/env'
 import {
   Dialog,
   DialogContent,
@@ -136,7 +137,7 @@ export function ParameterField({
     onUpdateParameter,
     isRemoveGithubComponent,
   ])
-  
+
   const handleRefreshConnections = async () => {
     try {
       await fetchIntegrationConnections(currentUserId, true)
@@ -186,7 +187,7 @@ export function ParameterField({
     ) {
       const firstSecret = secrets[0]
       if (firstSecret) {
-          onChange(firstSecret.id)
+        onChange(firstSecret.id)
       }
     }
   }, [parameter.type, secretMode, secrets, currentValue, onChange, isReceivingInput])
@@ -265,15 +266,17 @@ export function ParameterField({
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => navigate('/integrations')}
-            disabled={isReceivingInput}
-          >
-            Manage connections
-          </Button>
+          {env.VITE_ENABLE_CONNECTIONS && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => navigate('/integrations')}
+              disabled={isReceivingInput}
+            >
+              Manage connections
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"
@@ -737,8 +740,8 @@ export function ParameterField({
               value === undefined || value === null || value === ''
                 ? ''
                 : typeof value === 'string'
-                ? value
-                : JSON.stringify(value, null, 2)
+                  ? value
+                  : JSON.stringify(value, null, 2)
             }
             onBlur={handleJsonBlur}
             className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-y font-mono"

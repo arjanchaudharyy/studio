@@ -103,11 +103,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       href: '/api-keys',
       icon: Shield,
     },
-    {
+    ...(env.VITE_ENABLE_CONNECTIONS ? [{
       name: 'Connections',
       href: '/integrations',
       icon: Plug,
-    },
+    }] : []),
     {
       name: 'Artifact Library',
       href: '/artifacts',

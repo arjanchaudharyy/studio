@@ -6,6 +6,7 @@ type FrontendEnv = {
   VITE_BACKEND_BRANCH: string
   VITE_GIT_SHA: string
   VITE_LOGO_DEV_PUBLIC_KEY: string
+  VITE_ENABLE_CONNECTIONS: boolean
 }
 
 export const env: FrontendEnv = {
@@ -13,5 +14,6 @@ export const env: FrontendEnv = {
   VITE_BACKEND_BRANCH: (import.meta.env.VITE_BACKEND_BRANCH as string | undefined) ?? '',
   VITE_GIT_SHA: (import.meta.env.VITE_GIT_SHA as string | undefined) ?? '',
   VITE_LOGO_DEV_PUBLIC_KEY: (import.meta.env.VITE_LOGO_DEV_PUBLIC_KEY as string | undefined) ?? '',
+  VITE_ENABLE_CONNECTIONS: import.meta.env.VITE_ENABLE_CONNECTIONS === 'true',
 }
 
