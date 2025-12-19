@@ -21,20 +21,8 @@ function getAuthProviderName(): string {
 
   // In dev mode, always use local auth for testing (ignore Clerk settings)
   if (import.meta.env.DEV) {
-    console.log('[Auth] Dev mode detected - using local auth provider');
     return 'local';
   }
-
-  // Debug logging to help diagnose issues
-  const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-  console.log('[Auth] Provider selection:', {
-    envProvider: envProvider || 'undefined',
-    hasClerkKey,
-    clerkKeyPreview: hasClerkKey && typeof clerkKey === 'string' ? clerkKey.substring(0, 20) + '...' : 'missing',
-    allEnvKeys: Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')),
-  });
-  console.log('[Auth] VITE_AUTH_PROVIDER value:', import.meta.env.VITE_AUTH_PROVIDER);
-  console.log('[Auth] VITE_CLERK_PUBLISHABLE_KEY exists:', !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 
   // If explicitly set to 'local', always use local auth
   if (envProvider === 'local') {
@@ -88,22 +76,22 @@ const LocalAuthProvider: FrontendAuthProviderComponent = ({ children, onProvider
   // Create provider that reacts to store state
   const localProvider = useMemo<FrontendAuthProvider>(() => {
     const hasCredentials = !!(adminUsername && adminPassword);
-    
+
     return {
       name: 'local',
       context: {
         user: hasCredentials
           ? {
-              id: userId || 'admin',
-              organizationId: organizationId || 'local-dev',
-              organizationRole: 'ADMIN',
-            }
+            id: userId || 'admin',
+            organizationId: organizationId || 'local-dev',
+            organizationRole: 'ADMIN',
+          }
           : null,
         token: hasCredentials
           ? {
-              token: `basic-${btoa(`${adminUsername}:${adminPassword}`)}`,
-              expiresAt: undefined,
-            }
+            token: `basic-${btoa(`${adminUsername}:${adminPassword}`)}`,
+            expiresAt: undefined,
+          }
           : null,
         isLoading: false,
         isAuthenticated: hasCredentials,
@@ -216,8 +204,8 @@ const FALLBACK_AUTH_PROVIDER: FrontendAuthProvider = {
   SignUpComponent: () => <div>No auth provider available</div>,
   UserButtonComponent: () => <div>No auth provider available</div>,
   OrganizationSwitcherComponent: undefined,
-  initialize: () => {},
-  cleanup: () => {},
+  initialize: () => { },
+  cleanup: () => { },
 };
 
 // Export provider names for type safety

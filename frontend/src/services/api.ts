@@ -104,10 +104,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
         storeState.setToken(freshToken)
       } else {
         // If we can't get a fresh token, fall back to store token
-        console.warn('[API] Failed to get fresh Clerk token, using store token');
       }
     } catch (error) {
-      console.error('[API] Error fetching fresh Clerk token:', error);
       // Fall back to store token if fresh token fetch fails
     }
   }
@@ -122,8 +120,6 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     // Use Bearer token (for Clerk)
     const headerValue = token.startsWith('Bearer ') ? token : `Bearer ${token}`
     headers['Authorization'] = headerValue
-  } else {
-    console.warn('[API] No token or credentials available for request');
   }
 
   if (organizationId && organizationId.trim().length > 0) {
@@ -595,7 +591,7 @@ export const api = {
                 storeState.setToken(freshToken)
               }
             } catch (error) {
-              console.error('[API] Error fetching fresh Clerk token for SSE:', error)
+              // Ignore token fetch errors for SSE, will fallback to existing
             }
           }
 

@@ -105,13 +105,6 @@ export const useAuthStore = create<AuthState>()(
             context.provider ??
             (hasTokenUpdate && !sanitizedToken ? 'local' : current.provider)
 
-          console.log('[AuthStore] setAuthContext called:', {
-            context,
-            currentRoles: current.roles,
-            sanitizedRoles,
-            hasRolesUpdate,
-          })
-
           return {
             token: sanitizedToken,
             userId: sanitizedUserId,
