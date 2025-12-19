@@ -28,53 +28,56 @@ export default {
   			'2xl': '1400px'
   		}
   	},
-  	colors: {
-		// Include all default Tailwind colors
-		...require('tailwindcss/colors'),
-		// Custom semantic colors (override defaults)
-		transparent: 'transparent',
-		current: 'currentColor',
-		white: '#ffffff',
-		black: '#000000',
-		border: 'hsl(var(--border))',
-		input: 'hsl(var(--input))',
-		ring: 'hsl(var(--ring))',
-		background: 'hsl(var(--background))',
-		foreground: 'hsl(var(--foreground))',
-		primary: {
-			DEFAULT: 'hsl(var(--primary))',
-			foreground: 'hsl(var(--primary-foreground))'
-		},
-		secondary: {
-			DEFAULT: 'hsl(var(--secondary))',
-			foreground: 'hsl(var(--secondary-foreground))'
-		},
-		destructive: {
-			DEFAULT: 'hsl(var(--destructive))',
-			foreground: 'hsl(var(--destructive-foreground))'
-		},
-		muted: {
-			DEFAULT: 'hsl(var(--muted))',
-			foreground: 'hsl(var(--muted-foreground))'
-		},
-		accent: {
-			DEFAULT: 'hsl(var(--accent))',
-			foreground: 'hsl(var(--accent-foreground))'
-		},
-		popover: {
-			DEFAULT: 'hsl(var(--popover))',
-			foreground: 'hsl(var(--popover-foreground))'
-		},
-		card: {
-			DEFAULT: 'hsl(var(--card))',
-			foreground: 'hsl(var(--card-foreground))'
-		},
-		// Text Tertiary: #7A7C80
-		tertiary: {
-			DEFAULT: '#7A7C80',
-			foreground: '#7A7C80'
-		},
-	},
+  	colors: (() => {
+		// Exclude deprecated color names to silence Tailwind v3 warnings
+		const { lightBlue, warmGray, trueGray, coolGray, blueGray, ...colors } = require('tailwindcss/colors')
+		return {
+			...colors,
+			// Custom semantic colors (override defaults)
+			transparent: 'transparent',
+			current: 'currentColor',
+			white: '#ffffff',
+			black: '#000000',
+			border: 'hsl(var(--border))',
+			input: 'hsl(var(--input))',
+			ring: 'hsl(var(--ring))',
+			background: 'hsl(var(--background))',
+			foreground: 'hsl(var(--foreground))',
+			primary: {
+				DEFAULT: 'hsl(var(--primary))',
+				foreground: 'hsl(var(--primary-foreground))'
+			},
+			secondary: {
+				DEFAULT: 'hsl(var(--secondary))',
+				foreground: 'hsl(var(--secondary-foreground))'
+			},
+			destructive: {
+				DEFAULT: 'hsl(var(--destructive))',
+				foreground: 'hsl(var(--destructive-foreground))'
+			},
+			muted: {
+				DEFAULT: 'hsl(var(--muted))',
+				foreground: 'hsl(var(--muted-foreground))'
+			},
+			accent: {
+				DEFAULT: 'hsl(var(--accent))',
+				foreground: 'hsl(var(--accent-foreground))'
+			},
+			popover: {
+				DEFAULT: 'hsl(var(--popover))',
+				foreground: 'hsl(var(--popover-foreground))'
+			},
+			card: {
+				DEFAULT: 'hsl(var(--card))',
+				foreground: 'hsl(var(--card-foreground))'
+			},
+			// Text Tertiary: #7A7C80
+			tertiary: {
+				DEFAULT: '#7A7C80',
+				foreground: '#7A7C80'
+			},
+		}
+	})(),
   	extend: {
   		fontFamily: {
   			sans: [

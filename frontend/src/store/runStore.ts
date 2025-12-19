@@ -144,6 +144,12 @@ export const useRunStore = create<RunStore>()(
 
     fetchRuns: async (options) => {
       const workflowId = options?.workflowId ?? null
+      
+      // Skip fetching for placeholder "new" workflow ID - it's an unsaved workflow
+      if (workflowId === 'new') {
+        return []
+      }
+      
       const key = getCacheKey(workflowId)
       const force = options?.force ?? false
       const state = get()

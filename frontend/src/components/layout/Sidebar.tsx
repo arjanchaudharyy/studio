@@ -13,7 +13,7 @@ import type { ComponentMetadata } from '@/schemas/component'
 import { cn } from '@/lib/utils'
 import { env } from '@/config/env'
 import { Skeleton } from '@/components/ui/skeleton'
-import { 
+import {
   type ComponentCategory,
   getCategorySeparatorColor
 } from '@/utils/categoryColors'
@@ -62,8 +62,8 @@ function ComponentItem({ component, disabled, viewMode }: ComponentItemProps) {
         {/* Icon */}
         <div className="flex-shrink-0">
           {component.logo ? (
-            <img 
-              src={component.logo} 
+            <img
+              src={component.logo}
               alt={component.name}
               className="h-5 w-5 object-contain"
               onError={(e) => {
@@ -112,8 +112,8 @@ function ComponentItem({ component, disabled, viewMode }: ComponentItemProps) {
       {/* Default: Centered icon and name */}
       <div className="flex flex-col items-center justify-center gap-2 flex-1 group-hover:hidden transition-all">
         {component.logo ? (
-          <img 
-            src={component.logo} 
+          <img
+            src={component.logo}
             alt={component.name}
             className="h-8 w-8 flex-shrink-0 object-contain"
             onError={(e) => {
@@ -136,8 +136,8 @@ function ComponentItem({ component, disabled, viewMode }: ComponentItemProps) {
       <div className="hidden group-hover:flex flex-col gap-2 flex-1">
         <div className="flex items-start gap-2.5">
           {component.logo ? (
-            <img 
-              src={component.logo} 
+            <img
+              src={component.logo}
               alt={component.name}
               className="h-6 w-6 flex-shrink-0 object-contain"
               onError={(e) => {
@@ -176,17 +176,17 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
   const frontendBranch = env.VITE_FRONTEND_BRANCH.trim()
   const backendBranch = env.VITE_BACKEND_BRANCH.trim()
   const hasBranchInfo = Boolean(frontendBranch || backendBranch)
-  
+
   // Get category accent color (for left border) - uses separator colors for brightness
   const getCategoryAccentColor = (category: string): string | undefined => {
     return getCategorySeparatorColor(category as ComponentCategory, isDarkMode)
   }
-  
+
   // Get category text color with good contrast in both light and dark modes
   const getCategoryTextColor = (category: string): string => {
     const categoryColors: Record<string, string> = {
       input: 'text-blue-600 dark:text-blue-400',
-      transform: 'text-orange-600 dark:text-orange-400', 
+      transform: 'text-orange-600 dark:text-orange-400',
       ai: 'text-purple-600 dark:text-purple-400',
       security: 'text-red-600 dark:text-red-400',
       it_ops: 'text-cyan-600 dark:text-cyan-400',
@@ -194,7 +194,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
     }
     return categoryColors[category] || 'text-foreground'
   }
-  
+
   // Custom scrollbar state
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [scrollbarVisible, setScrollbarVisible] = useState(false)
@@ -215,7 +215,15 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
   // Filter out entry point component (always present, shouldn't be in the list)
   const filteredComponents = useMemo(() => {
     return allComponents.filter(
-      component => component.id !== 'core.workflow.entrypoint' && component.slug !== 'entry-point'
+      component => {
+        if (component.id === 'core.workflow.entrypoint' || component.slug === 'entry-point') {
+          return false
+        }
+        if (!env.VITE_ENABLE_IT_OPS && component.category === 'it_ops') {
+          return false
+        }
+        return true
+      }
     )
   }, [allComponents])
 
@@ -322,7 +330,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
     const updateScrollbar = (showImmediately = false) => {
       const { scrollTop, scrollHeight, clientHeight } = container
       const maxScroll = scrollHeight - clientHeight
-      
+
       if (maxScroll <= 0) {
         setScrollbarVisible(false)
         return
@@ -331,10 +339,10 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
       // Calculate scrollbar thumb position and height
       const thumbHeight = Math.max((clientHeight / scrollHeight) * clientHeight, 30)
       const thumbPosition = (scrollTop / maxScroll) * (clientHeight - thumbHeight)
-      
+
       setScrollbarHeight(thumbHeight)
       setScrollbarPosition(thumbPosition)
-      
+
       // Only show scrollbar when actively scrolling or explicitly requested
       if (showImmediately || isScrollingRef.current) {
         setScrollbarVisible(true)
@@ -363,7 +371,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
 
     container.addEventListener('scroll', handleScroll, { passive: true })
     window.addEventListener('resize', handleResize)
-    
+
     // Initial check - don't show scrollbar on mount
     updateScrollbar(false)
 
@@ -385,7 +393,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
       0
     )
   }, [filteredComponentsByCategory])
-  
+
   useEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
@@ -394,7 +402,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
     requestAnimationFrame(() => {
       const { scrollTop, scrollHeight, clientHeight } = container
       const maxScroll = scrollHeight - clientHeight
-      
+
       if (maxScroll <= 0) {
         setScrollbarVisible(false)
         setScrollbarHeight(0)
@@ -405,7 +413,7 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
       // Calculate scrollbar thumb position and height
       const thumbHeight = Math.max((clientHeight / scrollHeight) * clientHeight, 30)
       const thumbPosition = (scrollTop / maxScroll) * (clientHeight - thumbHeight)
-      
+
       setScrollbarHeight(thumbHeight)
       setScrollbarPosition(thumbPosition)
       // Don't show scrollbar automatically when content changes - only on scroll
@@ -467,178 +475,178 @@ export function Sidebar({ canManageWorkflows = true }: SidebarProps) {
       </div>
 
       <div className="relative flex-1 overflow-hidden">
-        <div 
+        <div
           ref={scrollContainerRef}
           className="h-full w-full overflow-y-auto px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-        {loading ? (
-          <div className="space-y-0">
-            <div>
-              <div className="py-3">
-                <Skeleton className="h-4 w-24 mb-2" />
-                {viewMode === 'list' ? (
-                  <div className="space-y-0.5">
-                    {Array.from({ length: 6 }).map((_, idx) => (
-                      <div key={idx} className="flex items-center gap-3 px-3 py-2">
-                        <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <Skeleton className="h-4 w-32 mb-1" />
-                          <Skeleton className="h-3 w-48" />
+          {loading ? (
+            <div className="space-y-0">
+              <div>
+                <div className="py-3">
+                  <Skeleton className="h-4 w-24 mb-2" />
+                  {viewMode === 'list' ? (
+                    <div className="space-y-0.5">
+                      {Array.from({ length: 6 }).map((_, idx) => (
+                        <div key={idx} className="flex items-center gap-3 px-3 py-2">
+                          <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <Skeleton className="h-4 w-32 mb-1" />
+                            <Skeleton className="h-3 w-48" />
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {Array.from({ length: 4 }).map((_, idx) => (
-                      <div key={idx} className="rounded-lg p-3 bg-background/50">
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <Skeleton className="h-5 w-5 rounded" />
-                              <Skeleton className="h-3 w-16" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {Array.from({ length: 4 }).map((_, idx) => (
+                        <div key={idx} className="rounded-lg p-3 bg-background/50">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-5 w-5 rounded" />
+                                <Skeleton className="h-3 w-16" />
+                              </div>
+                              <Skeleton className="h-3 w-6" />
                             </div>
-                            <Skeleton className="h-3 w-6" />
-                          </div>
-                          <Skeleton className="h-3 w-full" />
-                          <Skeleton className="h-3 w-3/4" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : error ? (
-          <div className="text-sm text-red-500 text-center py-8">
-            Failed to load components: {error}
-          </div>
-        ) : filteredComponents.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-8">
-            No components available
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {/* Search results message */}
-            {searchQuery.trim() && (
-              <div className="text-xs text-muted-foreground px-0.5 pb-1">
-                Found {Object.values(filteredComponentsByCategory).reduce((total, components) => total + components.length, 0)}
-                {Object.values(filteredComponentsByCategory).reduce((total, components) => total + components.length, 0) !== 1 ? ' components' : ' component'}{' '}
-                matching "{searchQuery}"
-              </div>
-            )}
-
-            {Object.keys(filteredComponentsByCategory).length > 0 && (
-            <Accordion 
-              type="multiple" 
-              className="space-y-2" 
-              value={openAccordionItems}
-              onValueChange={setOpenAccordionItems}
-            >
-              {Object.entries(filteredComponentsByCategory).map(([category, components]) => {
-                if (components.length === 0) return null
-
-                const categoryConfig = components[0]?.categoryConfig
-
-                const categoryAccentColor = getCategoryAccentColor(category)
-                
-                return (
-                  <AccordionItem 
-                    key={category} 
-                    value={category} 
-                    className="border border-border/50 rounded-sm px-3 py-1 transition-colors"
-                  >
-                    <AccordionTrigger 
-                      className={cn(
-                        'py-3 hover:no-underline hover:bg-muted/50 rounded-sm -mx-3 -my-1 px-3 [&[data-state=open]]:text-foreground',
-                        'group transition-colors relative'
-                      )}
-                      style={{
-                        borderLeftWidth: categoryAccentColor ? '3px' : undefined,
-                        borderLeftColor: categoryAccentColor || undefined,
-                      }}
-                    >
-                      <div className="flex flex-col items-start gap-0.5 w-full">
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-2">
-                            {categoryConfig?.icon && (
-                              (() => {
-                                const iconName = categoryConfig.icon in LucideIcons ? categoryConfig.icon : 'Box'
-                                const CategoryIcon = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>
-                                return (
-                                  <CategoryIcon className={cn(
-                                    'h-4 w-4 flex-shrink-0',
-                                    getCategoryTextColor(category)
-                                  )} />
-                                )
-                              })()
-                            )}
-                            <h3 className={cn(
-                              'text-sm font-semibold transition-colors',
-                              getCategoryTextColor(category)
-                            )}>
-                              {categoryConfig?.label ?? category}
-                            </h3>
+                            <Skeleton className="h-3 w-full" />
+                            <Skeleton className="h-3 w-3/4" />
                           </div>
                         </div>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="pt-1 pb-2 px-0">
-                      {viewMode === 'list' ? (
-                        <div className="space-y-0.5">
-                          {components.map((component) => (
-                            <ComponentItem
-                              key={component.id}
-                              component={component}
-                              disabled={!canManageWorkflows}
-                              viewMode={viewMode}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-2">
-                          {components.map((component) => (
-                            <ComponentItem
-                              key={component.id}
-                              component={component}
-                              disabled={!canManageWorkflows}
-                              viewMode={viewMode}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                )
-              })}
-            </Accordion>
-            )}
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="text-sm text-red-500 text-center py-8">
+              Failed to load components: {error}
+            </div>
+          ) : filteredComponents.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-8">
+              No components available
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {/* Search results message */}
+              {searchQuery.trim() && (
+                <div className="text-xs text-muted-foreground px-0.5 pb-1">
+                  Found {Object.values(filteredComponentsByCategory).reduce((total, components) => total + components.length, 0)}
+                  {Object.values(filteredComponentsByCategory).reduce((total, components) => total + components.length, 0) !== 1 ? ' components' : ' component'}{' '}
+                  matching "{searchQuery}"
+                </div>
+              )}
 
-            {/* Show no results message if search yields nothing */}
-            {searchQuery.trim() && Object.values(filteredComponentsByCategory).every(components => components.length === 0) && (
-              <div className="text-center py-8">
-                <p className="text-sm text-muted-foreground">
-                  No components found matching "{searchQuery}"
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Try different keywords or clear the search
+              {Object.keys(filteredComponentsByCategory).length > 0 && (
+                <Accordion
+                  type="multiple"
+                  className="space-y-2"
+                  value={openAccordionItems}
+                  onValueChange={setOpenAccordionItems}
+                >
+                  {Object.entries(filteredComponentsByCategory).map(([category, components]) => {
+                    if (components.length === 0) return null
+
+                    const categoryConfig = components[0]?.categoryConfig
+
+                    const categoryAccentColor = getCategoryAccentColor(category)
+
+                    return (
+                      <AccordionItem
+                        key={category}
+                        value={category}
+                        className="border border-border/50 rounded-sm px-3 py-1 transition-colors"
+                      >
+                        <AccordionTrigger
+                          className={cn(
+                            'py-3 hover:no-underline hover:bg-muted/50 rounded-sm -mx-3 -my-1 px-3 [&[data-state=open]]:text-foreground',
+                            'group transition-colors relative'
+                          )}
+                          style={{
+                            borderLeftWidth: categoryAccentColor ? '3px' : undefined,
+                            borderLeftColor: categoryAccentColor || undefined,
+                          }}
+                        >
+                          <div className="flex flex-col items-start gap-0.5 w-full">
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex items-center gap-2">
+                                {categoryConfig?.icon && (
+                                  (() => {
+                                    const iconName = categoryConfig.icon in LucideIcons ? categoryConfig.icon : 'Box'
+                                    const CategoryIcon = LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>
+                                    return (
+                                      <CategoryIcon className={cn(
+                                        'h-4 w-4 flex-shrink-0',
+                                        getCategoryTextColor(category)
+                                      )} />
+                                    )
+                                  })()
+                                )}
+                                <h3 className={cn(
+                                  'text-sm font-semibold transition-colors',
+                                  getCategoryTextColor(category)
+                                )}>
+                                  {categoryConfig?.label ?? category}
+                                </h3>
+                              </div>
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-1 pb-2 px-0">
+                          {viewMode === 'list' ? (
+                            <div className="space-y-0.5">
+                              {components.map((component) => (
+                                <ComponentItem
+                                  key={component.id}
+                                  component={component}
+                                  disabled={!canManageWorkflows}
+                                  viewMode={viewMode}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              {components.map((component) => (
+                                <ComponentItem
+                                  key={component.id}
+                                  component={component}
+                                  disabled={!canManageWorkflows}
+                                  viewMode={viewMode}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    )
+                  })}
+                </Accordion>
+              )}
+
+              {/* Show no results message if search yields nothing */}
+              {searchQuery.trim() && Object.values(filteredComponentsByCategory).every(components => components.length === 0) && (
+                <div className="text-center py-8">
+                  <p className="text-sm text-muted-foreground">
+                    No components found matching "{searchQuery}"
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Try different keywords or clear the search
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-2 border-t mt-2">
+                <p className="text-xs text-muted-foreground px-0.5">
+                  {searchQuery.trim()
+                    ? `${Object.values(filteredComponentsByCategory).reduce((total, components) => total + components.length, 0)} of ${filteredComponents.length} component${filteredComponents.length !== 1 ? 's' : ''} shown`
+                    : `${filteredComponents.length} component${filteredComponents.length !== 1 ? 's' : ''} available`
+                  }
                 </p>
               </div>
-            )}
-
-            <div className="pt-2 border-t mt-2">
-              <p className="text-xs text-muted-foreground px-0.5">
-                {searchQuery.trim()
-                  ? `${Object.values(filteredComponentsByCategory).reduce((total, components) => total + components.length, 0)} of ${filteredComponents.length} component${filteredComponents.length !== 1 ? 's' : ''} shown`
-                  : `${filteredComponents.length} component${filteredComponents.length !== 1 ? 's' : ''} available`
-                }
-              </p>
             </div>
-          </div>
-        )}
+          )}
         </div>
-        
+
         {/* Custom overlay scrollbar */}
         {scrollbarHeight > 0 && (
           <div

@@ -6,6 +6,7 @@ import { Loader2, CheckCircle, XCircle } from 'lucide-react'
 import type { components } from '@shipsec/backend-client'
 import { api } from '@/services/api'
 import { getCurrentUserId } from '@/lib/currentUser'
+import { env } from '@/config/env'
 
 type IntegrationConnection = components['schemas']['IntegrationConnectionResponse']
 
@@ -74,7 +75,8 @@ export function IntegrationCallback() {
         setStatus('success')
         setMessage(`Connected to ${connection.providerName}. Redirecting…`)
         setTimeout(() => {
-          navigate(`/integrations?connected=${connection.provider}`, { replace: true })
+          const target = env.VITE_ENABLE_CONNECTIONS ? `/integrations?connected=${connection.provider}` : '/'
+          navigate(target, { replace: true })
         }, 1200)
       } catch (error) {
         if (cancelled) {
@@ -104,8 +106,8 @@ export function IntegrationCallback() {
         <p className="text-sm text-muted-foreground mb-6">{message}</p>
 
         {status !== 'pending' && (
-          <Button variant="outline" onClick={() => navigate('/integrations')}>
-            Return to connections
+          <Button variant="outline" onClick={() => navigate(env.VITE_ENABLE_CONNECTIONS ? '/integrations' : '/')}>
+            {env.VITE_ENABLE_CONNECTIONS ? 'Return to connections' : 'Return home'}
           </Button>
         )}
       </div>

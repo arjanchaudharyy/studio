@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { env } from '@/config/env'
 
 interface AppTopBarProps {
   title?: string
@@ -53,7 +54,7 @@ export function AppTopBar({
       }
     }
 
-    if (location.pathname === '/integrations') {
+    if (env.VITE_ENABLE_CONNECTIONS && location.pathname === '/integrations') {
       return {
         title: 'Connections',
         subtitle: 'Manage OAuth tokens for external providers'

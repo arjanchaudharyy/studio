@@ -35,19 +35,9 @@ export function useAuthStoreIntegration() {
       if (authProvider.name === 'clerk') {
         organizationId = user.organizationId || `workspace-${user.id}`;
         
-        // Debug logging
-        console.log('[Auth Store Integration] Clerk user:', {
-          userId: user.id,
-          organizationId: user.organizationId,
-          organizationRole: user.organizationRole,
-          resolvedOrgId: organizationId,
-          workspace: `workspace-${user.id}`,
-        });
-        
         // If user is in their own workspace, they are ADMIN by default
         if (organizationId === `workspace-${user.id}`) {
           roles = ['ADMIN'];
-          console.log('[Auth Store Integration] User in workspace, granting ADMIN');
         } else {
           // If user has an organization role, use it
           // Otherwise, grant ADMIN as fallback (matches backend logic when JWT template doesn't include roles)
@@ -63,25 +53,16 @@ export function useAuthStoreIntegration() {
               roleUpper = roleUpper.substring(4);
             }
             roles = [roleUpper];
-            console.log('[Auth Store Integration] Using Clerk role:', roleUpper, '(original:', user.organizationRole, ')');
           } else {
             // No org_role in Clerk user object - grant ADMIN as fallback
             // This matches the backend behavior when JWT doesn't include org_role
             roles = ['ADMIN'];
-            console.log('[Auth Store Integration] No org_role, granting ADMIN as fallback');
           }
         }
       } else {
         organizationId = user.organizationId || undefined;
         roles = user.organizationRole ? [user.organizationRole.toUpperCase()] : ['MEMBER'];
       }
-
-      console.log('[Auth Store Integration] Setting auth context:', {
-        userId: user.id,
-        organizationId,
-        roles,
-        provider: providerForStore,
-      });
 
       setAuthContext({
         token: token.token,

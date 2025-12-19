@@ -75,19 +75,6 @@ export function useWorkflowExecutionLifecycle({
   setExecutionEdges,
   setExecutionDirty,
 }: UseWorkflowExecutionLifecycleOptions): UseWorkflowExecutionLifecycleResult {
-  const logPrefix = '[ExecutionLifecycle]'
-  const logSetExecutionNodes = (
-    nodes: ReactFlowNode<FrontendNodeData>[],
-    edges: ReactFlowEdge[],
-    params: { versionId?: string | null; dirty?: boolean; reason: string },
-  ) => {
-    const versionLabel = params.versionId ?? 'unknown'
-    const dirtyLabel = params.dirty ? ' (dirty)' : ''
-    console.info(
-      `${logPrefix} setting nodes from version ${versionLabel}${dirtyLabel} (${params.reason})`,
-      { nodeCount: nodes.length, edgeCount: edges.length },
-    )
-  }
   const fetchRuns = useRunStore((state) => state.fetchRuns)
   const refreshRuns = useRunStore((state) => state.refreshRuns)
   const getRunById = useRunStore((state) => state.getRunById)
@@ -223,7 +210,6 @@ export function useWorkflowExecutionLifecycle({
     const targetRunId = selectedRunId ?? routeRunId ?? mostRecentRunId
 
     if (!targetRunId) {
-      console.info(`${logPrefix} No target run; restoring design snapshot into execution graph`)
       preservedExecutionStateRef.current = null
       setExecutionDirty(false)
 
@@ -231,11 +217,6 @@ export function useWorkflowExecutionLifecycle({
         const savedNodes = cloneNodes(designSavedSnapshotRef.current.nodes)
         const savedEdges = cloneEdges(designSavedSnapshotRef.current.edges)
         const terminalNodes = executionNodesRef.current.filter((n) => n.type === 'terminal')
-        logSetExecutionNodes(savedNodes, savedEdges, {
-          versionId: metadata.currentVersionId,
-          dirty: false,
-          reason: 'no target run, design snapshot',
-        })
         setExecutionNodes([...savedNodes, ...terminalNodes])
         setExecutionEdges(savedEdges)
         executionLoadedSnapshotRef.current = {
@@ -246,11 +227,6 @@ export function useWorkflowExecutionLifecycle({
         const designNodesCopy = cloneNodes(designNodesRef.current)
         const designEdgesCopy = cloneEdges(designEdgesRef.current)
         const terminalNodes = executionNodesRef.current.filter((n) => n.type === 'terminal')
-        logSetExecutionNodes(designNodesCopy, designEdgesCopy, {
-          versionId: metadata.currentVersionId,
-          dirty: false,
-          reason: 'no target run, design ref',
-        })
         setExecutionNodes([...designNodesCopy, ...terminalNodes])
         setExecutionEdges(designEdgesCopy)
         executionLoadedSnapshotRef.current = {
@@ -267,12 +243,6 @@ export function useWorkflowExecutionLifecycle({
       return
     }
 
-    console.info(
-      `${logPrefix} Evaluating run ${targetRunId} (selected: ${selectedRunId ?? 'none'}, route: ${
-        routeRunId ?? 'none'
-      }, mostRecent: ${mostRecentRunId ?? 'none'})`,
-    )
-
     let run = getRunById(targetRunId)
     if (!run) {
       run = workflowRuns.find((candidate) => candidate.id === targetRunId)
@@ -285,11 +255,6 @@ export function useWorkflowExecutionLifecycle({
         const savedNodes = cloneNodes(designSavedSnapshotRef.current.nodes)
         const savedEdges = cloneEdges(designSavedSnapshotRef.current.edges)
         const terminalNodes = executionNodesRef.current.filter((n) => n.type === 'terminal')
-        logSetExecutionNodes(savedNodes, savedEdges, {
-          versionId: metadata.currentVersionId,
-          dirty: false,
-          reason: 'seed execution from saved snapshot (direct run navigation)',
-        })
         setExecutionNodes([...savedNodes, ...terminalNodes])
         setExecutionEdges(savedEdges)
         executionLoadedSnapshotRef.current = {
@@ -300,11 +265,6 @@ export function useWorkflowExecutionLifecycle({
         const designNodesCopy = cloneNodes(designNodesRef.current)
         const designEdgesCopy = cloneEdges(designEdgesRef.current)
         const terminalNodes = executionNodesRef.current.filter((n) => n.type === 'terminal')
-        logSetExecutionNodes(designNodesCopy, designEdgesCopy, {
-          versionId: metadata.currentVersionId,
-          dirty: false,
-          reason: 'seed execution from design ref (direct run navigation)',
-        })
         setExecutionNodes([...designNodesCopy, ...terminalNodes])
         setExecutionEdges(designEdgesCopy)
         executionLoadedSnapshotRef.current = {
@@ -328,7 +288,6 @@ export function useWorkflowExecutionLifecycle({
       prevVersionIdRef.current = versionId
 
       if (runIdChanged) {
-        console.info(`${logPrefix} Run changed -> clearing preserved execution state and dirty flag`)
         preservedExecutionStateRef.current = null
         setExecutionDirty(false)
       }
@@ -342,9 +301,6 @@ export function useWorkflowExecutionLifecycle({
           if (latestTargetRunIdRef.current !== targetRunId) return
           runToUse = normalizeRunSummary(runDetails)
           upsertRun(runToUse)
-          console.info(`${logPrefix} Fetched run from API for ${targetRunId}`, {
-            versionId: runToUse.workflowVersionId,
-          })
         } catch (error) {
           if (latestTargetRunIdRef.current !== targetRunId) return
           console.error('[VersionLoad] Failed to fetch run details:', error)
@@ -352,11 +308,6 @@ export function useWorkflowExecutionLifecycle({
             const savedNodes = cloneNodes(designSavedSnapshotRef.current.nodes)
             const savedEdges = cloneEdges(designSavedSnapshotRef.current.edges)
             const terminalNodes = executionNodesRef.current.filter((n) => n.type === 'terminal')
-            logSetExecutionNodes(savedNodes, savedEdges, {
-              versionId: metadata.currentVersionId,
-              dirty: false,
-              reason: 'fallback to design snapshot after run fetch failure',
-            })
             setExecutionNodes([...savedNodes, ...terminalNodes])
             setExecutionEdges(savedEdges)
             executionLoadedSnapshotRef.current = {
@@ -375,10 +326,6 @@ export function useWorkflowExecutionLifecycle({
           if (latestTargetRunIdRef.current !== targetRunId) return
           runToUse = normalizeRunSummary(runDetails)
           upsertRun(runToUse)
-          console.info(`${logPrefix} Refreshed run to obtain workflowVersionId`, {
-            runId: targetRunId,
-            versionId: runToUse.workflowVersionId,
-          })
         } catch (error) {
           if (latestTargetRunIdRef.current !== targetRunId) return
           console.error('[VersionLoad] Failed to fetch run details for version resolution:', error)
@@ -389,13 +336,6 @@ export function useWorkflowExecutionLifecycle({
 
       const actualVersionId = runToUse.workflowVersionId
 
-      console.info(`${logPrefix} Version decision`, {
-        runId: runToUse?.id,
-        actualVersionId,
-        workflowCurrentVersionId: metadata.currentVersionId,
-        historicalVersionId,
-      })
-
       if (!actualVersionId || actualVersionId === metadata.currentVersionId) {
         preservedExecutionStateRef.current = null
         setExecutionDirty(false)
@@ -404,11 +344,6 @@ export function useWorkflowExecutionLifecycle({
           const savedNodes = cloneNodes(designSavedSnapshotRef.current.nodes)
           const savedEdges = cloneEdges(designSavedSnapshotRef.current.edges)
           const terminalNodes = executionNodesRef.current.filter((n) => n.type === 'terminal')
-          logSetExecutionNodes(savedNodes, savedEdges, {
-            versionId: metadata.currentVersionId,
-            dirty: false,
-            reason: 'use design snapshot (version match/missing)',
-          })
           setExecutionNodes([...savedNodes, ...terminalNodes])
           setExecutionEdges(savedEdges)
           executionLoadedSnapshotRef.current = {
@@ -419,11 +354,6 @@ export function useWorkflowExecutionLifecycle({
           const designNodesCopy = cloneNodes(designNodesRef.current)
           const designEdgesCopy = cloneEdges(designEdgesRef.current)
           const terminalNodes = executionNodesRef.current.filter((n) => n.type === 'terminal')
-          logSetExecutionNodes(designNodesCopy, designEdgesCopy, {
-            versionId: metadata.currentVersionId,
-            dirty: false,
-            reason: 'use design ref (version match/missing)',
-          })
           setExecutionNodes([...designNodesCopy, ...terminalNodes])
           setExecutionEdges(designEdgesCopy)
           executionLoadedSnapshotRef.current = {
@@ -435,17 +365,10 @@ export function useWorkflowExecutionLifecycle({
         if (historicalVersionId) {
           setHistoricalVersionId(null)
         }
-        console.info(`${logPrefix} Using current design graph for run ${runToUse.id} (version match or missing)`, {
-          nodeCount: designSavedSnapshotRef.current?.nodes.length ?? 0,
-          edgeCount: designSavedSnapshotRef.current?.edges.length ?? 0,
-          versionId: metadata.currentVersionId,
-          versionNumber: runToUse.workflowVersion,
-        })
         return
       }
 
       if (actualVersionId === historicalVersionId) {
-        console.info(`${logPrefix} Historical version already loaded`, { versionId: actualVersionId })
         return
       }
 
@@ -464,11 +387,6 @@ export function useWorkflowExecutionLifecycle({
         const versionNodes = deserializeNodes(version)
         const versionEdges = deserializeEdges(version)
         const terminalNodes = executionNodesRef.current.filter((n) => n.type === 'terminal')
-        logSetExecutionNodes(versionNodes, versionEdges, {
-          versionId: actualVersionId,
-          dirty: false,
-          reason: 'loaded historical version',
-        })
         setExecutionNodes([...versionNodes, ...terminalNodes])
         setExecutionEdges(versionEdges)
         executionLoadedSnapshotRef.current = {
@@ -476,17 +394,6 @@ export function useWorkflowExecutionLifecycle({
           edges: cloneEdges(versionEdges),
         }
         setHistoricalVersionId(actualVersionId)
-        console.info(`${logPrefix} replacing with nodes from version ${actualVersionId}`, {
-          workflowVersionNumber: runToUse.workflowVersion,
-          nodeCount: versionNodes.length,
-          edgeCount: versionEdges.length,
-        })
-        console.info(`${logPrefix} Loaded historical version for run ${runToUse.id}`, {
-          versionId: actualVersionId,
-          nodeCount: versionNodes.length,
-          edgeCount: versionEdges.length,
-          workflowVersionNumber: runToUse.workflowVersion,
-        })
       } catch (error) {
         if (latestTargetRunIdRef.current !== targetRunId) return
         console.error('[VersionLoad] Failed to load workflow version:', error)
