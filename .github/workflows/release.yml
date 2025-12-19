@@ -118,6 +118,8 @@ jobs:
           tags: ${{ steps.tags.outputs.backend_tags }}
           build-args: |
             VITE_GIT_SHA=${{ steps.git_sha.outputs.sha }}
+            POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }}
+            POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -131,6 +133,8 @@ jobs:
           tags: ${{ steps.tags.outputs.worker_tags }}
           build-args: |
             VITE_GIT_SHA=${{ steps.git_sha.outputs.sha }}
+            POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }}
+            POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -146,6 +150,8 @@ jobs:
             VITE_GIT_SHA=${{ steps.git_sha.outputs.sha }}
             VITE_PUBLIC_POSTHOG_KEY=${{ secrets.POSTHOG_API_KEY }}
             VITE_PUBLIC_POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}
+            POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }}
+            POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

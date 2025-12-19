@@ -61,7 +61,46 @@ Get started with ShipSec Studio in minutes:
 3. **Run a scan** with pre-built components like Subfinder, Nuclei, or HTTPx
 4. **View results** in real-time as the workflow executes
 
-### Option 2: Run Locally
+### Option 2: Self-Host with Docker (Recommended)
+
+The easiest way to run ShipSec Studio on your own infrastructure:
+
+#### Prerequisites
+
+- **[docker](https://www.docker.com/)** - For running the application and security components
+- **[just](https://github.com/casey/just)** - Command runner for simplified workflows
+- **curl** and **jq** - For fetching release information
+
+#### Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/ShipSecAI/studio.git
+cd studio
+
+# Download the latest release and start
+just prod start-latest
+
+# Visit http://localhost:8090 to access ShipSec Studio
+```
+
+This command automatically:
+- Fetches the latest release version from GitHub
+- Pulls pre-built Docker images from GHCR
+- Starts the full stack (frontend, backend, worker, and infrastructure)
+
+#### Other Commands
+
+```bash
+just prod stop      # Stop the environment
+just prod logs      # View logs
+just prod status    # Check status
+just prod clean     # Remove all data
+```
+
+### Option 3: Development Setup
+
+For contributors who want to modify the source code:
 
 #### Prerequisites
 
@@ -69,7 +108,7 @@ Get started with ShipSec Studio in minutes:
 - **[docker](https://www.docker.com/)** - For running security components in isolated containers
 - **[just](https://github.com/casey/just)** - Command runner for simplified development workflows
 
-#### Quick Setup with `just` (Recommended)
+#### Setup
 
 ```bash
 # Clone the repository
@@ -79,7 +118,7 @@ cd studio
 # Initialize (installs dependencies and creates environment files)
 just init
 
-# Start development environment
+# Start development environment with hot-reload
 just dev
 
 # Visit http://localhost:5173 to access ShipSec Studio

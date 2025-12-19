@@ -156,8 +156,44 @@ prod action="start":
             docker system prune -f
             echo "✅ Production cleaned"
             ;;
+        start-latest)
+            echo "🔍 Fetching latest release information from GitHub API..."
+            if ! command -v curl &> /dev/null || ! command -v jq &> /dev/null; then
+                echo "❌ curl or jq is not installed. Please install them first."
+                exit 1
+            fi
+            
+            LATEST_TAG=$(curl -s https://api.github.com/repos/ShipSecAI/studio/releases | jq -r '.[0].tag_name')
+            
+            # Strip leading 'v' if present (v0.1-rc2 -> 0.1-rc2)
+            LATEST_TAG="${LATEST_TAG#v}"
+            
+            if [ "$LATEST_TAG" == "null" ] || [ -z "$LATEST_TAG" ]; then
+                echo "❌ Could not find any releases. Please check the repository at https://github.com/ShipSecAI/studio/releases"
+                exit 1
+            fi
+            
+            echo "📦 Found latest release: $LATEST_TAG"
+            
+            echo "📥 Pulling matching images from GHCR..."
+            docker pull ghcr.io/shipsecai/studio-backend:$LATEST_TAG
+            docker pull ghcr.io/shipsecai/studio-frontend:$LATEST_TAG
+            docker pull ghcr.io/shipsecai/studio-worker:$LATEST_TAG
+            
+            echo "🚀 Starting production environment with version $LATEST_TAG..."
+            export SHIPSEC_TAG=$LATEST_TAG
+            docker compose -f docker/docker-compose.full.yml up -d
+            
+            echo ""
+            echo "✅ ShipSec Studio $LATEST_TAG ready"
+            echo "   Frontend:    http://localhost:8090"
+            echo "   Backend:     http://localhost:3211"
+            echo "   Temporal UI: http://localhost:8081"
+            echo ""
+            echo "💡 Note: Using images tagged as $LATEST_TAG"
+            ;;
         *)
-            echo "Usage: just prod [start|stop|build|logs|status|clean]"
+            echo "Usage: just prod [start|start-latest|stop|build|logs|status|clean]"
             ;;
     esac
 
@@ -219,11 +255,15 @@ prod-images action="start":
 
             DOCKER_BUILDKIT=1 docker build \
                 --target backend \
+                --build-arg POSTHOG_API_KEY=$POSTHOG_API_KEY \
+                --build-arg POSTHOG_HOST=$POSTHOG_HOST \
                 -t ghcr.io/shipsecai/studio-backend:latest \
                 .
 
             DOCKER_BUILDKIT=1 docker build \
                 --target worker \
+                --build-arg POSTHOG_API_KEY=$POSTHOG_API_KEY \
+                --build-arg POSTHOG_HOST=$POSTHOG_HOST \
                 -t ghcr.io/shipsecai/studio-worker:latest \
                 .
 
@@ -325,6 +365,7 @@ help:
     @echo "Production (Docker):"
     @echo "  just prod          Start with cached images"
     @echo "  just prod build    Rebuild and start"
+    @echo "  just prod start-latest  Download latest release and start"
     @echo "  just prod stop     Stop production"
     @echo "  just prod logs     View production logs"
     @echo "  just prod status   Check production status"

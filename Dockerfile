@@ -40,6 +40,12 @@ FROM base AS backend
 # Switch to user
 USER shipsec
 
+# PostHog analytics (optional)
+ARG POSTHOG_API_KEY=""
+ARG POSTHOG_HOST=""
+ENV POSTHOG_API_KEY=${POSTHOG_API_KEY}
+ENV POSTHOG_HOST=${POSTHOG_HOST}
+
 # Set working directory for backend
 WORKDIR /app/backend
 
@@ -56,6 +62,12 @@ FROM base AS worker
 
 # Switch to user
 USER shipsec
+
+# PostHog analytics (optional)
+ARG POSTHOG_API_KEY=""
+ARG POSTHOG_HOST=""
+ENV POSTHOG_API_KEY=${POSTHOG_API_KEY}
+ENV POSTHOG_HOST=${POSTHOG_HOST}
 
 # Set working directory for worker
 WORKDIR /app/worker
