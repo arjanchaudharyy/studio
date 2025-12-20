@@ -11,6 +11,8 @@ interface WorkflowUiState {
   /** Currently focused terminal panel's node ID (for z-index stacking) */
   focusedTerminalNodeId: string | null
   showDemoComponents: boolean
+  configPanelOpen: boolean
+  schedulesPanelOpen: boolean
 }
 
 interface WorkflowUiActions {
@@ -22,6 +24,8 @@ interface WorkflowUiActions {
   /** Bring a terminal panel to the front by setting it as focused */
   bringTerminalToFront: (nodeId: string) => void
   toggleDemoComponents: () => void
+  setConfigPanelOpen: (open: boolean) => void
+  setSchedulesPanelOpen: (open: boolean) => void
 }
 
 export const useWorkflowUiStore = create<WorkflowUiState & WorkflowUiActions>()(
@@ -47,6 +51,10 @@ export const useWorkflowUiStore = create<WorkflowUiState & WorkflowUiActions>()(
       bringTerminalToFront: (nodeId) => set({ focusedTerminalNodeId: nodeId }),
       showDemoComponents: false,
       toggleDemoComponents: () => set((state) => ({ showDemoComponents: !state.showDemoComponents })),
+      configPanelOpen: false,
+      schedulesPanelOpen: false,
+      setConfigPanelOpen: (open) => set({ configPanelOpen: open }),
+      setSchedulesPanelOpen: (open) => set({ schedulesPanelOpen: open }),
     }),
     {
       name: 'workflow-ui-preferences',

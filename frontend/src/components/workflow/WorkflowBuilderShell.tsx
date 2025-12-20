@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+  import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -20,6 +20,8 @@ interface WorkflowBuilderShellProps {
   showLoadingOverlay: boolean
   scheduleDrawer?: ReactNode
   runDialog?: ReactNode
+  isConfigPanelVisible?: boolean
+  configPanelContent?: ReactNode
 }
 
 const LIBRARY_PANEL_WIDTH = 320
@@ -60,6 +62,8 @@ export function WorkflowBuilderShell({
   showLoadingOverlay,
   scheduleDrawer,
   runDialog,
+  isConfigPanelVisible,
+  configPanelContent,
 }: WorkflowBuilderShellProps) {
   const isMobile = useIsMobile()
   const layoutRef = useRef<HTMLDivElement | null>(null)
@@ -77,22 +81,24 @@ export function WorkflowBuilderShell({
   // Responsive panel width
   const libraryPanelWidth = isMobile ? LIBRARY_PANEL_WIDTH_MOBILE : LIBRARY_PANEL_WIDTH
 
-  // Reset hint when inspector becomes visible on mobile
+  // Reset hint when any panel becomes visible on mobile
+  const anyMobilePanelVisible = isInspectorVisible || isConfigPanelVisible || isScheduleSidebarVisible
+
   useEffect(() => {
-    if (isMobile && isInspectorVisible) {
+    if (isMobile && anyMobilePanelVisible) {
       setShowMobileHint(true)
     }
-  }, [isMobile, isInspectorVisible])
+  }, [isMobile, anyMobilePanelVisible])
 
   // Auto-hide mobile hint after 2 seconds
   useEffect(() => {
-    if (isMobile && isInspectorVisible && showMobileHint) {
+    if (isMobile && anyMobilePanelVisible && showMobileHint) {
       const timer = setTimeout(() => {
         setShowMobileHint(false)
       }, 2000)
       return () => clearTimeout(timer)
     }
-  }, [isMobile, isInspectorVisible, showMobileHint])
+  }, [isMobile, anyMobilePanelVisible, showMobileHint])
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined
@@ -361,17 +367,16 @@ export function WorkflowBuilderShell({
             </aside>
           )}
 
-          {/* Inspector Panel - Bottom sheet on mobile, side panel on desktop */}
+          {/* Mobile: Draggable bottom sheet for all panels */}
           {isMobile ? (
-            // Mobile: Draggable bottom sheet
             <aside
               className={cn(
-                'fixed inset-x-0 bottom-0 z-[60] bg-background border-t rounded-t-2xl shadow-2xl',
+                'fixed inset-x-0 bottom-0 z-[60] bg-background border-t rounded-t-2xl shadow-2xl overflow-hidden',
                 'transition-opacity duration-200',
-                isInspectorVisible ? 'opacity-100' : 'opacity-0 pointer-events-none translate-y-full',
+                anyMobilePanelVisible ? 'opacity-100' : 'opacity-0 pointer-events-none translate-y-full',
               )}
               style={{
-                height: isInspectorVisible ? `${mobileSheetHeight}%` : 0,
+                height: anyMobilePanelVisible ? `${mobileSheetHeight}%` : 0,
                 maxHeight: 'calc(100vh - 56px)', // Don't go above topbar
                 transition: isDraggingSheetRef.current
                   ? 'none'
@@ -399,16 +404,23 @@ export function WorkflowBuilderShell({
                       <svg className="w-3 h-3 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                       </svg>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">Slide down to inspect nodes</span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {isConfigPanelVisible ? 'Slide down to see canvas' :
+                          isScheduleSidebarVisible ? 'Slide down to see canvas' :
+                            'Slide down to inspect nodes'}
+                      </span>
                     </>
                   ) : null}
                 </div>
               </div>
 
               {/* Content */}
-              <div className="flex h-[calc(100%-36px)] min-h-0 overflow-hidden">
-                {inspectorContent}
-              </div>
+                <div className="flex h-[calc(100%-36px)] min-h-0 overflow-hidden w-full relative">
+                  {isConfigPanelVisible ? configPanelContent : 
+                   isScheduleSidebarVisible ? scheduleSidebarContent : 
+                   inspectorContent}
+                  <div id="mobile-bottom-sheet-portal" className="absolute inset-0 empty:hidden" />
+                </div>
             </aside>
           ) : (
             // Desktop: Side panel (unchanged)

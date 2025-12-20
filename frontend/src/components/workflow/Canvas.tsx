@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, createContext, useContext, type Dispatch, type SetStateAction } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ReactFlow,
   Background,
@@ -33,6 +34,24 @@ import type { WorkflowSchedule } from '@shipsec/shared'
 import { cn } from '@/lib/utils'
 import { useOptionalWorkflowSchedulesContext } from '@/features/workflow-builder/contexts/WorkflowSchedulesContext'
 import { mobilePlacementState, clearMobilePlacement } from '@/components/layout/Sidebar'
+
+// Custom hook to detect mobile viewport
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  )
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < breakpoint)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [breakpoint])
+
+  return isMobile
+}
 
 // Context for entry point actions
 interface EntryPointActionsContextValue {
@@ -116,6 +135,14 @@ export function Canvas({
   const { dataFlows, selectedNodeId, selectNode, selectEvent } = useExecutionTimelineStore()
   const mode = useWorkflowUiStore((state) => state.mode)
   const { toast } = useToast()
+  const { setConfigPanelOpen } = useWorkflowUiStore()
+  const isMobile = useIsMobile()
+
+  // Sync selection state with UI store for mobile bottom sheet visibility
+  useEffect(() => {
+    setConfigPanelOpen(Boolean(selectedNode))
+  }, [selectedNode, setConfigPanelOpen])
+
   const scheduleContext = useOptionalWorkflowSchedulesContext()
   const resolvedWorkflowSchedules = workflowSchedules ?? scheduleContext?.schedules ?? []
   const resolvedSchedulesLoading = schedulesLoading ?? scheduleContext?.isLoading ?? false
@@ -941,19 +968,40 @@ export function Canvas({
             </ReactFlow>
           </div>
 
-          {/* Config Panel */}
-          {mode === 'design' && (
-            <div
-              className={cn(
-                'relative overflow-hidden transition-all duration-150 ease-out',
-                selectedNode ? 'opacity-100' : 'opacity-0 pointer-events-none'
-              )}
-              style={{
-                width: selectedNode ? configPanelWidth : 0,
-                transition: 'width 150ms ease-out, opacity 150ms ease-out',
-              }}
-            >
-              {selectedNode && (
+          {/* Config Panel - Side panel on desktop, portal on mobile */}
+          {mode === 'design' && selectedNode && (
+            isMobile ? (
+              createPortal(
+                <div className="flex h-full w-full overflow-hidden bg-background">
+                  <ConfigPanel
+                    selectedNode={selectedNode}
+                    onClose={() => setSelectedNode(null)}
+                    onUpdateNode={handleUpdateNode}
+                    workflowId={workflowId}
+                    workflowSchedules={resolvedWorkflowSchedules}
+                    schedulesLoading={resolvedSchedulesLoading}
+                    scheduleError={resolvedScheduleError}
+                    onScheduleCreate={resolvedOnScheduleCreate}
+                    onScheduleEdit={resolvedOnScheduleEdit}
+                    onScheduleAction={resolvedOnScheduleAction}
+                    onScheduleDelete={resolvedOnScheduleDelete}
+                    onViewSchedules={resolvedOnViewSchedules}
+                    onWidthChange={() => { }} // Not resizable on mobile
+                  />
+                </div>,
+                document.getElementById('mobile-bottom-sheet-portal') || document.body
+              )
+            ) : (
+              <div
+                className={cn(
+                  'relative overflow-hidden transition-all duration-150 ease-out',
+                  selectedNode ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                )}
+                style={{
+                  width: configPanelWidth,
+                  transition: 'width 150ms ease-out, opacity 150ms ease-out',
+                }}
+              >
                 <ConfigPanel
                   selectedNode={selectedNode}
                   onClose={() => setSelectedNode(null)}
@@ -969,8 +1017,8 @@ export function Canvas({
                   onViewSchedules={resolvedOnViewSchedules}
                   onWidthChange={setConfigPanelWidth}
                 />
-              )}
-            </div>
+              </div>
+            )
           )}
         </div>
       </div>

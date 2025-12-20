@@ -134,15 +134,20 @@ function WorkflowBuilderContent() {
 
   const roles = useAuthStore((state) => state.roles)
   const canManageWorkflows = hasAdminRole(roles)
-  const mode = useWorkflowUiStore((state) => state.mode)
-  const libraryOpen = useWorkflowUiStore((state) => state.libraryOpen)
-  const toggleLibrary = useWorkflowUiStore((state) => state.toggleLibrary)
-  const inspectorWidth = useWorkflowUiStore((state) => state.inspectorWidth)
-  const setInspectorWidth = useWorkflowUiStore((state) => state.setInspectorWidth)
-  const setMode = useWorkflowUiStore((state) => state.setMode)
+  const {
+    mode,
+    libraryOpen,
+    toggleLibrary,
+    inspectorWidth,
+    setInspectorWidth,
+    setMode,
+    showDemoComponents,
+    toggleDemoComponents,
+    configPanelOpen,
+    schedulesPanelOpen,
+  } = useWorkflowUiStore()
+
   const selectedRunId = useExecutionTimelineStore((state) => state.selectedRunId)
-  const showDemoComponents = useWorkflowUiStore((state) => state.showDemoComponents)
-  const toggleDemoComponents = useWorkflowUiStore((state) => state.toggleDemoComponents)
 
   // Mode-aware getters for nodes and edges - memoized to prevent unnecessary re-renders
   const nodes = useMemo(() => {
@@ -743,6 +748,7 @@ function WorkflowBuilderContent() {
   }, [handleSave, mode, toggleDemoComponents, showDemoComponents, toast])
 
 
+
   // Show inspector if there's an active run OR if mode is execution
   // This allows smooth transition without forcing mode change
   const isInspectorVisible = mode === 'execution' || (selectedRunId !== null && mode !== 'design')
@@ -827,7 +833,7 @@ function WorkflowBuilderContent() {
       libraryContent={<Sidebar />}
       canvasContent={canvasContent}
       showScheduleSidebarContainer={false}
-      isScheduleSidebarVisible={false}
+      isScheduleSidebarVisible={schedulesPanelOpen}
       scheduleSidebarContent={null}
       isInspectorVisible={isInspectorVisible}
       inspectorContent={inspectorContent}
@@ -836,6 +842,8 @@ function WorkflowBuilderContent() {
       showLoadingOverlay={shouldShowInitialLoader}
       scheduleDrawer={null}
       runDialog={runDialogNode}
+      isConfigPanelVisible={configPanelOpen}
+      configPanelContent={null} // Will be portalled
     />
   )
 }

@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { SetStateAction } from 'react'
 import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow'
 import { Canvas } from '@/components/workflow/Canvas'
@@ -9,6 +10,25 @@ import { useWorkflowSchedules } from '@/features/workflow-builder/hooks/useWorkf
 import { ScheduleEditorDrawer } from '@/components/schedules/ScheduleEditorDrawer'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
+import { useWorkflowUiStore } from '@/store/workflowUiStore'
+
+// Custom hook to detect mobile viewport
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  )
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < breakpoint)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [breakpoint])
+
+  return isMobile
+}
 
 type SetNodesFn = (setter: SetStateAction<ReactFlowNode<FrontendNodeData>[]>) => void
 type SetEdgesFn = (setter: SetStateAction<ReactFlowEdge[]>) => void
@@ -58,6 +78,14 @@ export function WorkflowDesignerPane({
     workflowId,
     toast,
   })
+
+  const { setSchedulesPanelOpen } = useWorkflowUiStore()
+  const isMobile = useIsMobile()
+
+  // Sync selection state with UI store for mobile bottom sheet visibility
+  useEffect(() => {
+    setSchedulesPanelOpen(schedulePanelExpanded)
+  }, [schedulePanelExpanded, setSchedulesPanelOpen])
 
   const workflowOptions = useMemo(() => {
     if (!workflowId) return []
@@ -131,28 +159,50 @@ export function WorkflowDesignerPane({
           />
         </div>
 
-        <div
-          className={cn(
-            'transition-all duration-150 ease-out overflow-hidden shrink-0',
-            schedulePanelExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          )}
-          style={{
-            width: schedulePanelExpanded ? 432 : 0,
-            transition: 'width 150ms ease-out, opacity 150ms ease-out',
-          }}
-        >
-          <WorkflowSchedulesSidebar
-            schedules={schedules}
-            isLoading={isLoading}
-            error={error}
-            onClose={() => setSchedulePanelExpanded(false)}
-            onCreate={() => openScheduleDrawer('create')}
-            onManage={onNavigateToSchedules}
-            onEdit={(schedule) => openScheduleDrawer('edit', schedule)}
-            onAction={handleScheduleAction}
-            onDelete={handleScheduleDelete}
-          />
-        </div>
+        {/* Schedule Panel - Side panel on desktop, portal on mobile */}
+        {schedulePanelExpanded && (
+          isMobile ? (
+            createPortal(
+              <div className="flex h-full w-full overflow-hidden bg-background">
+                <WorkflowSchedulesSidebar
+                  schedules={schedules}
+                  isLoading={isLoading}
+                  error={error}
+                  onClose={() => setSchedulePanelExpanded(false)}
+                  onCreate={() => openScheduleDrawer('create')}
+                  onManage={onNavigateToSchedules}
+                  onEdit={(schedule) => openScheduleDrawer('edit', schedule)}
+                  onAction={handleScheduleAction}
+                  onDelete={handleScheduleDelete}
+                />
+              </div>,
+              document.getElementById('mobile-bottom-sheet-portal') || document.body
+            )
+          ) : (
+            <div
+              className={cn(
+                'transition-all duration-150 ease-out overflow-hidden shrink-0',
+                schedulePanelExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              )}
+              style={{
+                width: schedulePanelExpanded ? 432 : 0,
+                transition: 'width 150ms ease-out, opacity 150ms ease-out',
+              }}
+            >
+              <WorkflowSchedulesSidebar
+                schedules={schedules}
+                isLoading={isLoading}
+                error={error}
+                onClose={() => setSchedulePanelExpanded(false)}
+                onCreate={() => openScheduleDrawer('create')}
+                onManage={onNavigateToSchedules}
+                onEdit={(schedule) => openScheduleDrawer('edit', schedule)}
+                onAction={handleScheduleAction}
+                onDelete={handleScheduleDelete}
+              />
+            </div>
+          )
+        )}
 
         {workflowId ? (
           <ScheduleEditorDrawer
