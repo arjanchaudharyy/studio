@@ -22,6 +22,24 @@ import { RunInfoDisplay } from '@/components/timeline/RunInfoDisplay'
 
 const TERMINAL_STATUSES: ExecutionRun['status'][] = ['COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'TIMED_OUT']
 
+// Custom hook to detect mobile viewport
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  )
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < breakpoint)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [breakpoint])
+
+  return isMobile
+}
+
 const isRunLive = (run?: ExecutionRun | null) => {
   if (!run) {
     return false
@@ -324,14 +342,19 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
     )
   }
 
+  const isMobile = useIsMobile()
+
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-2 md:gap-4">
       {/* Run Selector Dropdown */}
       <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="w-64 justify-between text-left font-normal"
+            className={cn(
+              "justify-between text-left font-normal truncate",
+              isMobile ? "w-full max-w-[200px]" : "w-64"
+            )}
           >
             <span className="truncate">
               {selectedRun ? (
@@ -345,11 +368,16 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
                 <span className="text-muted-foreground">Select a run...</span>
               )}
             </span>
-            <ChevronDown className="h-4 w-4 opacity-50" />
+            <ChevronDown className="h-4 w-4 opacity-50 flex-shrink-0" />
           </Button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent className="w-96" align="start">
+        <DropdownMenuContent
+          className={cn(
+            isMobile ? "w-[calc(100vw-32px)] max-w-96" : "w-96"
+          )}
+          align="start"
+        >
           <div className="px-3 py-2 border-b space-y-2">
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Trigger</span>
             <div className="flex flex-wrap gap-2">
@@ -443,7 +471,7 @@ export function RunSelector({ onRerun }: RunSelectorProps = {}) {
                     variant={playbackMode === 'live' ? 'default' : 'secondary'}
                     className={cn(
                       "text-xs",
-                      playbackMode === 'live' 
+                      playbackMode === 'live'
                         ? "bg-blue-100 text-blue-700 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700"
                         : "bg-gray-100 text-gray-700 border border-gray-300 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700"
                     )}

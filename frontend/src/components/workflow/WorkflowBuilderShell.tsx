@@ -350,7 +350,7 @@ export function WorkflowBuilderShell({
               className={cn(
                 'overflow-hidden border-l bg-background transition-all duration-150 ease-out',
                 isScheduleSidebarVisible
-                  ? 'opacity-100 w-[380px] lg:w-[432px]'
+                  ? 'opacity-100 w-[432px]'
                   : 'opacity-0 w-0 pointer-events-none',
               )}
               style={{

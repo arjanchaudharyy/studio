@@ -4,7 +4,25 @@ import { ExecutionTimeline } from '@/components/timeline/ExecutionTimeline'
 import { EventInspector } from '@/components/timeline/EventInspector'
 import { Button } from '@/components/ui/button'
 import { MessageModal } from '@/components/ui/MessageModal'
-import { StopCircle, Link2, RefreshCw } from 'lucide-react'
+import { StopCircle, RefreshCw, Link2 } from 'lucide-react'
+
+// Custom hook to detect mobile viewport
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  )
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < breakpoint)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [breakpoint])
+
+  return isMobile
+}
 import { useExecutionTimelineStore } from '@/store/executionTimelineStore'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowExecution } from '@/hooks/useWorkflowExecution'
@@ -239,7 +257,7 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
     })
   }
 
-
+  const isMobile = useIsMobile()
   return (
     <>
       <aside className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background">
@@ -259,8 +277,8 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
                 size="sm"
                 className="h-7 px-2 gap-1"
               >
-                <StopCircle className="h-3 w-3" />
-                <span className="text-xs">Stop</span>
+                <StopCircle className="h-3.5 w-3.5 md:h-3 md:w-3" />
+                {!isMobile && <span className="text-xs">Stop</span>}
               </Button>
             )}
           </div>

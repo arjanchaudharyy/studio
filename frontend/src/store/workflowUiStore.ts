@@ -30,7 +30,7 @@ export const useWorkflowUiStore = create<WorkflowUiState & WorkflowUiActions>()(
       mode: 'design',
       inspectorTab: 'events',
       libraryOpen: true,
-      inspectorWidth: 360,
+      inspectorWidth: 432,
       focusedTerminalNodeId: null,
       setMode: (mode) => set((state) => ({
         mode,

@@ -110,40 +110,49 @@ export function WorkflowDesignerPane({
         onCloseScheduleSidebar: () => setSchedulePanelExpanded(false),
       }}
     >
-      <div className="flex-1 h-full relative">
-        {summaryNode && !hasSelectedNode && !schedulePanelExpanded && (
-          <div className="absolute right-3 top-3 z-20 transition-opacity duration-100 ease-out">
-            {summaryNode}
-          </div>
-        )}
-        <Canvas
-          className="flex-1 h-full relative"
-          nodes={nodes}
-          edges={edges}
-          setNodes={setNodes}
-          setEdges={setEdges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          workflowId={workflowId}
-          onClearNodeSelection={handleClearNodeSelection}
-          onNodeSelectionChange={handleNodeSelectionChange}
-        />
+      <div className="flex-1 h-full flex overflow-hidden">
+        <div className="flex-1 h-full relative min-w-0">
+          {summaryNode && !hasSelectedNode && !schedulePanelExpanded && (
+            <div className="absolute right-3 top-3 z-20 transition-opacity duration-100 ease-out">
+              {summaryNode}
+            </div>
+          )}
+          <Canvas
+            className="flex-1 h-full relative"
+            nodes={nodes}
+            edges={edges}
+            setNodes={setNodes}
+            setEdges={setEdges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            workflowId={workflowId}
+            onClearNodeSelection={handleClearNodeSelection}
+            onNodeSelectionChange={handleNodeSelectionChange}
+          />
+        </div>
 
-        {schedulePanelExpanded && (
-          <div className={cn('absolute top-0 right-0 h-full z-30 w-80 bg-background border-l border-border shadow-xl')}>
-            <WorkflowSchedulesSidebar
-              schedules={schedules}
-              isLoading={isLoading}
-              error={error}
-              onClose={() => setSchedulePanelExpanded(false)}
-              onCreate={() => openScheduleDrawer('create')}
-              onManage={onNavigateToSchedules}
-              onEdit={(schedule) => openScheduleDrawer('edit', schedule)}
-              onAction={handleScheduleAction}
-              onDelete={handleScheduleDelete}
-            />
-          </div>
-        )}
+        <div
+          className={cn(
+            'transition-all duration-150 ease-out overflow-hidden shrink-0',
+            schedulePanelExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          )}
+          style={{
+            width: schedulePanelExpanded ? 432 : 0,
+            transition: 'width 150ms ease-out, opacity 150ms ease-out',
+          }}
+        >
+          <WorkflowSchedulesSidebar
+            schedules={schedules}
+            isLoading={isLoading}
+            error={error}
+            onClose={() => setSchedulePanelExpanded(false)}
+            onCreate={() => openScheduleDrawer('create')}
+            onManage={onNavigateToSchedules}
+            onEdit={(schedule) => openScheduleDrawer('edit', schedule)}
+            onAction={handleScheduleAction}
+            onDelete={handleScheduleDelete}
+          />
+        </div>
 
         {workflowId ? (
           <ScheduleEditorDrawer
