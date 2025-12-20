@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps, type Node, useReactFlow, useUpdateNodeInternals } from 'reactflow'
-import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause, Terminal as TerminalIcon, Pencil } from 'lucide-react'
+import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause, Terminal as TerminalIcon, Pencil, Trash2 } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MarkdownView } from '@/components/ui/markdown'
@@ -35,10 +35,26 @@ const STATUS_ICONS = {
   idle: null,
 } as const
 
+// Custom hook to detect mobile viewport
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  )
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < breakpoint)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [breakpoint])
+
+  return isMobile
+}
+
 /**
  * Terminal button with portal-based panel rendering.
- * Uses portal to render terminal panels outside ReactFlow's stacking context,
- * allowing proper z-index stacking between terminals from different nodes.
  */
 interface TerminalButtonProps {
   id: string
@@ -299,7 +315,7 @@ function TerminalButton({
  */
 export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   const { getComponent, loading } = useComponentStore()
-  const { getNodes, getEdges, setNodes } = useReactFlow()
+  const { getNodes, getEdges, setNodes, deleteElements } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const { nodeStates, selectedRunId, selectNode, isPlaying, playbackMode, isLiveFollowing } = useExecutionTimelineStore()
   const { markDirty } = useWorkflowStore()
@@ -317,6 +333,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
 
   // Get API key for webhook details if this is an entry point
   const { lastCreatedKey } = useApiKeyStore()
+  const isMobile = useIsMobile()
   // Use last created key if available (from just-created flow), otherwise null (will show placeholder)
   const activeApiKey = lastCreatedKey
 
@@ -477,6 +494,13 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
 
   const handleResizeStart = () => {
     isResizing.current = true
+  }
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    deleteElements({ nodes: [{ id }] })
+    markDirty()
   }
 
   const handleResize = (_evt: unknown, params: { width: number; height: number }) => {
@@ -728,7 +752,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   return (
     <div
       className={cn(
-        'shadow-lg border-2 transition-[box-shadow,background-color,border-color,transform] relative',
+        'shadow-lg border-2 transition-[box-shadow,background-color,border-color,transform] relative group',
         // Entry point nodes have more rounded corners (even more rounded)
         isEntryPoint ? 'rounded-[1.5rem]' : 'rounded-lg',
         isTextBlock ? 'min-w-[240px] max-w-none flex flex-col' : 'min-w-[240px] max-w-[280px]',
@@ -886,6 +910,22 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                     bringTerminalToFront={bringTerminalToFront}
                   />
                 )}
+
+                {/* Delete button - shows only in design mode */}
+                {mode === 'design' && !isEntryPoint && (
+                  <button
+                    type="button"
+                    className={cn(
+                      "p-1 rounded hover:bg-destructive/10 text-muted-foreground/40 hover:text-destructive transition-all",
+                      isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    )}
+                    title="Delete node"
+                    aria-label="Delete node"
+                    onClick={handleDelete}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -928,7 +968,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
               Failed
             </Badge>
           )}
-          
+
           {/* Progress bar and events */}
           <ProgressBar
             progress={Number.isFinite(visualState.progress) ? visualState.progress : 0}
