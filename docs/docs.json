@@ -78,7 +78,7 @@
     "primary": {
       "type": "button",
       "label": "Dashboard",
-      "href": "https://beta.shipsec.ai"
+      "href": "https://studio.shipsec.ai"
     }
   },
   "footer": {
