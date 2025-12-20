@@ -4,6 +4,8 @@ import {
   ReactFlowProvider,
   type Node as ReactFlowNode,
   type Edge as ReactFlowEdge,
+  applyNodeChanges,
+  applyEdgeChanges,
 } from 'reactflow'
 import { TopBar } from '@/components/layout/TopBar'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -22,6 +24,8 @@ import { WorkflowExecutionPane } from '@/features/workflow-builder/components/Wo
 import { useWorkflowImportExport } from '@/features/workflow-builder/hooks/useWorkflowImportExport'
 import { useDesignWorkflowPersistence } from '@/features/workflow-builder/hooks/useDesignWorkflowPersistence'
 import { useWorkflowRunner } from '@/features/workflow-builder/hooks/useWorkflowRunner'
+import { useWorkflowHistory } from '@/features/workflow-builder/hooks/useWorkflowHistory'
+import { HistoryDebugger } from '@/features/workflow-builder/components/HistoryDebugger'
 import { useToast } from '@/components/ui/use-toast'
 import { useExecutionStore } from '@/store/executionStore'
 import { useWorkflowStore } from '@/store/workflowStore'
@@ -40,6 +44,7 @@ import type { FrontendNodeData } from '@/schemas/node'
 import { useAuthStore } from '@/store/authStore'
 import { hasAdminRole } from '@/utils/auth'
 import { track, Events } from '@/features/analytics/events'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 const ENTRY_DEFAULT_RUNTIME_INPUTS = [
   {
@@ -145,9 +150,24 @@ function WorkflowBuilderContent() {
     toggleDemoComponents,
     configPanelOpen,
     schedulesPanelOpen,
+    setLibraryOpen,
   } = useWorkflowUiStore()
 
   const selectedRunId = useExecutionTimelineStore((state) => state.selectedRunId)
+  const isMobile = useIsMobile()
+
+  // Undo/redo history management
+  const {
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    captureSnapshot,
+    initializeHistory,
+  } = useWorkflowHistory({
+    designGraph,
+    onHistoryChange: markDirty,
+  })
 
   // Mode-aware getters for nodes and edges - memoized to prevent unnecessary re-renders
   const nodes = useMemo(() => {
@@ -231,6 +251,34 @@ function WorkflowBuilderContent() {
       return
     }
 
+    // Capture snapshot for structural changes or drag end
+    if (mode === 'design') {
+      const hasStructuralChange = filteredChanges.some((c: any) => c.type === 'add' || c.type === 'remove')
+      const positionDragEnded = filteredChanges.some((c: any) => c.type === 'position' && c.dragging === false)
+
+      if (hasStructuralChange || positionDragEnded) {
+        // We must calculate the NEXT state to save it to history
+        // otherwise we are saving the 'before' state as the 'current' state in store, ignoring the change
+        const currentEdges = designEdgesRef.current
+        const nextNodes = applyNodeChanges(filteredChanges, currentNodes)
+
+        // Filter edges connected to removed nodes to avoid stale edges in snapshot
+        // This prevents the "deleted node but restored edges" artifact
+        let nextEdges = currentEdges
+        const removedNodeIds = filteredChanges
+          .filter((c: any) => c.type === 'remove')
+          .map((c: any) => c.id)
+
+        if (removedNodeIds.length > 0) {
+          nextEdges = currentEdges.filter(e =>
+            !removedNodeIds.includes(e.source) && !removedNodeIds.includes(e.target)
+          )
+        }
+
+        captureSnapshot(nextNodes, nextEdges)
+      }
+    }
+
     onNodesChangeBase(filteredChanges)
 
     // Mark design as dirty when nodes change in design mode
@@ -238,15 +286,26 @@ function WorkflowBuilderContent() {
     if (mode === 'design') {
       markDirty()
     }
-  }, [onNodesChangeBase, markDirty, mode, toast])
+  }, [onNodesChangeBase, markDirty, mode, toast, captureSnapshot])
 
   const onEdgesChange = useCallback((changes: any[]) => {
+    // Capture snapshot for edge changes
+    if (mode === 'design' && changes.length > 0) {
+      const hasStructuralChange = changes.some((c: any) => c.type === 'add' || c.type === 'remove')
+      if (hasStructuralChange) {
+        const currentEdges = designEdgesRef.current
+        const nextEdges = applyEdgeChanges(changes, currentEdges)
+        // Pass undefined for nodes to allow merging with pending node changes (e.g. from node deletion)
+        captureSnapshot(undefined, nextEdges)
+      }
+    }
+
     onEdgesChangeBase(changes)
     // Mark as dirty when edges change (only in design mode)
     if (mode === 'design' && changes.length > 0) {
       markDirty()
     }
-  }, [onEdgesChangeBase, markDirty, mode])
+  }, [onEdgesChangeBase, markDirty, mode, captureSnapshot])
   const { getComponent } = useComponentStore()
   const createEntryPointNode = useCallback((): ReactFlowNode<FrontendNodeData> => {
     const component = getComponent(ENTRY_COMPONENT_ID)
@@ -402,6 +461,13 @@ function WorkflowBuilderContent() {
       // If both are empty, design state should already be populated by workflow loading
     }
   }, [mode, setDesignNodes, setDesignEdges, setExecutionNodes, setExecutionEdges])
+
+  // Auto-open component library when switching to design mode on desktop
+  useEffect(() => {
+    if (mode === 'design' && !isMobile) {
+      setLibraryOpen(true)
+    }
+  }, [mode, isMobile, setLibraryOpen])
   // Track previous workflow ID to detect workflow switches
   const prevIdForResetRef = useRef<string | undefined>(undefined)
 
@@ -488,6 +554,9 @@ function WorkflowBuilderContent() {
             name: baseMetadata.name,
             description: baseMetadata.description ?? '',
           })
+
+          // Initialize undo/redo history with the initial state
+          initializeHistory([entryNode], [])
         }
         track(Events.WorkflowBuilderLoaded, { is_new: true })
         return
@@ -550,6 +619,9 @@ function WorkflowBuilderContent() {
           name: workflow.name,
           description: workflow.description ?? '',
         })
+
+        // Initialize undo/redo history with the loaded workflow
+        initializeHistory(workflowNodes, workflowEdges)
 
         // Analytics: builder loaded (existing workflow)
         track(Events.WorkflowBuilderLoaded, {
@@ -641,6 +713,7 @@ function WorkflowBuilderContent() {
     selectedRunId,
     resetHistoricalTracking,
     metadata.id,
+    initializeHistory,
   ])
 
   const resolveRuntimeInputDefinitions = useCallback(() => {
@@ -729,6 +802,30 @@ function WorkflowBuilderContent() {
         return
       }
 
+      // Undo shortcut: Ctrl/Cmd + Z (without Shift)
+      const isUndoCombo = (event.metaKey || event.ctrlKey) && key === 'z' && !event.shiftKey
+      if (isUndoCombo && mode === 'design') {
+        event.preventDefault()
+        event.stopPropagation()
+        if (canUndo) {
+          undo()
+        }
+        return
+      }
+
+      // Redo shortcut: Ctrl/Cmd + Shift + Z OR Ctrl/Cmd + Y
+      const isRedoCombo =
+        ((event.metaKey || event.ctrlKey) && event.shiftKey && key === 'z') ||
+        ((event.metaKey || event.ctrlKey) && key === 'y')
+      if (isRedoCombo && mode === 'design') {
+        event.preventDefault()
+        event.stopPropagation()
+        if (canRedo) {
+          redo()
+        }
+        return
+      }
+
       // Demo components toggle shortcut: Ctrl/Cmd + Shift + D
       const isDemoToggleCombo = (event.metaKey || event.ctrlKey) && event.shiftKey && key === 'd'
       if (isDemoToggleCombo) {
@@ -737,7 +834,8 @@ function WorkflowBuilderContent() {
         toggleDemoComponents()
         const isNowVisible = !showDemoComponents // because it was just toggled
         toast({
-          title: isNowVisible ? 'Demo components enabled' : 'Demo components disabled',
+          title: isNowVisible ? 'Debug mode enabled' : 'Debug mode disabled',
+          description: isNowVisible ? 'Showing demo components and undo stack' : 'Hidden demo components and undo stack',
           duration: 2000,
         })
       }
@@ -745,7 +843,7 @@ function WorkflowBuilderContent() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleSave, mode, toggleDemoComponents, showDemoComponents, toast])
+  }, [handleSave, mode, toggleDemoComponents, showDemoComponents, toast, undo, redo, canUndo, canRedo])
 
 
 
@@ -778,24 +876,32 @@ function WorkflowBuilderContent() {
       onImport={handleImportWorkflow}
       onExport={handleExportWorkflow}
       canManageWorkflows={canManageWorkflows}
+      onUndo={undo}
+      onRedo={redo}
+      canUndo={canUndo}
+      canRedo={canRedo}
     />
   )
 
   const shouldShowSummary = mode === 'design'
 
   const designerCanvas = (
-    <WorkflowDesignerPane
-      workflowId={workflowId}
-      workflowName={workflowName}
-      nodes={nodes}
-      edges={edges}
-      setNodes={setNodes}
-      setEdges={setEdges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      showSummary={shouldShowSummary}
-      onNavigateToSchedules={navigateToSchedules}
-    />
+    <>
+      <WorkflowDesignerPane
+        workflowId={workflowId}
+        workflowName={workflowName}
+        nodes={nodes}
+        edges={edges}
+        setNodes={setNodes}
+        setEdges={setEdges}
+        onNodesChange={onNodesChange}
+        onCaptureSnapshot={captureSnapshot}
+        onEdgesChange={onEdgesChange}
+        showSummary={shouldShowSummary}
+        onNavigateToSchedules={navigateToSchedules}
+      />
+      {mode === 'design' && showDemoComponents && <HistoryDebugger />}
+    </>
   )
 
   const executionCanvas = (
@@ -844,6 +950,10 @@ function WorkflowBuilderContent() {
       runDialog={runDialogNode}
       isConfigPanelVisible={configPanelOpen}
       configPanelContent={null} // Will be portalled
+      onUndo={undo}
+      onRedo={redo}
+      canUndo={canUndo}
+      canRedo={canRedo}
     />
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps, type Node, useReactFlow, useUpdateNodeInternals } from 'reactflow'
-import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause, Terminal as TerminalIcon, Pencil, Trash2 } from 'lucide-react'
+import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause, Terminal as TerminalIcon, Trash2 } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MarkdownView } from '@/components/ui/markdown'
@@ -851,22 +851,10 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                 <h3 className="text-sm font-semibold truncate">{displayLabel}</h3>
               </div>
               <div className="flex items-center gap-1">
-                {/* Edit button for text blocks - explicitly select node for editing */}
-                {isTextBlock && mode === 'design' && (
-                  <button
-                    type="button"
-                    className="p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
-                    title="Edit content"
-                    aria-label="Edit content"
-                    onClick={(e) => {
-                      // Stop propagation to prevent triggering parent div's onClick
-                      e.stopPropagation()
-                      // The node selection will be handled by React Flow's onNodeClick
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                {/* Delete button (Design Mode only, not Entry Point) */}
+
+
+
 
                 {/* Embedded Webhook Dialog (Controlled) */}
                 {isEntryPoint && (
