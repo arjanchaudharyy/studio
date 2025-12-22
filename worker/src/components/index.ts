@@ -10,7 +10,7 @@ initializeDestinationAdapters();
 // Core components
 import './core/entry-point';
 import './core/file-loader';
-import './core/webhook';
+import './core/http-request';
 import './core/text-splitter';
 import './core/text-joiner';
 import './core/console-log';

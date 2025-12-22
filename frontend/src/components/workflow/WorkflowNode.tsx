@@ -10,7 +10,7 @@ import { useExecutionStore } from '@/store/executionStore'
 import { useExecutionTimelineStore, type NodeVisualState } from '@/store/executionTimelineStore'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { getNodeStyle } from './nodeStyles'
-import type { NodeData } from '@/schemas/node'
+import type { NodeData, FrontendNodeData } from '@/schemas/node'
 import type { NodeStatus } from '@/schemas/node'
 import type { InputPort } from '@/schemas/component'
 import { useWorkflowUiStore } from '@/store/workflowUiStore'
@@ -378,7 +378,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   }, [id, isTerminalOpen, prefetchTerminal, selectedRunId])
 
   // Cast to access extended frontend fields (componentId, componentSlug, status, etc.)
-  const nodeData = data as any
+  const nodeData = data as FrontendNodeData
 
   // Get component metadata
   const componentRef: string | undefined = nodeData.componentId ?? nodeData.componentSlug
@@ -576,7 +576,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
 
   // Check if there are unfilled required parameters or inputs
   const componentParameters = component.parameters ?? []
-  const componentInputs = component.inputs ?? []
+  const componentInputs = nodeData.dynamicInputs ?? component.inputs ?? []
   const manualParameters = (nodeData.parameters ?? {}) as Record<string, unknown>
   const requiredParams = componentParameters.filter(param => param.required)
   const requiredInputs = componentInputs.filter(input => input.required)

@@ -19,14 +19,14 @@ import { ParameterFieldWrapper } from './ParameterField'
 import { WebhookDetails } from './WebhookDetails'
 import { SecretSelect } from '@/components/inputs/SecretSelect'
 import type { Node } from 'reactflow'
-import type { NodeData } from '@/schemas/node'
+import type { FrontendNodeData } from '@/schemas/node'
 import type { ComponentType, KeyboardEvent } from 'react'
 import {
   describePortDataType,
   inputSupportsManualValue,
   isListOfTextPortDataType,
 } from '@/utils/portUtils'
-import { API_BASE_URL } from '@/services/api'
+import { API_BASE_URL, api } from '@/services/api'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useApiKeyStore } from '@/store/apiKeyStore'
 import type { WorkflowSchedule } from '@shipsec/shared'
@@ -72,9 +72,9 @@ function CollapsibleSection({ title, count, defaultOpen = true, children }: Coll
 }
 
 interface ConfigPanelProps {
-  selectedNode: Node<NodeData> | null
+  selectedNode: Node<FrontendNodeData> | null
   onClose: () => void
-  onUpdateNode?: (nodeId: string, data: Partial<NodeData>) => void
+  onUpdateNode?: (id: string, data: Partial<FrontendNodeData>) => void
   initialWidth?: number
   onWidthChange?: (width: number) => void
   workflowId?: string | null
@@ -367,7 +367,7 @@ export function ConfigPanel({
   const handleParameterChange = (paramId: string, value: any) => {
     if (!selectedNode || !onUpdateNode) return
 
-    const nodeData = selectedNode.data as any
+    const nodeData: FrontendNodeData = selectedNode.data
 
     const updatedParameters = {
       ...(nodeData.parameters ?? {}),
@@ -388,7 +388,7 @@ export function ConfigPanel({
     return null
   }
 
-  const nodeData = selectedNode.data as any
+  const nodeData: FrontendNodeData = selectedNode.data
   const componentRef: string | undefined = nodeData.componentId ?? nodeData.componentSlug
   const component = getComponent(componentRef)
 
@@ -446,14 +446,59 @@ export function ConfigPanel({
   const iconName = component.icon && component.icon in LucideIcons ? component.icon : 'Box'
   const IconComponent = LucideIcons[iconName as keyof typeof LucideIcons] as ComponentType<{ className?: string }>
 
-  const componentInputs = component.inputs ?? []
+  const manualParameters = (nodeData.parameters ?? {}) as Record<string, unknown>
+
+  // Dynamic Ports Resolution
+  const [dynamicInputs, setDynamicInputs] = useState<any[] | null>(null)
+
+  // Debounce ref
+  const assertPortResolution = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    // If component doesn't have resolvePorts capability, skip
+    // We assume all might have it for now, or check metadata if available
+
+    // reset if component changes
+    if (!component) return
+
+    // Debounce the API call
+    if (assertPortResolution.current) {
+      clearTimeout(assertPortResolution.current)
+    }
+
+    assertPortResolution.current = setTimeout(async () => {
+      try {
+        // Only call if we have parameters
+        const result = await api.components.resolvePorts(component.id, manualParameters)
+        if (result && result.inputs) {
+          setDynamicInputs(result.inputs)
+
+          // Persist to node data so Canvas updates
+          // Use FrontendNodeData type for access
+          const currentDynamic = selectedNode?.data?.dynamicInputs
+          if (JSON.stringify(currentDynamic) !== JSON.stringify(result.inputs)) {
+            onUpdateNode?.(selectedNode!.id, { dynamicInputs: result.inputs })
+          }
+        }
+      } catch (e) {
+        console.error('Failed to resolve dynamic ports', e)
+      }
+    }, 500) // 500ms debounce
+
+    return () => {
+      if (assertPortResolution.current) {
+        clearTimeout(assertPortResolution.current)
+      }
+    }
+  }, [component?.id, JSON.stringify(manualParameters)]) // Deep compare parameters
+
+  const componentInputs = dynamicInputs ?? component.inputs ?? []
   const componentOutputs = component.outputs ?? []
   const componentParameters = component.parameters ?? []
   const exampleItems = [
     component.example,
     ...(component.examples ?? []),
   ].filter((value): value is string => Boolean(value && value.trim().length > 0))
-  const manualParameters = (nodeData.parameters ?? {}) as Record<string, unknown>
   const [scheduleActionState, setScheduleActionState] = useState<Record<string, 'pause' | 'resume' | 'run'>>({})
   const handleNavigateSchedules = useCallback(() => {
     if (!workflowId) {

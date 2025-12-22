@@ -2945,6 +2945,29 @@
         ]
       }
     },
+    "/api/v1/components/{id}/resolve-ports": {
+      "post": {
+        "operationId": "ComponentsController_resolvePorts",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolve dynamic ports based on parameters"
+          }
+        },
+        "tags": [
+          "components"
+        ]
+      }
+    },
     "/api/v1/secrets": {
       "get": {
         "operationId": "SecretsController_listSecrets",

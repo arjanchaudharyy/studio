@@ -246,7 +246,7 @@ export interface ExecutionContext {
   trace?: ITraceService;
 }
 
-export interface ComponentDefinition<I = unknown, O = unknown> {
+export interface ComponentDefinition<I = unknown, O = unknown, P = Record<string, unknown>> {
   id: string;
   label: string;
   category: ComponentCategory;
@@ -258,7 +258,7 @@ export interface ComponentDefinition<I = unknown, O = unknown> {
   requiresSecrets?: boolean;
   execute: (params: I, context: ExecutionContext) => Promise<O>;
   resolvePorts?: (
-    params: Record<string, unknown>,
+    params: P,
   ) => {
     inputs?: ComponentPortMetadata[];
     outputs?: ComponentPortMetadata[];
