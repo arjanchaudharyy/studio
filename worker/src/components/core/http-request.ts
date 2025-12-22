@@ -13,16 +13,22 @@ const inputSchema = z.object({
   contentType: z.string().default('application/json').describe('Content-Type header shorthand'),
   timeout: z.number().int().positive().default(30000).describe('Timeout in milliseconds'),
   failOnError: z.boolean().default(true).describe('Throw error on 4xx/5xx responses'),
+
+  // Auth configuration
+  authType: z.enum(['none', 'bearer', 'basic', 'custom']).default('none').describe('Authentication method'),
+
+  // Dynamic Auth Inputs
+  bearerToken: z.string().optional(),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  authHeaderName: z.string().optional(),
+  authHeaderValue: z.string().optional(),
 });
 
 type Input = z.infer<typeof inputSchema>;
 
-type Output = {
-  status: number;
-  statusText: string;
-  data: unknown;
-  headers: Record<string, string>;
-  rawBody: string;
+type Params = {
+  authType?: 'none' | 'bearer' | 'basic' | 'custom';
 };
 
 const outputSchema = z.object({
@@ -33,7 +39,9 @@ const outputSchema = z.object({
   rawBody: z.string(),
 });
 
-const definition: ComponentDefinition<Input, Output> = {
+type Output = z.infer<typeof outputSchema>;
+
+const definition: ComponentDefinition<Input, Output, Params> = {
   id: 'core.http.request',
   label: 'HTTP Request',
   category: 'transform',
@@ -161,81 +169,34 @@ const definition: ComponentDefinition<Input, Output> = {
   },
   resolvePorts(params) {
     const inputs: any[] = [
-      {
-        id: 'url',
-        label: 'URL',
-        dataType: port.text(),
-        required: true,
-        description: 'The target API endpoint URL.',
-      },
-      {
-        id: 'body',
-        label: 'Body',
-        dataType: port.text(),
-        required: false,
-        description: 'Request body. For JSON, ensure it is a valid JSON string.',
-      },
-      {
-        id: 'headers',
-        label: 'Headers',
-        dataType: port.json(),
-        required: false,
-        description: 'Key-value map of HTTP headers.',
-      },
+      { id: 'url', label: 'URL', dataType: port.text(), required: true },
+      { id: 'body', label: 'Body', dataType: port.text(), required: false },
+      { id: 'headers', label: 'Headers', dataType: port.json(), required: false },
     ];
 
-    const authType = params.authType as string;
+    const authType = params.authType;
 
     if (authType === 'bearer') {
-      inputs.push({
-        id: 'bearerToken',
-        label: 'Bearer Token',
-        dataType: port.secret(),
-        required: true,
-        description: 'Token for Authorization: Bearer header',
-      });
+      inputs.push({ id: 'bearerToken', label: 'Bearer Token', dataType: port.secret(), required: true });
     } else if (authType === 'basic') {
       inputs.push(
-        {
-          id: 'username',
-          label: 'Username',
-          dataType: port.text(),
-          required: true,
-        },
-        {
-          id: 'password',
-          label: 'Password',
-          dataType: port.secret(),
-          required: true,
-        }
+        { id: 'username', label: 'Username', dataType: port.text(), required: true },
+        { id: 'password', label: 'Password', dataType: port.secret(), required: true }
       );
     } else if (authType === 'custom') {
       inputs.push(
-        {
-          id: 'authHeaderName',
-          label: 'Header Name',
-          dataType: port.text(),
-          required: true,
-          description: 'e.g. X-API-Key',
-        },
-        {
-          id: 'authHeaderValue',
-          label: 'Header Value',
-          dataType: port.secret(),
-          required: true,
-        }
+        { id: 'authHeaderName', label: 'Header Name', dataType: port.text(), required: true },
+        { id: 'authHeaderValue', label: 'Header Value', dataType: port.secret(), required: true }
       );
     }
 
     return { inputs };
   },
   async execute(params, context) {
-    // We cast params to any because dynamic inputs aren't in the static Input type yet
-    const p = params as any;
-    const { url, method, body, headers = {}, contentType, timeout, failOnError, authType } = p;
+    const { url, method, body, headers = {}, contentType, timeout, failOnError, authType, bearerToken, username, password, authHeaderName, authHeaderValue } = params;
 
     context.logger.info(`[HTTP] ${method} ${url}`);
-    
+
     // Merge headers
     const finalHeaders = new Headers(headers);
     if (contentType !== 'custom' && !finalHeaders.has('Content-Type')) {
@@ -243,13 +204,13 @@ const definition: ComponentDefinition<Input, Output> = {
     }
 
     // Handle Auth
-    if (authType === 'bearer' && p.bearerToken) {
-      finalHeaders.set('Authorization', `Bearer ${p.bearerToken}`);
-    } else if (authType === 'basic' && p.username && p.password) {
-      const b64 = btoa(`${p.username}:${p.password}`);
+    if (authType === 'bearer' && bearerToken) {
+      finalHeaders.set('Authorization', `Bearer ${bearerToken}`);
+    } else if (authType === 'basic' && username && password) {
+      const b64 = btoa(`${username}:${password}`);
       finalHeaders.set('Authorization', `Basic ${b64}`);
-    } else if (authType === 'custom' && p.authHeaderName && p.authHeaderValue) {
-      finalHeaders.set(p.authHeaderName, p.authHeaderValue);
+    } else if (authType === 'custom' && authHeaderName && authHeaderValue) {
+      finalHeaders.set(authHeaderName, authHeaderValue);
     }
 
     const controller = new AbortController();
@@ -257,9 +218,9 @@ const definition: ComponentDefinition<Input, Output> = {
 
     try {
       context.emitProgress(`Requesting ${method} ${url}...`);
-      
+
       const response = await fetch(url, {
-        method,
+        method: method,
         headers: finalHeaders,
         body: method !== 'GET' && method !== 'HEAD' ? body : undefined,
         signal: controller.signal,
