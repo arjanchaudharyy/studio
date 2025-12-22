@@ -9,7 +9,7 @@ import { transform } from 'sucrase';
 
 const variableConfigSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(['string', 'number', 'boolean', 'json', 'secret']).default('json'),
+  type: z.enum(['string', 'number', 'boolean', 'json', 'secret', 'list']).default('json'),
 });
 
 const parameterSchema = z.object({
@@ -33,6 +33,7 @@ const mapTypeToPort = (type: string, id: string, label: string) => {
     case 'number': return { id, label, dataType: port.number(), required: true };
     case 'boolean': return { id, label, dataType: port.boolean(), required: true };
     case 'secret': return { id, label, dataType: port.secret(), required: true };
+    case 'list': return { id, label, dataType: port.list(port.text()), required: true };
     default: return { id, label, dataType: port.json(), required: true };
   }
 };
