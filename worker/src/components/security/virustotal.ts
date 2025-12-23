@@ -43,6 +43,7 @@ const definition: ComponentDefinition<Input, Output> = {
     ],
     outputs: [
       { id: 'malicious', label: 'Malicious Count', dataType: port.number() },
+      { id: 'reputation', label: 'Reputation', dataType: port.number() },
       { id: 'full_report', label: 'Full Report', dataType: port.json() },
     ],
     parameters: [
@@ -65,6 +66,11 @@ const definition: ComponentDefinition<Input, Output> = {
           inputs: [
               { id: 'indicator', label: 'Indicator', dataType: port.text(), required: true },
               { id: 'apiKey', label: 'API Key', dataType: port.secret(), required: true }
+          ],
+          outputs: [
+              { id: 'malicious', label: 'Malicious Count', dataType: port.number() },
+              { id: 'reputation', label: 'Reputation', dataType: port.number() },
+              { id: 'full_report', label: 'Full Report', dataType: port.json() },
           ]
       };
   },

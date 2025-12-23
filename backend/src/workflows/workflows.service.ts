@@ -4,6 +4,9 @@ import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nest
 import { status as grpcStatus, type ServiceError } from '@grpc/grpc-js';
 
 import { compileWorkflowGraph } from '../dsl/compiler';
+// Ensure all worker components are registered before accessing the registry
+import '@shipsec/studio-worker/components';
+import { componentRegistry } from '@shipsec/component-sdk';
 import { WorkflowDefinition } from '../dsl/types';
 import {
   TemporalService,
@@ -1137,7 +1140,73 @@ export class WorkflowsService {
   }
 
   private parse(dto: WorkflowGraphDto) {
-    return WorkflowGraphSchema.parse(dto);
+    const parsed = WorkflowGraphSchema.parse(dto);
+    
+    // Resolve dynamic ports for each node based on its component and parameters
+    const nodesWithResolvedPorts = parsed.nodes.map((node) => {
+      const nodeData = node.data as any;
+      // Component ID can be in node.type, data.componentId, or data.componentSlug
+      // In the workflow graph schema, node.type contains the component ID (e.g., "security.virustotal.lookup")
+      const componentId = node.type !== 'workflow' ? node.type : (nodeData.componentId || nodeData.componentSlug);
+      
+      if (!componentId) {
+        return node;
+      }
+      
+      try {
+        const component = componentRegistry.get(componentId);
+        if (!component) {
+          return node;
+        }
+        
+        // Get parameters from node data (they may be stored in config, parameters, or at data level)
+        const params = nodeData.parameters || nodeData.config || {};
+        
+        // Resolve ports using the component's resolvePorts function if available
+        if (typeof component.resolvePorts === 'function') {
+          try {
+            const resolved = component.resolvePorts(params);
+            return {
+              ...node,
+              data: {
+                ...nodeData,
+                dynamicInputs: resolved.inputs ?? component.metadata?.inputs ?? [],
+                dynamicOutputs: resolved.outputs ?? component.metadata?.outputs ?? [],
+              },
+            };
+          } catch (resolveError) {
+            this.logger.warn(`Failed to resolve ports for component ${componentId}: ${resolveError}`);
+            // Fall back to static metadata
+            return {
+              ...node,
+              data: {
+                ...nodeData,
+                dynamicInputs: component.metadata?.inputs ?? [],
+                dynamicOutputs: component.metadata?.outputs ?? [],
+              },
+            };
+          }
+        } else {
+          // No dynamic resolver, use static metadata
+          return {
+            ...node,
+            data: {
+              ...nodeData,
+              dynamicInputs: component.metadata?.inputs ?? [],
+              dynamicOutputs: component.metadata?.outputs ?? [],
+            },
+          };
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to get component ${componentId} for port resolution: ${error}`);
+        return node;
+      }
+    });
+    
+    return {
+      ...parsed,
+      nodes: nodesWithResolvedPorts,
+    };
   }
 
   private formatInputSummary(inputs?: Record<string, unknown>): string {
