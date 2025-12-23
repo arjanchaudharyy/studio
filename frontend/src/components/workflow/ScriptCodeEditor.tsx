@@ -181,9 +181,9 @@ export function ScriptCodeEditor({
         return generateFullCode(inputVariables, outputVariables)
     }, [inputVariables, outputVariables])
 
-    // Initialize code if empty or has old format
+    // Initialize code if completely empty - but don't overwrite existing code with different structure
     useEffect(() => {
-        if (!code || code.trim() === '' || !hasValidStructure(code)) {
+        if (!code || code.trim() === '') {
             onCodeChange(defaultCode)
         }
     }, []) // Only on mount
