@@ -1,5 +1,0 @@
-Contact: contact@shipsec.ai
-Preferred-Languages: en
-
-# ShipSec Studio Security Policy
-# Report security vulnerabilities responsibly to contact@shipsec.ai | VDP 
