@@ -14,6 +14,9 @@ export const WorkflowViewportSchema = z.object({
 export const WorkflowNodeDataSchema = z.object({
   label: z.string(),
   config: z.record(z.string(), z.unknown()).default({}),
+  // Dynamic ports resolved from component's resolvePorts function
+  dynamicInputs: z.array(z.record(z.string(), z.unknown())).optional(),
+  dynamicOutputs: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 
 export const WorkflowNodeSchema = z.object({
