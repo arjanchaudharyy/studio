@@ -3,8 +3,9 @@ import {
   componentRegistry,
   ComponentDefinition,
   port,
+  runComponentWithRunner,
+  type DockerRunnerConfig,
 } from '@shipsec/component-sdk';
-import { spawn } from 'child_process';
 
 const variableConfigSchema = z.object({
   name: z.string().min(1),
@@ -36,79 +37,8 @@ const mapTypeToPort = (type: string, id: string, label: string) => {
   }
 };
 
-const definition: ComponentDefinition<Input, Output> = {
-  id: 'core.logic.script',
-  label: 'Script / Logic',
-  category: 'transform',
-  runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema: z.record(z.string(), z.unknown()),
-  docs: 'Execute custom TypeScript code in a secure Docker container. Supports fetch(), async/await, and modern JS.',
-  metadata: {
-    slug: 'logic-script',
-    version: '1.0.0',
-    type: 'process',
-    category: 'transform',
-    description: 'Execute custom TypeScript in a secure Docker sandbox.',
-    icon: 'Code',
-    author: { name: 'ShipSecAI', type: 'shipsecai' },
-    isLatest: true,
-    deprecated: false,
-    inputs: [],
-    outputs: [],
-    parameters: [
-      {
-        id: 'variables',
-        label: 'Input Variables',
-        type: 'json',
-        default: [],
-        description: 'Define input variables that will be available in your script.',
-      },
-      {
-        id: 'returns',
-        label: 'Output Variables',
-        type: 'json',
-        default: [],
-        description: 'Define output variables your script should return.',
-      },
-      {
-        id: 'code',
-        label: 'Script Code',
-        type: 'textarea',
-        rows: 15,
-        default: 'export async function script(input: Input): Promise<Output> {\n  // Your logic here\n  return {};\n}',
-        description: 'Define a function named `script`. Supports async/await and fetch().',
-        required: true,
-      },
-    ],
-  },
-  resolvePorts(params: any) {
-    const inputs: any[] = [];
-    const outputs: any[] = [];
-    if (Array.isArray(params.variables)) {
-      params.variables.forEach((v: any) => { if (v.name) inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
-    }
-    if (Array.isArray(params.returns)) {
-      params.returns.forEach((v: any) => { if (v.name) outputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
-    }
-    return { inputs, outputs };
-  },
-  async execute(params, context) {
-    const { code, variables = [], returns = [] } = params;
-    
-    // Bun runs TS natively!
-    const userCode = code;
-
-    // 1. Prepare Inputs
-    const inputValues: Record<string, any> = {};
-    variables.forEach((v) => {
-      if (v.name && params[v.name] !== undefined) {
-        inputValues[v.name] = params[v.name];
-      }
-    });
-
-    // 2. Prepare the Plugin
-    const pluginCode = `
+// Bun plugin for HTTP imports (allows import from URLs)
+const pluginCode = `
 import { plugin } from "bun";
 const rx_any = /./;
 const rx_http = /^https?:\\/\\//;
@@ -153,15 +83,8 @@ plugin({
 });
 `;
 
-    // 3. Harness to run the user script
-    let processedUserCode = userCode;
-    // Regex matches optional 'async', then 'function script', but only if NOT preceded by 'export '
-    const exportRegex = /^(?!\s*export\s+)(.*?\s*(?:async\s+)?function\s+script\b)/m;
-    if (exportRegex.test(processedUserCode)) {
-      processedUserCode = processedUserCode.replace(exportRegex, (match) => `export ${match.trimStart()}`);
-    }
-
-    const harnessCode = `
+// Harness code that runs the user script
+const harnessCode = `
 import { script } from "./user_script.ts";
 const INPUTS = JSON.parse(process.env.SHIPSEC_INPUTS || '{}');
 
@@ -180,78 +103,167 @@ async function run() {
 run();
 `;
 
-    // 4. Encode to Base64
-    const pluginB64 = Buffer.from(pluginCode).toString('base64');
-    const userB64 = Buffer.from(processedUserCode).toString('base64');
-    const harnessB64 = Buffer.from(harnessCode).toString('base64');
+// Base64 encode the static code
+const pluginB64 = Buffer.from(pluginCode).toString('base64');
+const harnessB64 = Buffer.from(harnessCode).toString('base64');
 
-    // 5. Execute in Docker
-    return new Promise((resolve, reject) => {
-      context.logger.info('[Script] Starting container with HTTP Loader...');
-      
-      const dockerProcess = spawn('docker', [
-        'run', '--rm', '-i',
-        '--name', `shipsec-script-${context.runId}-${Date.now()}`,
-        '--label', 'shipsec-managed=true',
-        '--memory', '256m',
-        '--cpus', '0.5',
-        '-e', `SHIPSEC_INPUTS=${JSON.stringify(inputValues)}`,
-        'oven/bun:alpine',
-        'sh', '-c', 
-        `echo "${pluginB64}" | base64 -d > plugin.ts && ` +
-        `echo "${userB64}" | base64 -d > user_script.ts && ` +
-        `echo "${harnessB64}" | base64 -d > harness.ts && ` +
-        `bun run --preload ./plugin.ts harness.ts`
-      ]);
+// Docker runner configuration - will be customized per execution
+const baseRunner: DockerRunnerConfig = {
+  kind: 'docker',
+  image: 'oven/bun:alpine',
+  entrypoint: 'sh',
+  command: ['-c', ''], // Will be set dynamically in execute()
+  env: {},
+  network: 'bridge', // Need network access for fetch() and HTTP imports
+  timeoutSeconds: 30,
+};
 
-      let stdout = '';
-      let stderr = '';
+const definition: ComponentDefinition<Input, Output> = {
+  id: 'core.logic.script',
+  label: 'Script / Logic',
+  category: 'transform',
+  runner: baseRunner,
+  inputSchema,
+  outputSchema: z.record(z.string(), z.unknown()),
+  docs: 'Execute custom TypeScript code in a secure Docker container. Supports fetch(), async/await, and modern JS.',
+  metadata: {
+    slug: 'logic-script',
+    version: '1.0.0',
+    type: 'process',
+    category: 'transform',
+    description: 'Execute custom TypeScript in a secure Docker sandbox.',
+    icon: 'Code',
+    author: { name: 'ShipSecAI', type: 'shipsecai' },
+    isLatest: true,
+    deprecated: false,
+    inputs: [],
+    outputs: [],
+    parameters: [
+      {
+        id: 'variables',
+        label: 'Input Variables',
+        type: 'json',
+        default: [],
+        description: 'Define input variables that will be available in your script.',
+      },
+      {
+        id: 'returns',
+        label: 'Output Variables',
+        type: 'json',
+        default: [],
+        description: 'Define output variables your script should return.',
+      },
+      {
+        id: 'code',
+        label: 'Script Code',
+        type: 'textarea',
+        rows: 15,
+        default: 'export async function script(input: Input): Promise<Output> {\\n  // Your logic here\\n  return {};\\n}',
+        description: 'Define a function named `script`. Supports async/await and fetch().',
+        required: true,
+      },
+    ],
+  },
+  resolvePorts(params: any) {
+    const inputs: any[] = [];
+    const outputs: any[] = [];
+    if (Array.isArray(params.variables)) {
+      params.variables.forEach((v: any) => { if (v.name) inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
+    }
+    if (Array.isArray(params.returns)) {
+      params.returns.forEach((v: any) => { if (v.name) outputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
+    }
+    return { inputs, outputs };
+  },
+  async execute(params, context) {
+    const { code, variables = [], returns = [] } = params;
 
-      const timeout = setTimeout(() => {
-        dockerProcess.kill();
-        reject(new Error('Script execution timed out (30s)'));
-      }, 30000);
-
-      dockerProcess.stdout.on('data', (data) => {
-        const str = data.toString();
-        stdout += str;
-        const logs = str.replace(/---RESULT_START---[\s\S]*---RESULT_END---/, '').trim();
-        if (logs) context.logger.info('[Script Output]', { output: logs });
-      });
-
-      dockerProcess.stderr.on('data', (data) => {
-        const str = data.toString();
-        stderr += str;
-        context.logger.error('[Script Error]', { output: str.trim() });
-      });
-
-      dockerProcess.on('close', (code) => {
-        clearTimeout(timeout);
-        if (code !== 0) {
-          return reject(new Error(`Script failed with exit code ${code}. ${stderr}`));
-        }
-
-        const match = stdout.match(/---RESULT_START---([\s\S]*)---RESULT_END---/);
-        if (!match) {
-          return reject(new Error('Script finished but no result was returned.'));
-        }
-
-        try {
-          const result = JSON.parse(match[1].trim());
-          const finalOutput: Record<string, unknown> = {};
-          returns.forEach((r) => {
-            if (result && r.name && result[r.name] !== undefined) {
-              finalOutput[r.name] = result[r.name];
-            } else {
-              finalOutput[r.name] = null;
-            }
-          });
-          resolve(finalOutput);
-        } catch (err) {
-          reject(new Error('Failed to parse script result.'));
-        }
-      });
+    // 1. Prepare Inputs from connected ports
+    const inputValues: Record<string, any> = {};
+    variables.forEach((v) => {
+      if (v.name && params[v.name] !== undefined) {
+        inputValues[v.name] = params[v.name];
+      }
     });
+
+    // 2. Process user code - ensure it has 'export' keyword
+    let processedUserCode = code;
+    const exportRegex = /^(?!\s*export\s+)(.*?\s*(?:async\s+)?function\s+script\b)/m;
+    if (exportRegex.test(processedUserCode)) {
+      processedUserCode = processedUserCode.replace(exportRegex, (match) => `export ${match.trimStart()}`);
+    }
+    const userB64 = Buffer.from(processedUserCode).toString('base64');
+
+    // 3. Build the shell command that sets up files and runs bun
+    const shellCommand = [
+      `echo "${pluginB64}" | base64 -d > plugin.ts`,
+      `echo "${userB64}" | base64 -d > user_script.ts`,
+      `echo "${harnessB64}" | base64 -d > harness.ts`,
+      `bun run --preload ./plugin.ts harness.ts`,
+    ].join(' && ');
+
+    // 4. Configure the runner for this execution
+    const runnerConfig: DockerRunnerConfig = {
+      ...baseRunner,
+      command: ['-c', shellCommand],
+      env: {
+        SHIPSEC_INPUTS: JSON.stringify(inputValues),
+      },
+    };
+
+    context.emitProgress({
+      message: 'Starting script execution in Docker...',
+      level: 'info',
+      data: { inputCount: Object.keys(inputValues).length },
+    });
+
+    // 5. Execute using the Docker runner
+    const raw = await runComponentWithRunner<typeof params, any>(
+      runnerConfig,
+      async () => {
+        // Fallback if docker runner fails - should not happen
+        throw new Error('Docker runner should handle this execution');
+      },
+      params,
+      context,
+    );
+
+    // 6. Parse the result from stdout
+    let result: Record<string, unknown> = {};
+    
+    if (typeof raw === 'string') {
+      const match = raw.match(/---RESULT_START---([\s\S]*)---RESULT_END---/);
+      if (match) {
+        try {
+          result = JSON.parse(match[1].trim());
+        } catch (err) {
+          throw new Error('Failed to parse script result JSON.');
+        }
+      } else {
+        // If no result markers, maybe the raw output is the result
+        console.warn('No result markers found in output, returning empty result');
+      }
+    } else if (raw && typeof raw === 'object') {
+      result = raw;
+    }
+
+    // 7. Map results to declared outputs
+    const finalOutput: Record<string, unknown> = {};
+    returns.forEach((r) => {
+      if (result && r.name && result[r.name] !== undefined) {
+        finalOutput[r.name] = result[r.name];
+      } else {
+        finalOutput[r.name] = null;
+      }
+    });
+
+    context.emitProgress({
+      message: 'Script execution completed',
+      level: 'info',
+      data: { outputCount: Object.keys(finalOutput).length },
+    });
+
+    return finalOutput;
   },
 };
 
