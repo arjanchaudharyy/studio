@@ -1,8 +1,12 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import * as LucideIcons from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useCommandPaletteStore } from '@/store/commandPaletteStore'
 import { useThemeStore } from '@/store/themeStore'
+import { useComponentStore } from '@/store/componentStore'
+import { useWorkflowUiStore } from '@/store/workflowUiStore'
+import { mobilePlacementState } from '@/components/layout/Sidebar'
 import { api } from '@/services/api'
 import { cn } from '@/lib/utils'
 import {
@@ -20,13 +24,16 @@ import {
     Hash,
     Command,
     CornerDownLeft,
+    Box,
+    Puzzle,
 } from 'lucide-react'
 import { env } from '@/config/env'
 import type { WorkflowMetadataNormalized } from '@/schemas/workflow'
 import { WorkflowMetadataSchema } from '@/schemas/workflow'
+import type { ComponentMetadata } from '@/schemas/component'
 
 // Command types
-type CommandCategory = 'navigation' | 'workflows' | 'actions' | 'settings'
+type CommandCategory = 'navigation' | 'workflows' | 'actions' | 'settings' | 'components'
 
 interface BaseCommand {
     id: string
@@ -34,6 +41,7 @@ interface BaseCommand {
     description?: string
     category: CommandCategory
     icon?: React.ComponentType<{ className?: string }>
+    iconUrl?: string // For component logos
     keywords?: string[]
 }
 
@@ -52,7 +60,13 @@ interface WorkflowCommand extends BaseCommand {
     workflowId: string
 }
 
-type Command = NavigationCommand | ActionCommand | WorkflowCommand
+interface ComponentCommand extends BaseCommand {
+    type: 'component'
+    componentId: string
+    componentName: string
+}
+
+type Command = NavigationCommand | ActionCommand | WorkflowCommand | ComponentCommand
 
 // Category labels and order
 const categoryLabels: Record<CommandCategory, string> = {
@@ -60,21 +74,29 @@ const categoryLabels: Record<CommandCategory, string> = {
     workflows: 'Workflows',
     actions: 'Quick Actions',
     settings: 'Settings',
+    components: 'Add Component',
 }
 
-const categoryOrder: CommandCategory[] = ['actions', 'navigation', 'workflows', 'settings']
+const categoryOrder: CommandCategory[] = ['actions', 'components', 'navigation', 'workflows', 'settings']
 
 export function CommandPalette() {
     const { isOpen, close } = useCommandPaletteStore()
     const navigate = useNavigate()
     const location = useLocation()
     const { theme, startTransition } = useThemeStore()
+    const { getAllComponents, fetchComponents, loading: componentsLoading } = useComponentStore()
+    const mode = useWorkflowUiStore((state) => state.mode)
     const [query, setQuery] = useState('')
     const [selectedIndex, setSelectedIndex] = useState(0)
     const [workflows, setWorkflows] = useState<WorkflowMetadataNormalized[]>([])
     const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const listRef = useRef<HTMLDivElement>(null)
+
+    // Check if we're on a workflow builder page
+    const isOnWorkflowPage = location.pathname.startsWith('/workflows/') && location.pathname !== '/workflows/new'
+    const isOnNewWorkflowPage = location.pathname === '/workflows/new'
+    const canPlaceComponents = (isOnWorkflowPage || isOnNewWorkflowPage) && mode === 'design'
 
     // Reset state when opening
     useEffect(() => {
@@ -88,7 +110,7 @@ export function CommandPalette() {
         }
     }, [isOpen])
 
-    // Load workflows when palette opens
+    // Load workflows and components when palette opens
     useEffect(() => {
         if (isOpen && workflows.length === 0) {
             setIsLoadingWorkflows(true)
@@ -105,7 +127,72 @@ export function CommandPalette() {
                     setIsLoadingWorkflows(false)
                 })
         }
-    }, [isOpen, workflows.length])
+
+        // Fetch components if not already loaded
+        if (isOpen && getAllComponents().length === 0) {
+            fetchComponents().catch(() => {
+                // Silent fail
+            })
+        }
+    }, [isOpen, workflows.length, getAllComponents, fetchComponents])
+
+    // Get all components (filtered same as Sidebar)
+    const allComponents = useMemo(() => {
+        const components = getAllComponents()
+        return components.filter((component) => {
+            // Filter out entry point
+            if (component.id === 'core.workflow.entrypoint' || component.slug === 'entry-point') {
+                return false
+            }
+            // Filter out IT ops if disabled
+            if (!env.VITE_ENABLE_IT_OPS && component.category === 'it_ops') {
+                return false
+            }
+            // Filter out demo components
+            const name = component.name.toLowerCase()
+            const slug = component.slug.toLowerCase()
+            const category = component.category.toLowerCase()
+            if (
+                category === 'demo' ||
+                name.includes('demo') ||
+                slug.includes('demo') ||
+                name.includes('(test)') ||
+                name === 'live event' ||
+                name === 'parallel sleep' ||
+                slug === 'live-event' ||
+                slug === 'parallel-sleep'
+            ) {
+                return false
+            }
+            return true
+        })
+    }, [getAllComponents])
+
+    // Handle component placement
+    const handleComponentSelect = useCallback(
+        (component: ComponentMetadata) => {
+            // If not on workflow page, navigate to new workflow first
+            if (!isOnWorkflowPage && !isOnNewWorkflowPage) {
+                // Navigate to new workflow - user will need to add component after
+                navigate('/workflows/new')
+                close()
+                return
+            }
+
+            // Set up mobile placement state (works for both mobile and desktop now)
+            // The canvas will detect this and place the component
+            mobilePlacementState.componentId = component.id
+            mobilePlacementState.componentName = component.name
+            mobilePlacementState.isActive = true
+
+            // Close the command palette
+            close()
+
+            // For desktop, we could also trigger a center placement, but the "click to place"
+            // gives users more control over where the component goes
+        },
+        [isOnWorkflowPage, isOnNewWorkflowPage, navigate, close]
+    )
 
     // Build static commands
     const staticCommands = useMemo<Command[]>(() => {
@@ -221,17 +308,50 @@ export function CommandPalette() {
         }))
     }, [workflows])
 
+    // Build component commands
+    const componentCommands = useMemo<Command[]>(() => {
+        return allComponents.map((component) => {
+            // Get icon component if available
+            const iconName = component.icon && component.icon in LucideIcons ? component.icon : null
+            const IconComponent = iconName
+                ? (LucideIcons[iconName as keyof typeof LucideIcons] as React.ComponentType<{ className?: string }>)
+                : Box
+
+            return {
+                id: `component-${component.id}`,
+                type: 'component' as const,
+                label: component.name,
+                description: component.description || `Add ${component.name} to canvas`,
+                category: 'components' as const,
+                icon: IconComponent,
+                iconUrl: component.logo || undefined,
+                componentId: component.id,
+                componentName: component.name,
+                keywords: [
+                    component.name.toLowerCase(),
+                    component.slug.toLowerCase(),
+                    component.category.toLowerCase(),
+                    'component',
+                    'add',
+                    'node',
+                    ...(component.description?.toLowerCase().split(' ') || []),
+                ],
+            }
+        })
+    }, [allComponents])
+
     // Combine all commands
     const allCommands = useMemo<Command[]>(() => {
-        return [...staticCommands, ...workflowCommands]
-    }, [staticCommands, workflowCommands])
+        return [...staticCommands, ...workflowCommands, ...componentCommands]
+    }, [staticCommands, workflowCommands, componentCommands])
 
     // Filter commands based on query
     const filteredCommands = useMemo(() => {
         if (!query.trim()) {
-            // Show all commands when no query, limited workflows
+            // Show all static commands and limited workflows/components when no query
             return [
                 ...staticCommands,
+                ...(canPlaceComponents ? componentCommands.slice(0, 5) : []), // Show first 5 components if on workflow page
                 ...workflowCommands.slice(0, 5), // Show first 5 workflows
             ]
         }
@@ -249,7 +369,7 @@ export function CommandPalette() {
 
             return searchTerms.every((term) => searchableText.includes(term))
         })
-    }, [query, allCommands, staticCommands, workflowCommands])
+    }, [query, allCommands, staticCommands, workflowCommands, componentCommands, canPlaceComponents])
 
     // Group commands by category
     const groupedCommands = useMemo(() => {
@@ -258,6 +378,7 @@ export function CommandPalette() {
             workflows: [],
             actions: [],
             settings: [],
+            components: [],
         }
 
         filteredCommands.forEach((cmd) => {
@@ -301,9 +422,16 @@ export function CommandPalette() {
                     navigate(`/workflows/${command.workflowId}`)
                     close()
                     break
+                case 'component': {
+                    const component = allComponents.find((c) => c.id === command.componentId)
+                    if (component) {
+                        handleComponentSelect(component)
+                    }
+                    break
+                }
             }
         },
-        [navigate, close]
+        [navigate, close, allComponents, handleComponentSelect]
     )
 
     // Keyboard handling
@@ -371,7 +499,7 @@ export function CommandPalette() {
                             setSelectedIndex(0)
                         }}
                         onKeyDown={handleKeyDown}
-                        placeholder="Search commands, workflows, settings..."
+                        placeholder={canPlaceComponents ? "Search commands, components, workflows..." : "Search commands, workflows, settings..."}
                         className="flex-1 bg-transparent border-none outline-none text-base placeholder:text-muted-foreground/60"
                         autoComplete="off"
                         spellCheck={false}
@@ -386,13 +514,13 @@ export function CommandPalette() {
                     ref={listRef}
                     className="max-h-[400px] overflow-y-auto overflow-x-hidden"
                 >
-                    {isLoadingWorkflows && query && (
+                    {(isLoadingWorkflows || componentsLoading) && query && (
                         <div className="px-4 py-3 text-sm text-muted-foreground">
-                            Loading workflows...
+                            Loading...
                         </div>
                     )}
 
-                    {!isLoadingWorkflows && flatCommandList.length === 0 && (
+                    {!isLoadingWorkflows && !componentsLoading && flatCommandList.length === 0 && (
                         <div className="px-4 py-8 text-center">
                             <Hash className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
                             <p className="text-sm text-muted-foreground">No results found</p>
@@ -411,15 +539,25 @@ export function CommandPalette() {
 
                         return (
                             <div key={group.category} className="py-2">
-                                <div className="px-4 py-1.5">
+                                <div className="px-4 py-1.5 flex items-center gap-2">
+                                    {group.category === 'components' && (
+                                        <Puzzle className="w-3 h-3 text-muted-foreground/70" />
+                                    )}
                                     <span className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
                                         {group.label}
                                     </span>
+                                    {group.category === 'components' && !canPlaceComponents && (
+                                        <span className="text-xs text-muted-foreground/50 normal-case tracking-normal">
+                                            (open a workflow first)
+                                        </span>
+                                    )}
                                 </div>
                                 {group.commands.map((command, cmdIndex) => {
                                     const flatIndex = startIndex + cmdIndex
                                     const isSelected = flatIndex === selectedIndex
                                     const Icon = command.icon
+                                    const isComponent = command.type === 'component'
+                                    const hasLogo = isComponent && 'iconUrl' in command && command.iconUrl
 
                                     return (
                                         <button
@@ -431,17 +569,31 @@ export function CommandPalette() {
                                                 'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-75',
                                                 isSelected
                                                     ? 'bg-accent text-accent-foreground'
-                                                    : 'hover:bg-accent/50'
+                                                    : 'hover:bg-accent/50',
+                                                isComponent && !canPlaceComponents && 'opacity-50'
                                             )}
+                                            disabled={isComponent && !canPlaceComponents}
                                         >
-                                            {Icon && (
-                                                <Icon
-                                                    className={cn(
-                                                        'w-4 h-4 flex-shrink-0',
-                                                        isSelected ? 'text-accent-foreground' : 'text-muted-foreground'
-                                                    )}
-                                                />
-                                            )}
+                                            {/* Icon or Logo */}
+                                            <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
+                                                {hasLogo ? (
+                                                    <img
+                                                        src={(command as ComponentCommand & { iconUrl: string }).iconUrl}
+                                                        alt=""
+                                                        className="w-5 h-5 object-contain"
+                                                        onError={(e) => {
+                                                            e.currentTarget.style.display = 'none'
+                                                        }}
+                                                    />
+                                                ) : Icon ? (
+                                                    <Icon
+                                                        className={cn(
+                                                            'w-4 h-4',
+                                                            isSelected ? 'text-accent-foreground' : 'text-muted-foreground'
+                                                        )}
+                                                    />
+                                                ) : null}
+                                            </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="font-medium text-sm truncate">
                                                     {command.label}
