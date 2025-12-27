@@ -25,6 +25,7 @@ import './core/credentials-aws';
 import './core/destination-artifact';
 import './core/destination-s3';
 import './core/text-block';
+import './core/approval-gate';
 import './ai/openai-provider';
 import './ai/gemini-provider';
 import './ai/openrouter-provider';

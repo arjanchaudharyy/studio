@@ -84,12 +84,15 @@ export function CommandPalette() {
     const navigate = useNavigate()
     const location = useLocation()
     const { theme, startTransition } = useThemeStore()
-    const { getAllComponents, fetchComponents, loading: componentsLoading } = useComponentStore()
+    const { fetchComponents, loading: componentsLoading } = useComponentStore()
+    // Subscribe to components from store to trigger re-renders when they load
+    const storeComponents = useComponentStore((state) => state.components)
     const mode = useWorkflowUiStore((state) => state.mode)
     const [query, setQuery] = useState('')
     const [selectedIndex, setSelectedIndex] = useState(0)
     const [workflows, setWorkflows] = useState<WorkflowMetadataNormalized[]>([])
     const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false)
+    const [componentsFetched, setComponentsFetched] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const listRef = useRef<HTMLDivElement>(null)
 
@@ -110,7 +113,7 @@ export function CommandPalette() {
         }
     }, [isOpen])
 
-    // Load workflows and components when palette opens
+    // Load workflows when palette opens
     useEffect(() => {
         if (isOpen && workflows.length === 0) {
             setIsLoadingWorkflows(true)
@@ -127,18 +130,22 @@ export function CommandPalette() {
                     setIsLoadingWorkflows(false)
                 })
         }
+    }, [isOpen, workflows.length])
 
-        // Fetch components if not already loaded
-        if (isOpen && getAllComponents().length === 0) {
+    // Fetch components when palette opens (if not already fetched)
+    useEffect(() => {
+        if (isOpen && !componentsFetched && Object.keys(storeComponents).length === 0) {
+            setComponentsFetched(true)
             fetchComponents().catch(() => {
                 // Silent fail
             })
         }
-    }, [isOpen, workflows.length, getAllComponents, fetchComponents])
+    }, [isOpen, componentsFetched, storeComponents, fetchComponents])
 
     // Get all components (filtered same as Sidebar)
+    // Depend on storeComponents to re-render when they're loaded
     const allComponents = useMemo(() => {
-        const components = getAllComponents()
+        const components = Object.values(storeComponents)
         return components.filter((component) => {
             // Filter out entry point
             if (component.id === 'core.workflow.entrypoint' || component.slug === 'entry-point') {
@@ -166,7 +173,7 @@ export function CommandPalette() {
             }
             return true
         })
-    }, [getAllComponents])
+    }, [storeComponents])
 
     // Handle component placement
     const handleComponentSelect = useCallback(

@@ -11,6 +11,8 @@ export * from './platform-workflow-links';
 export * from './workflow-roles';
 export * from './integrations';
 export * from './workflow-schedules';
+export * from './approval-requests';
 
 export * from './terminal-records';
 export * from './agent-trace-events';
+
