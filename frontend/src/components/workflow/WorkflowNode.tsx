@@ -35,6 +35,7 @@ const STATUS_ICONS = {
   error: XCircle,
   waiting: Clock,
   awaiting_input: ShieldAlert,
+  skipped: LucideIcons.Ban,
   idle: null,
 } as const
 
@@ -309,6 +310,82 @@ function TerminalButton({
           <span className="w-2 h-2 rounded-full bg-green-400" />
         ) : null}
       </button>
+    </div>
+  )
+}
+
+/**
+ * Parameters Display - Shows required and select parameters on the node
+ */
+interface ParametersDisplayProps {
+  componentParameters: any[]
+  requiredParams: any[]
+  nodeParameters: Record<string, any> | undefined
+  position?: 'top' | 'bottom'
+}
+
+function ParametersDisplay({
+  componentParameters,
+  requiredParams,
+  nodeParameters,
+  position = 'bottom'
+}: ParametersDisplayProps) {
+  // Show required parameters and important select parameters (like mode)
+  const selectParams = componentParameters.filter(
+    param => param.type === 'select' && !param.required
+  )
+  const paramsToShow = [...requiredParams, ...selectParams]
+
+  if (paramsToShow.length === 0) return null
+
+  return (
+    <div className={cn(
+      position === 'top'
+        ? "pb-2 mb-2 border-b border-border/50"
+        : "pt-2 border-t border-border/50"
+    )}>
+      <div className="space-y-1">
+        {paramsToShow.map((param) => {
+          const value = nodeParameters?.[param.id]
+          const effectiveValue = value !== undefined ? value : param.default
+          const hasValue = effectiveValue !== undefined && effectiveValue !== null && effectiveValue !== ''
+          const isDefault = value === undefined && param.default !== undefined
+
+          // For select parameters, show the label instead of value
+          let displayValue = hasValue ? effectiveValue : ''
+          if (param.type === 'select' && hasValue && param.options) {
+            const option = param.options.find((opt: any) => opt.value === effectiveValue)
+            displayValue = option?.label || effectiveValue
+          }
+
+          return (
+            <div key={`param-${param.id}`} className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-muted-foreground font-medium truncate">
+                {param.label}
+              </span>
+              <div className="flex items-center gap-1">
+                {hasValue ? (
+                  <span
+                    className={cn(
+                      "font-mono px-1 py-0.5 rounded text-[10px] truncate max-w-[80px]",
+                      isDefault
+                        ? "text-muted-foreground bg-muted/50 italic"
+                        : param.type === 'select'
+                          ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 font-semibold"
+                          : "text-foreground bg-muted"
+                    )}
+                    title={isDefault ? `Default: ${String(displayValue)}` : String(displayValue)}
+                  >
+                    {String(displayValue)}
+                  </span>
+                ) : param.required ? (
+                  <span className="text-red-500 text-[10px]">*required</span>
+                ) : null}
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -803,6 +880,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
     <div
       className={cn(
         'shadow-lg border-2 transition-[box-shadow,background-color,border-color,transform] relative group',
+        'bg-background',
         // Entry point nodes have more rounded corners (even more rounded)
         isEntryPoint ? 'rounded-[1.5rem]' : 'rounded-lg',
         isTextBlock ? 'min-w-[240px] max-w-none flex flex-col' : 'min-w-[240px] max-w-[280px]',
@@ -816,14 +894,13 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
         !isEntryPoint && isTimelineActive && effectiveStatus === 'error' && 'border-red-400',
 
         // Node status states (non-entry-point nodes only)
-        !isEntryPoint && nodeData.status && nodeData.status !== 'idle' && [
+        !isEntryPoint && (effectiveStatus !== 'idle' || isTimelineActive) && [
           nodeStyle.bg,
           nodeStyle.border,
         ],
 
         // Default state (all nodes when idle) - white/grey background
         (!nodeData.status || nodeData.status === 'idle') && !isTimelineActive && [
-          'bg-background',
           'border-border',
         ],
 
@@ -1033,6 +1110,12 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
               Failed
             </Badge>
           )}
+          {visualState.status === 'skipped' && (
+            <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-600 border border-slate-300 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-600">
+              <LucideIcons.Ban className="h-3 w-3 mr-1" />
+              Skipped
+            </Badge>
+          )}
 
           {/* Progress bar and events */}
           <ProgressBar
@@ -1190,6 +1273,20 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                     </div>
                   ))}
                 </div>
+              ) : isEntryPoint ? (
+                <div className="relative flex items-center justify-end gap-2 text-xs">
+                  <div className="flex-1 text-right italic font-medium opacity-60">
+                    Triggered
+                  </div>
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    // No ID provided - matches 'undefined' in React Flow, 
+                    // which is what edges created without sourceHandle expect.
+                    className="!w-[10px] !h-[10px] !border-2 !border-blue-500 !bg-blue-500 !rounded-full"
+                    style={{ top: '50%', right: '-18px', transform: 'translateY(-50%)' }}
+                  />
+                </div>
               ) : (
                 <div className="text-xs text-muted-foreground/60 text-center py-2">
                   No outputs
@@ -1197,7 +1294,20 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
               )}
             </div>
           </div>
-        ) : componentInputs.length > 0 && (
+        ) : null}
+
+        {/* Parameters Display - Shown above ports for non-entry-point nodes */}
+        {!isEntryPoint && (
+          <ParametersDisplay
+            componentParameters={componentParameters}
+            requiredParams={requiredParams}
+            nodeParameters={nodeData.parameters}
+            position="top"
+          />
+        )}
+
+        {/* Input Ports (not shown for entry points) */}
+        {!isEntryPoint && componentInputs.length > 0 && (
           <div className="space-y-1.5">
             {componentInputs.map((input) => {
               // Check if this input has a connection
@@ -1277,10 +1387,10 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
           </div>
         )}
 
-        {/* Output Ports (not shown for entry points - they're in the split layout) */}
-        {!isEntryPoint && effectiveOutputs.length > 0 && (
+        {/* Output Ports - Regular only (not shown for entry points - they're in the split layout) */}
+        {!isEntryPoint && effectiveOutputs.filter((o: any) => !o.isBranching).length > 0 && (
           <div className="space-y-1.5">
-            {effectiveOutputs.map((output) => (
+            {effectiveOutputs.filter((o: any) => !o.isBranching).map((output: any) => (
               <div key={output.id} className="relative flex items-center justify-end gap-2 text-xs">
                 <div className="flex-1 text-right">
                   <div className="text-muted-foreground font-medium">{output.label}</div>
@@ -1297,63 +1407,112 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
           </div>
         )}
 
-        {/* Parameters Display (Required + Select types) */}
-        {(() => {
-          // Show required parameters and important select parameters (like mode)
-          const selectParams = componentParameters.filter(
-            param => param.type === 'select' && !param.required
-          )
-          const paramsToShow = [...requiredParams, ...selectParams]
+        {/* Branching Outputs - Compact horizontal section */}
+        {!isEntryPoint && (() => {
+          const branchingOutputs = effectiveOutputs.filter((o: any) => o.isBranching)
+          if (branchingOutputs.length === 0) return null
 
-          if (paramsToShow.length === 0) return null
+          // Determine which branch is active (for execution mode)
+          // Determine which branches are active (for execution mode)
+          const data = isTimelineActive ? visualState.lastEvent?.data : undefined
+          const activatedPorts = data?.activatedPorts
+
+          // Legacy fallback for manual-approval
+          const legacyActiveBranchId = !activatedPorts && data
+            ? (data.approved === true ? 'approved'
+              : data.approved === false ? 'rejected'
+                : null)
+            : null
+
+          const isNodeFinished = isTimelineActive && (visualState.status === 'success' || visualState.status === 'error')
+          const isNodeSkipped = isTimelineActive && visualState.status === 'skipped'
+          const hasBranchDecision = isNodeFinished || isNodeSkipped
 
           return (
-            <div className="pt-2 border-t border-border/50">
-              <div className="space-y-1">
-                {paramsToShow.map((param) => {
-                  const value = nodeData.parameters?.[param.id]
-                  const effectiveValue = value !== undefined ? value : param.default
-                  const hasValue = effectiveValue !== undefined && effectiveValue !== null && effectiveValue !== ''
-                  const isDefault = value === undefined && param.default !== undefined
+            <div className="mt-2 pt-2 border-t border-dashed border-amber-300/50 dark:border-amber-700/50">
+              <div className="flex gap-2">
+                {/* Left side: Title */}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <LucideIcons.GitBranch className="h-3 w-3 text-amber-500 dark:text-amber-400" />
+                  <span className="text-[9px] font-medium text-amber-600/80 dark:text-amber-400/80 uppercase tracking-wider">
+                    Branches
+                  </span>
+                </div>
 
-                  // For select parameters, show the label instead of value
-                  let displayValue = hasValue ? effectiveValue : ''
-                  if (param.type === 'select' && hasValue && param.options) {
-                    const option = param.options.find(opt => opt.value === effectiveValue)
-                    displayValue = option?.label || effectiveValue
-                  }
+                {/* Right side: Branch pills stacked */}
+                <div className="flex flex-col flex-1 gap-1">
+                  {branchingOutputs.map((output: any) => {
+                    const isActive = isNodeFinished && (
+                      activatedPorts
+                        ? activatedPorts.includes(output.id)
+                        : legacyActiveBranchId === output.id
+                    )
 
-                  return (
-                    <div key={`param-${param.id}`} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground font-medium truncate">
-                        {param.label}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {hasValue ? (
-                          <span
-                            className={cn(
-                              "font-mono px-1 py-0.5 rounded text-[10px] truncate max-w-[80px]",
-                              isDefault
-                                ? "text-muted-foreground bg-muted/50 italic"
-                                : param.type === 'select'
-                                  ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 font-semibold"
-                                  : "text-foreground bg-muted"
-                            )}
-                            title={isDefault ? `Default: ${String(displayValue)}` : String(displayValue)}
-                          >
-                            {String(displayValue)}
-                          </span>
-                        ) : param.required ? (
-                          <span className="text-red-500 text-[10px]">*required</span>
-                        ) : null}
+                    const isInactive = isNodeSkipped || (isNodeFinished && !isActive)
+                    const branchColor = output.branchColor || 'amber'
+
+                    // Color classes for design mode (no decision yet)
+                    const designModeColors: Record<string, string> = {
+                      green: "bg-green-50/80 dark:bg-green-900/20 border-green-400 dark:border-green-600 text-green-700 dark:text-green-300",
+                      red: "bg-red-50/80 dark:bg-red-900/20 border-red-400 dark:border-red-600 text-red-700 dark:text-red-300",
+                      amber: "bg-amber-50/80 dark:bg-amber-900/20 border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-300",
+                      blue: "bg-blue-50/80 dark:bg-blue-900/20 border-blue-400 dark:border-blue-600 text-blue-700 dark:text-blue-300",
+                      purple: "bg-purple-50/80 dark:bg-purple-900/20 border-purple-400 dark:border-purple-600 text-purple-700 dark:text-purple-300",
+                      slate: "bg-slate-100/80 dark:bg-slate-800/30 border-slate-400 dark:border-slate-600 text-slate-700 dark:text-slate-300",
+                    }
+
+                    // Handle colors for design mode
+                    const handleDesignColors: Record<string, string> = {
+                      green: "!border-green-500 !bg-green-500",
+                      red: "!border-red-500 !bg-red-500",
+                      amber: "!border-amber-500 !bg-amber-500",
+                      blue: "!border-blue-500 !bg-blue-500",
+                      purple: "!border-purple-500 !bg-purple-500",
+                      slate: "!border-slate-500 !bg-slate-500",
+                    }
+
+                    return (
+                      <div
+                        key={output.id}
+                        className="relative flex items-center justify-end gap-2 text-xs"
+                      >
+                        <div
+                          className={cn(
+                            "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all",
+                            "border",
+                            // No decision yet (design or running)
+                            !hasBranchDecision && designModeColors[branchColor],
+                            // Active branch - always green
+                            isActive && "bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-600 text-green-700 dark:text-green-300 ring-1 ring-green-400/50",
+                            // Inactive/Skipped branch - MUTED/OFF state
+                            isInactive && "bg-slate-50/50 dark:bg-slate-900/20 border-dashed border-slate-200 dark:border-slate-800 text-slate-300 dark:text-slate-600 opacity-30 grayscale-[0.8]",
+                          )}
+                        >
+                          {isActive && <LucideIcons.Check className="h-2.5 w-2.5" />}
+                          {isInactive && <LucideIcons.X className="h-2.5 w-2.5 text-slate-400/50" />}
+                          <span>{output.label}</span>
+                        </div>
+                        <Handle
+                          type="source"
+                          position={Position.Right}
+                          id={output.id}
+                          className={cn(
+                            "!w-[10px] !h-[10px] !border-2 !rounded-full",
+                            !hasBranchDecision && handleDesignColors[branchColor],
+                            isActive && "!border-green-500 !bg-green-500",
+                            isInactive && "!border-slate-300 !bg-slate-200 dark:!bg-slate-800 opacity-30"
+                          )}
+                          style={{ top: '50%', right: '-18px', transform: 'translateY(-50%)' }}
+                        />
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
             </div>
           )
         })()}
+
 
         {/* Enhanced Execution Status Messages */}
         {isTimelineActive && (

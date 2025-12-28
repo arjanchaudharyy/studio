@@ -319,8 +319,34 @@ function validateEdgeCompatibility(
 
     const sourceHandle = edge.sourceHandle;
     const targetHandle = edge.targetHandle;
-
-    if (!sourceHandle || !targetHandle) {
+    
+    // Check for malformed data edges: if one handle is present but not the other
+    const hasSourceHandle = !!sourceHandle;
+    const hasTargetHandle = !!targetHandle;
+    
+    if (hasSourceHandle && !hasTargetHandle) {
+      errors.push({
+        node: targetAction.ref,
+        field: 'inputMappings',
+        message: `Edge has sourceHandle "${sourceHandle}" but missing targetHandle. Data edges must specify both source and target handles.`,
+        severity: 'error',
+        suggestion: 'Add targetHandle to specify which input port on the target node should receive the data',
+      });
+      continue;
+    }
+    
+    if (!hasSourceHandle && hasTargetHandle) {
+      errors.push({
+        node: targetAction.ref,
+        field: 'inputMappings',
+        message: `Edge has targetHandle "${targetHandle}" but missing sourceHandle. Data edges must specify both source and target handles.`,
+        severity: 'error',
+        suggestion: 'Add sourceHandle to specify which output port on the source node provides the data',
+      });
+      continue;
+    }
+    
+    if (!hasSourceHandle && !hasTargetHandle) {
       // Control edge used for ordering only; skip type validation
       continue;
     }

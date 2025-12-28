@@ -72,6 +72,8 @@ export const OutputPortSchema = z.object({
   label: z.string(),
   dataType: PortDataTypeSchema.optional().default(DEFAULT_TEXT_PORT),
   description: z.string().optional(),
+  isBranching: z.boolean().optional(), // True if this port controls conditional execution
+  branchColor: z.enum(['green', 'red', 'amber', 'blue', 'purple', 'slate']).optional(), // Custom color for branching ports
 })
 
 export type OutputPort = z.infer<typeof OutputPortSchema>

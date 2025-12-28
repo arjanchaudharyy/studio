@@ -96,7 +96,17 @@ const definition: ComponentDefinition<Input, Output, Params> = {
         id: 'approved',
         label: 'Approved',
         dataType: port.boolean(),
-        description: 'True if approved, false if rejected',
+        description: 'Active path when request is approved',
+        isBranching: true,
+        branchColor: 'green',
+      },
+      {
+        id: 'rejected',
+        label: 'Rejected',
+        dataType: port.boolean(),
+        description: 'Active path when request is rejected',
+        isBranching: true,
+        branchColor: 'red',
       },
       {
           id: 'respondedBy',

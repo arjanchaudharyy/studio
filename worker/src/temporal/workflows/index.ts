@@ -108,6 +108,19 @@ export async function shipsecWorkflowRun(
 
   try {
     await runWorkflowWithScheduler(input.definition, {
+      onNodeSkipped: async (actionRef) => {
+        console.log(`[Workflow] Node skipped: ${actionRef}`);
+        await recordTraceEventActivity({
+          type: 'NODE_SKIPPED',
+          runId: input.runId,
+          nodeRef: actionRef,
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          context: {
+            activityId: 'workflow-orchestration',
+          },
+        });
+      },
       run: async (actionRef, schedulerContext) => {
         const action = actionsByRef.get(actionRef);
         if (!action) {
@@ -231,14 +244,55 @@ export async function shipsecWorkflowRun(
           console.log(`[Workflow] Human input resolved for ${action.ref}: approved=${resolution.approved}`);
 
           // Store the final result (merging in responseData for dynamic ports)
+          // Include both 'approved' and 'rejected' fields so downstream nodes can consume either port's data
           results.set(action.ref, {
             approved: resolution.approved,
+            rejected: !resolution.approved,
             respondedBy: resolution.respondedBy,
             responseNote: resolution.responseNote,
             respondedAt: resolution.respondedAt,
             requestId: approvalResult.requestId,
             ...(typeof resolution.responseData === 'object' ? resolution.responseData : {}),
           });
+
+          // Determine active ports based on resolution
+          const activePorts: string[] = [
+            'respondedBy',
+            'responseNote',
+            'respondedAt',
+            'requestId'
+          ];
+
+          const inputType = (pendingData.inputType ?? 'approval') as string;
+          
+          if (inputType === 'approval' || inputType === 'review') {
+             // Standard approval gating
+             activePorts.push(resolution.approved ? 'approved' : 'rejected');
+          } else if (inputType === 'selection') {
+             // Activate ports for selected options
+             const selection = (resolution.responseData as any)?.selection;
+             if (selection !== undefined && selection !== null) {
+                activePorts.push('selection');
+                if (Array.isArray(selection)) {
+                  selection.forEach((val: string) => activePorts.push(`option:${val}`));
+                } else if (typeof selection === 'string') {
+                  activePorts.push(`option:${selection}`);
+                }
+             }
+             
+             if (resolution.approved) {
+                activePorts.push('approved');
+             } else {
+                activePorts.push('rejected');
+             }
+          } else {
+             // Fallback for form/acknowledge
+             if (resolution.approved) {
+                activePorts.push('approved');
+             } else {
+                activePorts.push('rejected');
+             }
+          }
 
           // Explicitly mark the node as completed via trace (since we suppressed it earlier)
           await recordTraceEventActivity({
@@ -247,21 +301,21 @@ export async function shipsecWorkflowRun(
             nodeRef: action.ref,
             timestamp: new Date().toISOString(),
             outputSummary: results.get(action.ref),
+            data: { activatedPorts: activePorts },
             level: 'info',
             context: {
-                runId: input.runId,
-                componentRef: action.ref
+                activityId: 'workflow-orchestration',
             }
           });
 
-          // If rejected, we might want to treat this as a failure
-          if (!resolution.approved) {
-            console.log(`[Workflow] Human input rejected for ${action.ref}`);
-            // We'll let downstream nodes handle the rejection based on the output
-          }
+          // Return active ports to scheduler for conditional execution
+          return { activePorts };
         } else {
           // Normal component - just store the result
           results.set(action.ref, output.output);
+          
+          // Return any active ports returned by the component activity
+          return { activePorts: output.activeOutputPorts };
         }
       },
     });
