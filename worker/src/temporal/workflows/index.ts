@@ -259,6 +259,7 @@ export async function shipsecWorkflowRun(
           const activePorts: string[] = [
             'respondedBy',
             'responseNote',
+            'respondedAt',
             'requestId'
           ];
 
@@ -270,16 +271,15 @@ export async function shipsecWorkflowRun(
           } else if (inputType === 'selection') {
              // Activate ports for selected options
              const selection = (resolution.responseData as any)?.selection;
-             if (Array.isArray(selection)) {
-               selection.forEach((val: string) => activePorts.push(`option:${val}`));
-             } else if (typeof selection === 'string') {
-               activePorts.push(`option:${selection}`);
+             if (selection !== undefined && selection !== null) {
+                activePorts.push('selection');
+                if (Array.isArray(selection)) {
+                  selection.forEach((val: string) => activePorts.push(`option:${val}`));
+                } else if (typeof selection === 'string') {
+                  activePorts.push(`option:${selection}`);
+                }
              }
              
-             // Also support approved/rejected conceptual ports if needed, 
-             // but selection usually implies specific choice paths.
-             // If we want to support a concept of "Any Selection" vs "Rejected/Cancel", 
-             // we could use approved/rejected too, but let's stick to explicit options for now.
              if (resolution.approved) {
                 activePorts.push('approved');
              } else {
