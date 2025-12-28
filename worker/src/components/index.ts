@@ -26,9 +26,9 @@ import './core/destination-artifact';
 import './core/destination-s3';
 import './core/text-block';
 // Manual Action components
-import './manual-action/approval-gate';
-import './manual-action/human-input-choice';
-import './manual-action/human-input-form';
+import './manual-action/manual-approval';
+import './manual-action/manual-selection';
+import './manual-action/manual-form';
 import './ai/openai-provider';
 import './ai/gemini-provider';
 import './ai/openrouter-provider';

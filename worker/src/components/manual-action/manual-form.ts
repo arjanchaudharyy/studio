@@ -7,14 +7,15 @@ import {
 } from '@shipsec/component-sdk';
 
 /**
- * Human Input Form Component
+ * Manual Form Component
  *
  * Pauses workflow to ask the user to fill out a form.
+ * Supports dynamic templates for title and description.
  */
 
 const inputSchema = z.object({
-  data: z.any().optional().describe('Optional data to include in the context'),
-});
+  // Dynamic variables will be injected here by resolvePorts
+}).catchall(z.any());
 
 type Input = z.infer<typeof inputSchema>;
 
@@ -30,32 +31,54 @@ const outputSchema = z.object({
 
 type Output = z.infer<typeof outputSchema>;
 
-// Reuse contract name if possible, or define specific one. 
-// Since structure differs (schema vs options), maybe separate contract or union?
-// For now, I'll use a new contract string to avoid collision if strict validation exists.
-const HUMAN_FORM_PENDING_CONTRACT = 'core.human-form.pending.v1';
+type Params = {
+  variables?: { name: string; type: string }[];
+};
+
+/**
+ * Simple helper to replace {{var}} placeholders in a string
+ */
+function interpolate(template: string, vars: Record<string, any>): string {
+  if (!template) return '';
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key) => {
+    return vars[key] !== undefined ? String(vars[key]) : match;
+  });
+}
+
+const mapTypeToPort = (type: string, id: string, label: string) => {
+  switch (type) {
+    case 'string': return { id, label, dataType: port.text(), required: false };
+    case 'number': return { id, label, dataType: port.number(), required: false };
+    case 'boolean': return { id, label, dataType: port.boolean(), required: false };
+    case 'secret': return { id, label, dataType: port.secret(), required: false };
+    case 'list': return { id, label, dataType: port.list(port.text()), required: false };
+    default: return { id, label, dataType: port.any(), required: false };
+  }
+};
+
+const HUMAN_FORM_PENDING_CONTRACT = 'core.manual-form.pending.v1';
 
 registerContract({
   name: HUMAN_FORM_PENDING_CONTRACT,
   schema: outputSchema,
-  summary: 'Human form pending response',
-  description: 'Indicates that a workflow is waiting for human form input.',
+  summary: 'Manual form pending response',
+  description: 'Indicates that a workflow is waiting for manual form input.',
 });
 
-const definition: ComponentDefinition<Input, Output> = {
-  id: 'core.interaction.human-form',
-  label: 'Form Input',
+const definition: ComponentDefinition<Input, Output, Params> = {
+  id: 'core.manual_action.form',
+  label: 'Manual Form',
   category: 'manual_action',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
-  docs: 'Pauses workflow execution until a user fills out a form.',
+  docs: 'Pauses workflow execution until a user fills out a form. Supports Markdown and dynamic context variables.',
   metadata: {
-    slug: 'human-form',
-    version: '1.0.0',
+    slug: 'manual-form',
+    version: '1.2.0',
     type: 'process',
     category: 'manual_action',
-    description: 'Collect structured data from a user via a form.',
+    description: 'Collect structured data via a manual form. Supports dynamic context templates.',
     icon: 'FormInput', 
     author: {
       name: 'ShipSecAI',
@@ -63,15 +86,7 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'data',
-        label: 'Context Data',
-        dataType: port.any(),
-        required: false,
-        description: 'Data to contextually show to the user',
-      },
-    ],
+    inputs: [],
     outputs: [
       {
         id: 'result',
@@ -94,8 +109,16 @@ const definition: ComponentDefinition<Input, Output> = {
         label: 'Description',
         type: 'textarea',
         required: false,
-        placeholder: 'Please provide the details below...',
-        description: 'Instructions for the user',
+        placeholder: 'Please provide details below... You can use {{variable}} here.',
+        description: 'Instructions (Markdown supported)',
+        helpText: 'Provide context for the form. Supports interpolation.',
+      },
+      {
+          id: 'variables',
+          label: 'Context Variables',
+          type: 'json',
+          default: [],
+          description: 'Define variables to use as {{name}} in your description.',
       },
       {
         id: 'schema',
@@ -115,11 +138,25 @@ const definition: ComponentDefinition<Input, Output> = {
       },
     ],
   },
+  resolvePorts(params) {
+    const inputs: any[] = [];
+    if (params.variables && Array.isArray(params.variables)) {
+        for (const v of params.variables) {
+            if (!v || !v.name) continue;
+            inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name));
+        }
+    }
+    return { inputs };
+  },
   async execute(params, context) {
-    const title = (context as any).parameters?.title || 'Form Input Required';
-    const description = (context as any).parameters?.description || null;
-    const timeoutStr = (context as any).parameters?.timeout;
-    const schemaRaw = (context as any).parameters?.schema;
+    const titleTemplate = params.title || 'Form Input Required';
+    const descriptionTemplate = params.description || '';
+    const timeoutStr = params.timeout;
+    const schemaRaw = params.schema;
+
+    // Interpolate
+    const title = interpolate(titleTemplate, params);
+    const description = interpolate(descriptionTemplate, params);
 
     // Parse schema
     let schema: Record<string, unknown> = {};
@@ -146,7 +183,7 @@ const definition: ComponentDefinition<Input, Output> = {
 
     const requestId = `req-${context.runId}-${context.componentRef}`;
     
-    context.logger.info(`[Human Form] Created request: ${title}`);
+    context.logger.info(`[Manual Form] Created request: ${title}`);
 
     return {
       pending: true as const,
@@ -156,6 +193,7 @@ const definition: ComponentDefinition<Input, Output> = {
       description,
       schema,
       timeoutAt,
+      contextData: params,
     };
   },
 };

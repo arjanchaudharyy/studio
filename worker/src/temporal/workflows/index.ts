@@ -183,7 +183,7 @@ export async function shipsecWorkflowRun(
             inputType: pendingData.inputType ?? 'approval',
             title: pendingData.title,
             description: pendingData.description,
-            context: mergedParams.data ? { data: mergedParams.data } : undefined,
+            context: pendingData.contextData ?? (mergedParams.data ? { data: mergedParams.data } : undefined),
             inputSchema: pendingData.inputSchema ?? (pendingData.options ? { options: pendingData.options, multiple: pendingData.multiple } : undefined) ?? (pendingData.schema ? { schema: pendingData.schema } : undefined),
             timeoutMs: pendingData.timeoutAt ? new Date(pendingData.timeoutAt).getTime() - Date.now() : undefined,
             organizationId: input.organizationId ?? null,

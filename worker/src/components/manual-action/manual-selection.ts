@@ -7,14 +7,15 @@ import {
 } from '@shipsec/component-sdk';
 
 /**
- * Human Input Choice Component
+ * Manual Selection Component
  *
  * Pauses workflow to ask the user to select from a list of options.
+ * Supports dynamic templates for title and description.
  */
 
 const inputSchema = z.object({
-  data: z.any().optional().describe('Optional data to include in the context'),
-});
+  // Dynamic variables will be injected here by resolvePorts
+}).catchall(z.any());
 
 type Input = z.infer<typeof inputSchema>;
 
@@ -31,29 +32,54 @@ const outputSchema = z.object({
 
 type Output = z.infer<typeof outputSchema>;
 
-const HUMAN_INPUT_PENDING_CONTRACT = 'core.human-input.pending.v1';
+type Params = {
+  variables?: { name: string; type: string }[];
+};
+
+/**
+ * Simple helper to replace {{var}} placeholders in a string
+ */
+function interpolate(template: string, vars: Record<string, any>): string {
+  if (!template) return '';
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key) => {
+    return vars[key] !== undefined ? String(vars[key]) : match;
+  });
+}
+
+const mapTypeToPort = (type: string, id: string, label: string) => {
+  switch (type) {
+    case 'string': return { id, label, dataType: port.text(), required: false };
+    case 'number': return { id, label, dataType: port.number(), required: false };
+    case 'boolean': return { id, label, dataType: port.boolean(), required: false };
+    case 'secret': return { id, label, dataType: port.secret(), required: false };
+    case 'list': return { id, label, dataType: port.list(port.text()), required: false };
+    default: return { id, label, dataType: port.any(), required: false };
+  }
+};
+
+const HUMAN_INPUT_PENDING_CONTRACT = 'core.manual-selection.pending.v1';
 
 registerContract({
   name: HUMAN_INPUT_PENDING_CONTRACT,
   schema: outputSchema,
-  summary: 'Human input pending response',
-  description: 'Indicates that a workflow is waiting for human input.',
+  summary: 'Manual selection pending response',
+  description: 'Indicates that a workflow is waiting for manual selection input.',
 });
 
-const definition: ComponentDefinition<Input, Output> = {
-  id: 'core.interaction.human-choice',
-  label: 'Multiple Choice Input',
+const definition: ComponentDefinition<Input, Output, Params> = {
+  id: 'core.manual_action.selection',
+  label: 'Manual Selection',
   category: 'manual_action',
   runner: { kind: 'inline' },
   inputSchema,
   outputSchema,
-  docs: 'Pauses workflow execution until a user selects an option from a list.',
+  docs: 'Pauses workflow execution until a user selects an option. Supports Markdown and dynamic context variables.',
   metadata: {
-    slug: 'human-choice',
-    version: '1.0.0',
+    slug: 'manual-selection',
+    version: '1.2.0',
     type: 'process',
     category: 'manual_action',
-    description: 'Ask the user to select from a list of options.',
+    description: 'Ask the user to select from a list of options. Supports dynamic context templates.',
     icon: 'ListChecks',
     author: {
       name: 'ShipSecAI',
@@ -61,15 +87,7 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'data',
-        label: 'Context Data',
-        dataType: port.any(),
-        required: false,
-        description: 'Data to contextually show to the user',
-      },
-    ],
+    inputs: [],
     outputs: [
       {
         id: 'result',
@@ -92,13 +110,21 @@ const definition: ComponentDefinition<Input, Output> = {
         label: 'Description',
         type: 'textarea',
         required: false,
-        placeholder: 'Please choose one...',
-        description: 'Instructions for the user',
+        placeholder: 'Please choose one... You can use {{variable}} here.',
+        description: 'Instructions (Markdown supported)',
+        helpText: 'Provide context for the selection. Supports interpolation.',
+      },
+      {
+          id: 'variables',
+          label: 'Context Variables',
+          type: 'json',
+          default: [],
+          description: 'Define variables to use as {{name}} in your description.',
       },
       {
         id: 'options',
         label: 'Options',
-        type: 'json', // Assuming JSON editor for options list
+        type: 'json',
         required: true,
         placeholder: '["Option A", "Option B"]',
         description: 'List of options (strings or {label, value} objects)',
@@ -121,12 +147,26 @@ const definition: ComponentDefinition<Input, Output> = {
       },
     ],
   },
+  resolvePorts(params) {
+    const inputs: any[] = [];
+    if (params.variables && Array.isArray(params.variables)) {
+        for (const v of params.variables) {
+            if (!v || !v.name) continue;
+            inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name));
+        }
+    }
+    return { inputs };
+  },
   async execute(params, context) {
-    const title = (context as any).parameters?.title || 'Input Required';
-    const description = (context as any).parameters?.description || null;
-    const timeoutStr = (context as any).parameters?.timeout;
-    const optionsRaw = (context as any).parameters?.options;
-    const multiple = (context as any).parameters?.multiple === true;
+    const titleTemplate = params.title || 'Input Required';
+    const descriptionTemplate = params.description || '';
+    const timeoutStr = params.timeout;
+    const optionsRaw = params.options;
+    const multiple = params.multiple === true;
+
+    // Interpolate
+    const title = interpolate(titleTemplate, params);
+    const description = interpolate(descriptionTemplate, params);
 
     // Parse options
     let options: Array<string | { label: string; value: string }> = [];
@@ -136,13 +176,12 @@ const definition: ComponentDefinition<Input, Output> = {
         try {
             options = JSON.parse(optionsRaw);
         } catch (e) {
-            // Fallback: comma separated?
             options = optionsRaw.split(',').map(s => s.trim());
         }
     }
 
     if (!Array.isArray(options) || options.length === 0) {
-        throw new Error('Human Choice component requires at least one option.');
+        throw new Error('Manual Selection component requires at least one option.');
     }
 
     // Calculate timeout
@@ -156,7 +195,7 @@ const definition: ComponentDefinition<Input, Output> = {
 
     const requestId = `req-${context.runId}-${context.componentRef}`;
     
-    context.logger.info(`[Human Choice] Created request: ${title}`);
+    context.logger.info(`[Manual Selection] Created request: ${title}`);
 
     return {
       pending: true as const,
@@ -167,6 +206,7 @@ const definition: ComponentDefinition<Input, Output> = {
       options,
       multiple,
       timeoutAt,
+      contextData: params,
     };
   },
 };

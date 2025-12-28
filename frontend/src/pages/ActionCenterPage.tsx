@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { MarkdownView } from '@/components/ui/markdown'
 
 
 
@@ -131,11 +132,11 @@ export function ActionCenterPage() {
     const [error, setError] = useState<string | null>(null)
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'expired'>('pending')
-    const [actionState, setActionState] = useState<Record<string, 'approve' | 'reject'>>({})
+    const [actionState, setActionState] = useState<Record<string, 'approve' | 'reject' | 'view'>>({})
 
     // Resolve dialog state
     const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
-    const [resolveAction, setResolveAction] = useState<'approve' | 'reject'>('approve')
+    const [resolveAction, setResolveAction] = useState<'approve' | 'reject' | 'view'>('approve')
     const [selectedApproval, setSelectedApproval] = useState<HumanInputRequest | null>(null)
     const [responseNote, setResponseNote] = useState('')
 
@@ -172,7 +173,7 @@ export function ActionCenterPage() {
 
     const pendingCount = approvals.filter(a => a.status === 'pending').length
 
-    const markAction = (id: string, action: 'approve' | 'reject') => {
+    const markAction = (id: string, action: 'approve' | 'reject' | 'view') => {
         setActionState((state) => ({ ...state, [id]: action }))
     }
 
@@ -184,7 +185,7 @@ export function ActionCenterPage() {
         })
     }
 
-    const openResolveDialog = (approval: HumanInputRequest, action: 'approve' | 'reject') => {
+    const openResolveDialog = (approval: HumanInputRequest, action: 'approve' | 'reject' | 'view') => {
         setSelectedApproval(approval)
         setResolveAction(action)
         setResponseNote('')
@@ -427,9 +428,15 @@ export function ActionCenterPage() {
                                                                     </Button>
                                                                 </>
                                                             ) : (
-                                                                <span className="text-xs text-muted-foreground">
-                                                                    {approval.respondedBy && `by ${approval.respondedBy}`}
-                                                                </span>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="gap-1 h-8"
+                                                                    onClick={() => openResolveDialog(approval, 'view')}
+                                                                >
+                                                                    <ExternalLink className="h-4 w-4" />
+                                                                    View Details
+                                                                </Button>
                                                             )}
                                                         </div>
                                                     </TableCell>
@@ -461,68 +468,105 @@ export function ActionCenterPage() {
 
             {/* Resolve Dialog */}
             <Dialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>
-                            {resolveAction === 'approve' ? 'Approve Request' : 'Reject Request'}
+                            {resolveAction === 'approve' ? 'Approve Request' :
+                                resolveAction === 'reject' ? 'Reject Request' : 'Request Details'}
                         </DialogTitle>
                         <DialogDescription>
                             {selectedApproval?.title}
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
+                    <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
                         {selectedApproval?.description && (
-                            <Card>
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Description</CardDescription>
+                            <div className="space-y-2">
+                                <Label className="text-muted-foreground">Description</Label>
+                                <div className="border rounded-md p-4 bg-muted/30">
+                                    <MarkdownView content={selectedApproval.description} className="prose prose-sm dark:prose-invert max-w-none" />
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedApproval?.status === 'resolved' && (
+                            <Card className="border-primary/20 bg-primary/5">
+                                <CardHeader className="py-3 px-4">
+                                    <div className="flex items-center justify-between">
+                                        <CardDescription className="text-primary font-medium">Response Details</CardDescription>
+                                        <Badge variant="outline" className="bg-background">
+                                            Resolved {selectedApproval.respondedAt && formatDateTime(selectedApproval.respondedAt)}
+                                        </Badge>
+                                    </div>
                                 </CardHeader>
-                                <CardContent className="text-sm">
-                                    {selectedApproval.description}
+                                <CardContent className="py-3 px-4 space-y-3">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <Label className="text-[10px] uppercase text-muted-foreground">Status</Label>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                {renderStatusBadge(selectedApproval)}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <Label className="text-[10px] uppercase text-muted-foreground">Responded By</Label>
+                                            <div className="text-sm font-medium mt-0.5">{selectedApproval.respondedBy || 'System'}</div>
+                                        </div>
+                                    </div>
+
+                                    {selectedApproval.responseData && Object.keys(selectedApproval.responseData).length > 0 && (
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[10px] uppercase text-muted-foreground">Submitted Data</Label>
+                                            <pre className="text-xs bg-background/50 p-2.5 rounded border border-primary/10 overflow-auto">
+                                                {JSON.stringify(selectedApproval.responseData, null, 2)}
+                                            </pre>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         )}
+
                         {selectedApproval?.context && Object.keys(selectedApproval.context).length > 0 && (
-                            <Card>
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Context Data</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-32">
-                                        {JSON.stringify(selectedApproval.context, null, 2)}
-                                    </pre>
-                                </CardContent>
-                            </Card>
+                            <div className="space-y-2">
+                                <Label className="text-muted-foreground">Input Context</Label>
+                                <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-32 border">
+                                    {JSON.stringify(selectedApproval.context, null, 2)}
+                                </pre>
+                            </div>
                         )}
-                        <div className="space-y-2">
-                            <Label htmlFor="response-note">Add a note (optional)</Label>
-                            <Textarea
-                                id="response-note"
-                                placeholder="Explain your decision..."
-                                value={responseNote}
-                                onChange={(e) => setResponseNote(e.target.value)}
-                            />
-                        </div>
+
+                        {selectedApproval?.status === 'pending' && (
+                            <div className="space-y-2">
+                                <Label htmlFor="response-note">Add a note (optional)</Label>
+                                <Textarea
+                                    id="response-note"
+                                    placeholder="Explain your decision..."
+                                    value={responseNote}
+                                    onChange={(e) => setResponseNote(e.target.value)}
+                                />
+                            </div>
+                        )}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setResolveDialogOpen(false)}>
-                            Cancel
+                            {selectedApproval?.status === 'pending' ? 'Cancel' : 'Close'}
                         </Button>
-                        <Button
-                            variant={resolveAction === 'approve' ? 'default' : 'destructive'}
-                            onClick={handleResolve}
-                        >
-                            {resolveAction === 'approve' ? (
-                                <>
-                                    <CheckCircle className="h-4 w-4 mr-2" />
-                                    Approve
-                                </>
-                            ) : (
-                                <>
-                                    <XCircle className="h-4 w-4 mr-2" />
-                                    Reject
-                                </>
-                            )}
-                        </Button>
+                        {selectedApproval?.status === 'pending' && (
+                            <Button
+                                variant={resolveAction === 'approve' ? 'default' : 'destructive'}
+                                onClick={handleResolve}
+                            >
+                                {resolveAction === 'approve' ? (
+                                    <>
+                                        <CheckCircle className="h-4 w-4 mr-2" />
+                                        Approve
+                                    </>
+                                ) : (
+                                    <>
+                                        <XCircle className="h-4 w-4 mr-2" />
+                                        Reject
+                                    </>
+                                )}
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
