@@ -56,6 +56,12 @@ const { prepareRunPayloadActivity } = proxyActivities<{
   startToCloseTimeout: '2 minutes',
 });
 
+const { recordTraceEventActivity } = proxyActivities<{
+  recordTraceEventActivity(event: any): Promise<void>;
+}>({
+  startToCloseTimeout: '1 minute',
+});
+
 /**
  * Check if an output indicates a pending approval gate
  */
@@ -227,6 +233,20 @@ export async function shipsecWorkflowRun(
             respondedAt: resolution.respondedAt,
             requestId: approvalResult.requestId,
             responseData: resolution.responseData,
+          });
+
+          // Explicitly mark the node as completed via trace (since we suppressed it earlier)
+          await recordTraceEventActivity({
+            type: 'NODE_COMPLETED',
+            runId: input.runId,
+            nodeRef: action.ref,
+            timestamp: new Date().toISOString(),
+            outputSummary: results.get(action.ref),
+            level: 'info',
+            context: {
+                runId: input.runId,
+                componentRef: action.ref
+            }
           });
 
           // If rejected, we might want to treat this as a failure

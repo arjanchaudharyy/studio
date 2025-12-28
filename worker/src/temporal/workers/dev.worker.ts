@@ -17,12 +17,20 @@ import {
   finalizeRunActivity,
   initializeComponentActivityServices,
 } from '../activities/run-component.activity';
-import { prepareRunPayloadActivity } from '../activities/run-dispatcher.activity';
 import {
   createHumanInputRequestActivity,
   cancelHumanInputRequestActivity,
   initializeHumanInputActivity,
 } from '../activities/human-input.activity';
+import { prepareRunPayloadActivity } from '../activities/run-dispatcher.activity';
+import {
+  recordTraceEventActivity,
+  initializeTraceActivity,
+} from '../activities/trace.activity';
+
+// ... (existing imports)
+
+
 import { ArtifactAdapter, FileStorageAdapter, SecretsAdapter, RedisTerminalStreamAdapter, KafkaLogAdapter, KafkaTraceAdapter, KafkaAgentTracePublisher } from '../../adapters';
 import * as schema from '../../adapters/schema';
 
@@ -162,6 +170,11 @@ async function main() {
     baseUrl: backendUrl,
   });
 
+  // Initialize trace activity
+  initializeTraceActivity({
+    trace: traceAdapter,
+  });
+
   console.log(`✅ Service adapters initialized`);
 
   console.log(`🏗️ Creating Temporal worker...`);
@@ -171,6 +184,9 @@ async function main() {
       setRunMetadataActivity,
       finalizeRunActivity,
       prepareRunPayloadActivity,
+      createHumanInputRequestActivity,
+      cancelHumanInputRequestActivity,
+      recordTraceEventActivity,
     }).join(', ')}`,
   );
 
@@ -201,6 +217,7 @@ async function main() {
       prepareRunPayloadActivity,
       createHumanInputRequestActivity,
       cancelHumanInputRequestActivity,
+      recordTraceEventActivity,
     },
     bundlerOptions: {
       ignoreModules: ['child_process'],

@@ -7,7 +7,8 @@ export const EXECUTION_STATUS = [
   'FAILED',
   'CANCELLED',
   'TERMINATED',
-  'TIMED_OUT'
+  'TIMED_OUT',
+  'AWAITING_INPUT'
 ] as const;
 
 export type ExecutionStatus = (typeof EXECUTION_STATUS)[number];

@@ -867,6 +867,14 @@ export class WorkflowsService {
 
     const statusPayload = this.mapTemporalStatus(runId, temporalStatus, run, completedActions);
 
+    // Override running status if waiting for human input
+    if (statusPayload.status === 'RUNNING') {
+      const hasPendingInput = await this.runRepository.hasPendingInputs(runId);
+      if (hasPendingInput) {
+        statusPayload.status = 'AWAITING_INPUT';
+      }
+    }
+
     // Track workflow completion/failure when status changes to terminal state
     if (['COMPLETED', 'FAILED', 'CANCELLED', 'TERMINATED', 'TIMED_OUT'].includes(statusPayload.status)) {
       const startTime = run.createdAt;

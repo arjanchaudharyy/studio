@@ -218,25 +218,30 @@ export async function runComponentActivity(
     // the component via `runComponentWithRunner`.
     const output = await component.execute(parsedParams, context);
 
-    trace?.record({
-      type: 'NODE_COMPLETED',
-      runId: input.runId,
-      nodeRef: action.ref,
-      timestamp: new Date().toISOString(),
-      outputSummary: output,
-      level: 'info',
-      context: {
+    // Check if component requested suspension (e.g. approval gate)
+    const isSuspended = output && typeof output === 'object' && 'pending' in output && (output as any).pending === true;
+
+    if (!isSuspended) {
+      trace?.record({
+        type: 'NODE_COMPLETED',
         runId: input.runId,
-        componentRef: action.ref,
-        activityId: activityInfo.activityId,
-        attempt: activityInfo.attempt,
-        correlationId,
-        streamId,
-        joinStrategy,
-        triggeredBy,
-        failure,
-      },
-    });
+        nodeRef: action.ref,
+        timestamp: new Date().toISOString(),
+        outputSummary: output,
+        level: 'info',
+        context: {
+          runId: input.runId,
+          componentRef: action.ref,
+          activityId: activityInfo.activityId,
+          attempt: activityInfo.attempt,
+          correlationId,
+          streamId,
+          joinStrategy,
+          triggeredBy,
+          failure,
+        },
+      });
+    }
 
     return { output };
   } catch (error) {
