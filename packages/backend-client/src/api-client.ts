@@ -545,6 +545,38 @@ export class ShipSecApiClient {
       body: payload,
     });
   }
+
+  // ===== Approvals =====
+
+  async listApprovals(options?: { status?: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled' }) {
+    return this.client.GET('/api/v1/approvals', {
+      params: {
+        query: {
+          status: options?.status,
+        },
+      },
+    });
+  }
+
+  async getApproval(id: string) {
+    return this.client.GET('/api/v1/approvals/{id}', {
+      params: { path: { id } },
+    });
+  }
+
+  async approveRequest(id: string, payload: { responseNote?: string } = {}) {
+    return this.client.POST('/api/v1/approvals/{id}/approve', {
+      params: { path: { id } },
+      body: payload,
+    });
+  }
+
+  async rejectRequest(id: string, payload: { responseNote?: string } = {}) {
+    return this.client.POST('/api/v1/approvals/{id}/reject', {
+      params: { path: { id } },
+      body: payload,
+    });
+  }
 }
 
 /**

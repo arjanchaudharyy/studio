@@ -749,6 +749,33 @@ export const api = {
       return await response.blob()
     },
   },
+
+  approvals: {
+    list: async (status?: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled') => {
+      const response = await apiClient.listApprovals({ status }) as any
+      if (response.error) throw new Error('Failed to fetch approvals')
+      return response.data || []
+    },
+
+    get: async (id: string) => {
+      const response = await apiClient.getApproval(id) as any
+      if (response.error) throw new Error('Failed to fetch approval')
+      if (!response.data) throw new Error('Approval not found')
+      return response.data
+    },
+
+    approve: async (id: string, responseNote?: string) => {
+      const response = await apiClient.approveRequest(id, { responseNote }) as any
+      if (response.error) throw new Error('Failed to approve request')
+      return response.data
+    },
+
+    reject: async (id: string, responseNote?: string) => {
+      const response = await apiClient.rejectRequest(id, { responseNote }) as any
+      if (response.error) throw new Error('Failed to reject request')
+      return response.data
+    },
+  },
 }
 
 export async function getApiAuthHeaders(): Promise<Record<string, string>> {

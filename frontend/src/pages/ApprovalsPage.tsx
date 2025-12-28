@@ -34,6 +34,7 @@ import {
     ExternalLink,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+import { api } from '@/services/api'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import {
     Dialog,
@@ -46,15 +47,17 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 
+type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled'
+
 interface ApprovalRequest {
     id: string
     runId: string
     workflowId: string
     nodeRef: string
-    status: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled'
+    status: ApprovalStatus
     title: string
     description: string | null
-    context: Record<string, unknown>
+    context: Record<string, unknown> | null
     approveToken: string
     rejectToken: string
     timeoutAt: string | null
@@ -129,7 +132,7 @@ export function ApprovalsPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [search, setSearch] = useState('')
-    const [statusFilter, setStatusFilter] = useState('pending')
+    const [statusFilter, setStatusFilter] = useState<'all' | ApprovalStatus>('pending')
     const [actionState, setActionState] = useState<Record<string, 'approve' | 'reject'>>({})
 
     // Resolve dialog state
@@ -142,18 +145,9 @@ export function ApprovalsPage() {
         setIsLoading(true)
         setError(null)
         try {
-            const query = statusFilter === 'all' ? '' : `?status=${statusFilter}`
-            const response = await fetch(`/api/approvals${query}`, {
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-            })
-            if (!response.ok) {
-                throw new Error('Failed to fetch approvals')
-            }
-            const data = await response.json()
-            setApprovals(data)
+            const status = statusFilter === 'all' ? undefined : statusFilter
+            const data = await api.approvals.list(status)
+            setApprovals(data as ApprovalRequest[])
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load approvals')
         } finally {
@@ -163,6 +157,7 @@ export function ApprovalsPage() {
 
     useEffect(() => {
         fetchApprovals()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statusFilter])
 
     const filteredApprovals = useMemo(() => {
@@ -205,21 +200,10 @@ export function ApprovalsPage() {
         setResolveDialogOpen(false)
 
         try {
-            const endpoint = resolveAction === 'approve'
-                ? `/api/approvals/${selectedApproval.id}/approve`
-                : `/api/approvals/${selectedApproval.id}/reject`
-
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({ responseNote }),
-            })
-
-            if (!response.ok) {
-                throw new Error('Failed to process approval')
+            if (resolveAction === 'approve') {
+                await api.approvals.approve(selectedApproval.id, responseNote || undefined)
+            } else {
+                await api.approvals.reject(selectedApproval.id, responseNote || undefined)
             }
 
             toast({
@@ -303,7 +287,7 @@ export function ApprovalsPage() {
                             />
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
                                 <SelectTrigger className="w-[150px]">
                                     <SelectValue placeholder="Status" />
                                 </SelectTrigger>

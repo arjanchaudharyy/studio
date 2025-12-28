@@ -10,16 +10,17 @@ import {
   HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { ApprovalsService } from './approvals.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentAuth } from '../auth/auth-context.decorator';
 import type { AuthContext } from '../auth/types';
-
-class ResolveApprovalDto {
-  respondedBy?: string;
-  responseNote?: string;
-}
+import {
+  ResolveApprovalDto,
+  ListApprovalsQueryDto,
+  ApprovalResponseDto,
+  PublicApprovalResultDto,
+} from './dto/approvals.dto';
 
 @ApiTags('Approvals')
 @Controller('approvals')
@@ -29,14 +30,13 @@ export class ApprovalsController {
   @Get()
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'List all approval requests' })
-  @ApiQuery({ name: 'status', required: false, enum: ['pending', 'approved', 'rejected', 'expired', 'cancelled'] })
-  @ApiResponse({ status: 200, description: 'List of approval requests' })
+  @ApiResponse({ status: 200, description: 'List of approval requests', type: [ApprovalResponseDto] })
   async list(
     @CurrentAuth() auth: AuthContext | null,
-    @Query('status') status?: string,
+    @Query() query: ListApprovalsQueryDto,
   ) {
     const orgId = auth?.organizationId ?? null;
-    if (status === 'pending') {
+    if (query.status === 'pending') {
       return this.approvalsService.listPending(orgId);
     }
     return this.approvalsService.list(orgId);
@@ -46,7 +46,7 @@ export class ApprovalsController {
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Get approval request by ID' })
   @ApiParam({ name: 'id', description: 'Approval request ID' })
-  @ApiResponse({ status: 200, description: 'Approval request details' })
+  @ApiResponse({ status: 200, description: 'Approval request details', type: ApprovalResponseDto })
   @ApiResponse({ status: 404, description: 'Approval request not found' })
   async get(@Param('id') id: string) {
     const approval = await this.approvalsService.findById(id);
@@ -61,7 +61,7 @@ export class ApprovalsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Approve an approval request' })
   @ApiParam({ name: 'id', description: 'Approval request ID' })
-  @ApiResponse({ status: 200, description: 'Approval request approved' })
+  @ApiResponse({ status: 200, description: 'Approval request approved', type: ApprovalResponseDto })
   @ApiResponse({ status: 400, description: 'Approval already resolved or expired' })
   @ApiResponse({ status: 404, description: 'Approval request not found' })
   async approve(
@@ -81,7 +81,7 @@ export class ApprovalsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reject an approval request' })
   @ApiParam({ name: 'id', description: 'Approval request ID' })
-  @ApiResponse({ status: 200, description: 'Approval request rejected' })
+  @ApiResponse({ status: 200, description: 'Approval request rejected', type: ApprovalResponseDto })
   @ApiResponse({ status: 400, description: 'Approval already resolved or expired' })
   @ApiResponse({ status: 404, description: 'Approval request not found' })
   async reject(
@@ -109,7 +109,7 @@ export class PublicApproveController {
   @Get(':token')
   @ApiOperation({ summary: 'Approve via secure token (public link)' })
   @ApiParam({ name: 'token', description: 'Secure approval token' })
-  @ApiResponse({ status: 200, description: 'Approval confirmed' })
+  @ApiResponse({ status: 200, description: 'Approval confirmed', type: PublicApprovalResultDto })
   @ApiResponse({ status: 404, description: 'Invalid or expired token' })
   async approveByToken(
     @Param('token') token: string,
@@ -140,7 +140,7 @@ export class PublicRejectController {
   @Get(':token')
   @ApiOperation({ summary: 'Reject via secure token (public link)' })
   @ApiParam({ name: 'token', description: 'Secure rejection token' })
-  @ApiResponse({ status: 200, description: 'Rejection confirmed' })
+  @ApiResponse({ status: 200, description: 'Rejection confirmed', type: PublicApprovalResultDto })
   @ApiResponse({ status: 404, description: 'Invalid or expired token' })
   async rejectByToken(
     @Param('token') token: string,

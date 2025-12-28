@@ -3869,6 +3869,264 @@
         ]
       }
     },
+    "/api/v1/approvals": {
+      "get": {
+        "operationId": "ApprovalsController_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "expired",
+                "cancelled"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of approval requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "List all approval requests",
+        "tags": [
+          "Approvals"
+        ]
+      }
+    },
+    "/api/v1/approvals/{id}": {
+      "get": {
+        "operationId": "ApprovalsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Approval request ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval request details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Approval request not found"
+          }
+        },
+        "summary": "Get approval request by ID",
+        "tags": [
+          "Approvals"
+        ]
+      }
+    },
+    "/api/v1/approvals/{id}/approve": {
+      "post": {
+        "operationId": "ApprovalsController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Approval request ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveApprovalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approval request approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Approval already resolved or expired"
+          },
+          "404": {
+            "description": "Approval request not found"
+          }
+        },
+        "summary": "Approve an approval request",
+        "tags": [
+          "Approvals"
+        ]
+      }
+    },
+    "/api/v1/approvals/{id}/reject": {
+      "post": {
+        "operationId": "ApprovalsController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Approval request ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveApprovalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approval request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Approval already resolved or expired"
+          },
+          "404": {
+            "description": "Approval request not found"
+          }
+        },
+        "summary": "Reject an approval request",
+        "tags": [
+          "Approvals"
+        ]
+      }
+    },
+    "/api/v1/approve/{token}": {
+      "get": {
+        "operationId": "PublicApproveController_approveByToken",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "description": "Secure approval token",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "note",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApprovalResultDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid or expired token"
+          }
+        },
+        "summary": "Approve via secure token (public link)",
+        "tags": [
+          "Approvals - Public"
+        ]
+      }
+    },
+    "/api/v1/reject/{token}": {
+      "get": {
+        "operationId": "PublicRejectController_rejectByToken",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "description": "Secure rejection token",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "note",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rejection confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicApprovalResultDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid or expired token"
+          }
+        },
+        "summary": "Reject via secure token (public link)",
+        "tags": [
+          "Approvals - Public"
+        ]
+      }
+    },
     "/api/v1/testing/webhooks": {
       "post": {
         "operationId": "TestingWebhookController_acceptWebhook",
@@ -4033,6 +4291,26 @@
                         "type": "string"
                       },
                       "additionalProperties": {}
+                    },
+                    "dynamicInputs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "dynamicOutputs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
                     }
                   },
                   "required": [
@@ -4182,6 +4460,26 @@
                             "type": "string"
                           },
                           "additionalProperties": {}
+                        },
+                        "dynamicInputs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "dynamicOutputs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
                         }
                       },
                       "required": [
@@ -4362,6 +4660,26 @@
                         "type": "string"
                       },
                       "additionalProperties": {}
+                    },
+                    "dynamicInputs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "dynamicOutputs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      }
                     }
                   },
                   "required": [
@@ -4528,6 +4846,26 @@
                             "type": "string"
                           },
                           "additionalProperties": {}
+                        },
+                        "dynamicInputs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "dynamicOutputs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
                         }
                       },
                       "required": [
@@ -6155,6 +6493,160 @@
             "maximum": 9007199254740991
           }
         }
+      },
+      "ApprovalResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "workflowId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "nodeRef": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "expired",
+              "cancelled"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "context": {
+            "nullable": true
+          },
+          "approveToken": {
+            "type": "string"
+          },
+          "rejectToken": {
+            "type": "string"
+          },
+          "timeoutAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "respondedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "respondedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "responseNote": {
+            "type": "string",
+            "nullable": true
+          },
+          "organizationId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "workflowId",
+          "nodeRef",
+          "status",
+          "title",
+          "description",
+          "context",
+          "approveToken",
+          "rejectToken",
+          "timeoutAt",
+          "respondedAt",
+          "respondedBy",
+          "responseNote",
+          "organizationId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ResolveApprovalDto": {
+        "type": "object",
+        "properties": {
+          "respondedBy": {
+            "description": "User ID or identifier of who resolved the approval",
+            "type": "string"
+          },
+          "responseNote": {
+            "description": "Optional note explaining the decision",
+            "type": "string"
+          }
+        }
+      },
+      "PublicApprovalResultDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "approval": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "title": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "approved",
+                  "rejected",
+                  "expired",
+                  "cancelled"
+                ]
+              },
+              "respondedAt": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "status",
+              "respondedAt"
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "approval"
+        ]
       }
     }
   }
