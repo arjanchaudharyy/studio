@@ -81,7 +81,7 @@ export function HumanInputResolutionView({
 }: HumanInputResolutionViewProps) {
     const { toast } = useToast()
     const [submitting, setSubmitting] = useState(false)
-    const [resolveAction] = useState<'approve' | 'reject' | 'view'>(
+    const [resolveAction, setResolveAction] = useState<'approve' | 'reject' | 'view'>(
         request.status === 'pending' ? initialAction : 'view'
     )
     const [responseNote, setResponseNote] = useState('')
@@ -107,15 +107,14 @@ export function HumanInputResolutionView({
         try {
             const data: any = {
                 status: resolveAction === 'approve' ? 'approved' : 'rejected',
-                comment: responseNote || undefined
+                comment: responseNote || undefined,
+                approved: resolveAction === 'approve'
             }
 
             if (request.inputType === 'selection') {
                 data.selection = parsedInputSchema?.multiple ? selectedOptions : selectedOptions[0]
-                data.approved = resolveAction === 'approve'
             } else if (request.inputType === 'form') {
                 Object.assign(data, formValues)
-                data.approved = resolveAction === 'approve'
             }
 
             const updatedRequest = await api.humanInputs.resolve(request.id, {
@@ -124,9 +123,10 @@ export function HumanInputResolutionView({
                 comment: responseNote || undefined
             })
 
+            const actionText = request.inputType === 'acknowledge' ? 'Acknowledged' : (resolveAction === 'approve' ? 'Approved' : 'Rejected')
             toast({
-                title: resolveAction === 'approve' ? 'Approved' : 'Rejected',
-                description: `"${request.title}" has been ${resolveAction}d.`,
+                title: actionText,
+                description: `"${request.title}" has been ${actionText.toLowerCase()}.`,
             })
 
             onResolved?.(updatedRequest as unknown as HumanInputRequest)
@@ -185,6 +185,70 @@ export function HumanInputResolutionView({
             {/* Input UI for Pending Tasks */}
             {isPending && resolveAction !== 'view' && (
                 <div className="space-y-6 pt-4 border-t">
+                    {request.inputType === 'approval' && (
+                        <div className="space-y-3">
+                            <Label className="text-sm font-semibold">Your Decision</Label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Button
+                                    variant={resolveAction === 'approve' ? 'default' : 'outline'}
+                                    className={cn(
+                                        "h-20 flex-col gap-1 transition-all border-2",
+                                        resolveAction === 'approve' ? "border-primary/50 bg-primary/5 text-primary hover:bg-primary/10" : "border-muted"
+                                    )}
+                                    onClick={() => setResolveAction('approve')}
+                                >
+                                    <CheckCircle className="h-5 w-5" />
+                                    <span className="font-bold">Approve</span>
+                                </Button>
+                                <Button
+                                    variant={resolveAction === 'reject' ? 'default' : 'outline'}
+                                    className={cn(
+                                        "h-20 flex-col gap-1 transition-all border-2",
+                                        resolveAction === 'reject' ? "border-destructive/50 bg-destructive/5 text-destructive hover:bg-destructive/10" : "border-muted"
+                                    )}
+                                    onClick={() => setResolveAction('reject')}
+                                >
+                                    <XCircle className="h-5 w-5" />
+                                    <span className="font-bold">Reject</span>
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {(request.inputType === 'selection' || request.inputType === 'form') && (
+                        <div className="flex justify-center mb-2">
+                            <div className="flex p-1 bg-muted rounded-lg w-full max-w-[300px]">
+                                <Button
+                                    variant={resolveAction === 'approve' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="flex-1 h-8 px-4"
+                                    onClick={() => setResolveAction('approve')}
+                                >
+                                    Approve
+                                </Button>
+                                <Button
+                                    variant={resolveAction === 'reject' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="flex-1 h-8 px-4"
+                                    onClick={() => setResolveAction('reject')}
+                                >
+                                    Reject
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {request.inputType === 'acknowledge' && (
+                        <div className="flex flex-col items-center justify-center py-6 space-y-4">
+                            <div className="p-4 rounded-full bg-primary/10 text-primary">
+                                <Clock className="h-10 w-10" />
+                            </div>
+                            <p className="text-sm text-center text-muted-foreground">
+                                Please acknowledge that you have reviewed the details above.
+                            </p>
+                        </div>
+                    )}
+
                     {request.inputType === 'selection' && (
                         <div className="space-y-3">
                             <Label className="text-sm font-semibold">Please select an option</Label>
@@ -372,12 +436,15 @@ export function HumanInputResolutionView({
                     >
                         {submitting ? (
                             <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : request.inputType === 'acknowledge' ? (
+                            <CheckCircle className="h-4 w-4 mr-2" />
                         ) : resolveAction === 'approve' ? (
                             <CheckCircle className="h-4 w-4 mr-2" />
                         ) : (
                             <XCircle className="h-4 w-4 mr-2" />
                         )}
-                        {resolveAction === 'approve' ? 'Submit Approval' : 'Submit Rejection'}
+                        {request.inputType === 'acknowledge' ? 'Acknowledge' :
+                            resolveAction === 'approve' ? 'Submit Approval' : 'Submit Rejection'}
                     </Button>
                 )}
             </div>
