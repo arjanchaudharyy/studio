@@ -154,10 +154,11 @@ async function main() {
     agentTracePublisher,
   });
 
-  // Initialize human input activity with database and backend URL
+  // Initialize human input activity with database, trace and backend URL
   const backendUrl = process.env.BACKEND_URL ?? 'http://localhost:3211';
   initializeHumanInputActivity({
     database: db,
+    trace: traceAdapter,
     baseUrl: backendUrl,
   });
 

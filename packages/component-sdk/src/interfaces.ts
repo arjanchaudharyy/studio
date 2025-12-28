@@ -128,7 +128,7 @@ export interface ExecutionContextMetadata {
 }
 
 export interface TraceEvent {
-  type: 'NODE_STARTED' | 'NODE_COMPLETED' | 'NODE_FAILED' | 'NODE_PROGRESS';
+  type: 'NODE_STARTED' | 'NODE_COMPLETED' | 'NODE_FAILED' | 'NODE_PROGRESS' | 'AWAITING_INPUT';
   runId: string;
   nodeRef: string;
   timestamp: string;

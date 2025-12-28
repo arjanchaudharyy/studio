@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import type { ITraceService } from '@shipsec/component-sdk';
 import * as schema from '../../adapters/schema';
 import type { HumanInputType } from '../../adapters/schema';
 
@@ -29,18 +30,21 @@ export interface CreateHumanInputRequestResult {
   resolveUrl: string;
 }
 
-// Database instance will be injected at runtime
+// Service instances will be injected at runtime
 let db: NodePgDatabase<typeof schema> | undefined;
+let trace: ITraceService | undefined;
 let baseUrl: string = 'http://localhost:3211';
 
 /**
- * Initialize the human input activity with database connection
+ * Initialize the human input activity with database connection and trace service
  */
 export function initializeHumanInputActivity(options: {
   database: NodePgDatabase<typeof schema>;
+  trace?: ITraceService;
   baseUrl?: string;
 }) {
   db = options.database;
+  trace = options.trace;
   if (options.baseUrl) {
     baseUrl = options.baseUrl;
   }
@@ -90,6 +94,26 @@ export async function createHumanInputRequestActivity(
   });
 
   console.log(`[HumanInputActivity] Created ${input.inputType} request ${requestId} for run ${input.runId}, node ${input.nodeRef}`);
+
+  // Emit AWAITING_INPUT trace event so the UI shows the node as awaiting input
+  trace?.record({
+    type: 'AWAITING_INPUT',
+    runId: input.runId,
+    nodeRef: input.nodeRef,
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    data: {
+      requestId,
+      inputType: input.inputType,
+      title: input.title,
+      description: input.description,
+      timeoutAt: timeoutAt?.toISOString(),
+    },
+    context: {
+      runId: input.runId,
+      componentRef: input.nodeRef,
+    },
+  });
 
   // Generate public URL for resolving
   const resolveUrl = `${baseUrl}/api/v1/human-inputs/resolve/${resolveToken}`;
