@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { status as grpcStatus, type ServiceError } from '@grpc/grpc-js';
 
 import { compileWorkflowGraph } from '../dsl/compiler';
@@ -274,6 +274,17 @@ export class WorkflowsService {
     auth?: AuthContext | null,
   ): Promise<ServiceWorkflowResponse> {
     const input = this.parse(dto);
+    
+    // Validate workflow graph before saving (including port connections)
+    try {
+      compileWorkflowGraph(input);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new BadRequestException(`Workflow validation failed: ${error.message}`);
+      }
+      throw error;
+    }
+    
     this.ensureOrganizationAdmin(auth);
     const organizationId = this.requireOrganizationId(auth);
     const record = await this.repository.create(input, { organizationId });
@@ -309,6 +320,17 @@ export class WorkflowsService {
     auth?: AuthContext | null,
   ): Promise<ServiceWorkflowResponse> {
     const input = this.parse(dto);
+    
+    // Validate workflow graph before saving (including port connections)
+    try {
+      compileWorkflowGraph(input);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new BadRequestException(`Workflow validation failed: ${error.message}`);
+      }
+      throw error;
+    }
+    
     const organizationId = await this.requireWorkflowAdmin(id, auth);
     const record = await this.repository.update(id, input, { organizationId });
     const version = await this.versionRepository.create({

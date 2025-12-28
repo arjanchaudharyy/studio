@@ -221,6 +221,11 @@ export async function runComponentActivity(
     // Check if component requested suspension (e.g. approval gate)
     const isSuspended = output && typeof output === 'object' && 'pending' in output && (output as any).pending === true;
 
+    // Extract activeOutputPorts if component returned them (for conditional execution)
+    const activeOutputPorts = output && typeof output === 'object' && 'activeOutputPorts' in output
+      ? (output as any).activeOutputPorts as string[]
+      : undefined;
+
     if (!isSuspended) {
       trace?.record({
         type: 'NODE_COMPLETED',
@@ -243,7 +248,7 @@ export async function runComponentActivity(
       });
     }
 
-    return { output };
+    return { output, activeOutputPorts };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     trace?.record({
