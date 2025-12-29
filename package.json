@@ -25,8 +25,9 @@
     "mcp:logs": "pm2 logs shipsec-mcp-server",
     "mcp:status": "pm2 status shipsec-mcp-server",
     "typecheck": "bun --filter='@shipsec/*' typecheck",
-    "test": "bun --filter='@shipsec/*' run test",
-    "dev:docs": "cd docs && mint dev" 
+    "test": "bun test",
+    "test:e2e": "RUN_E2E=true bun test e2e-tests",
+    "dev:docs": "cd docs && mint dev"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
