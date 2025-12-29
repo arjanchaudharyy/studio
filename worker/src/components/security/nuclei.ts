@@ -5,6 +5,9 @@ import {
   port,
   runComponentWithRunner,
   type DockerRunnerConfig,
+  ValidationError,
+  ServiceError,
+  ComponentRetryPolicy,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 import * as yaml from 'js-yaml';
@@ -159,10 +162,24 @@ const dockerTimeoutSeconds = (() => {
   return parsed;
 })();
 
+// Retry policy for Nuclei - expensive, long-running scans
+const nucleiRetryPolicy: ComponentRetryPolicy = {
+  maxAttempts: 2, // Only retry once for expensive vulnerability scans
+  initialIntervalSeconds: 10,
+  maximumIntervalSeconds: 60,
+  backoffCoefficient: 1.5,
+  nonRetryableErrorTypes: [
+    'ContainerError',
+    'ValidationError',
+    'ConfigurationError',
+  ],
+};
+
 const definition: ComponentDefinition<Input, Output> = {
   id: 'shipsec.nuclei.scan',
   label: 'Nuclei Vulnerability Scanner',
   category: 'security',
+  retryPolicy: nucleiRetryPolicy,
   runner: {
     kind: 'docker',
     // Using custom ShipSecAI image instead of projectdiscovery/nuclei:latest because:
@@ -395,8 +412,9 @@ const definition: ComponentDefinition<Input, Output> = {
           // Validate size (10MB max)
           const sizeMB = zipBuffer.length / (1024 * 1024);
           if (sizeMB > 10) {
-            throw new Error(
+            throw new ValidationError(
               `Template archive too large: ${sizeMB.toFixed(2)}MB (max 10MB)`,
+              { details: { sizeMB, maxSizeMB: 10 } }
             );
           }
 
@@ -512,10 +530,11 @@ const definition: ComponentDefinition<Input, Output> = {
 
         // Nuclei exits with 0 even when findings exist
         if (exitCode !== 0 && !stderr.includes('No results found')) {
-          throw new Error(
+          throw new ServiceError(
             stderr
               ? `Nuclei scan failed: ${stderr}`
               : `Nuclei exited with code ${exitCode}`,
+            { details: { exitCode, stderr: stderr?.slice(0, 500) } }
           );
         }
       } else if (typeof rawRunnerResult === 'string') {
