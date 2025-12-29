@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps, type Node, useReactFlow, useUpdateNodeInternals } from 'reactflow'
+import { ExecutionErrorView } from './ExecutionErrorView'
 import { Loader2, CheckCircle, XCircle, Clock, Activity, AlertCircle, Pause, Terminal as TerminalIcon, Trash2 } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -1116,6 +1117,14 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
               <LucideIcons.Ban className="h-3 w-3 mr-1" />
               Skipped
             </Badge>
+          )}
+
+          {/* Detailed error representation */}
+          {visualState.status === 'error' && visualState.lastEvent?.error && (
+            <ExecutionErrorView
+              error={visualState.lastEvent.error}
+              className="mt-2"
+            />
           )}
 
           {/* Progress bar and events */}

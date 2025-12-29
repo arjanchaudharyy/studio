@@ -227,7 +227,12 @@ export async function runComponentActivity(
       type: 'NODE_FAILED',
       timestamp: new Date().toISOString(),
       message: errorMsg,
-      error: errorMsg,
+      error: {
+        message: errorMsg,
+        type: (error as any)?.type || (error instanceof Error ? error.name : 'UnknownError'),
+        stack: error instanceof Error ? error.stack : undefined,
+        details: (error as any)?.details,
+      },
       level: 'error',
     });
 

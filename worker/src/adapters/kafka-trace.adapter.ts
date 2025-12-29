@@ -23,7 +23,7 @@ type SerializedTraceEvent = {
   timestamp: string;
   level: TraceEvent['level'];
   message?: string;
-  error?: string;
+  error?: TraceEvent['error'];
   outputSummary?: unknown;
   data?: Record<string, unknown> | null;
   sequence: number;
