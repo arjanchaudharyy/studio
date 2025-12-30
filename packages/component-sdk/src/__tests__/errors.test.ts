@@ -14,6 +14,7 @@ import {
   ConfigurationError,
   PermissionError,
   ContainerError,
+  HttpError,
   // Helper functions
   fromHttpResponse,
   isComponentError,
@@ -247,6 +248,40 @@ describe('ContainerError', () => {
   });
 });
 
+describe('HttpError', () => {
+  it('should NOT be retryable', () => {
+    const error = new HttpError('Unexpected status', 418);
+    expect(error.retryable).toBe(false);
+    expect(error.type).toBe('HttpError');
+    expect(error.statusCode).toBe(418);
+    expect(error.message).toBe('Unexpected status');
+  });
+
+  it('should accept options', () => {
+    const cause = new Error('Original error');
+    const error = new HttpError('Custom error', 520, {
+      cause,
+      details: { origin: 'upstream' },
+    });
+
+    expect(error.cause).toBe(cause);
+    expect(error.details).toEqual({ origin: 'upstream' });
+  });
+
+  it('should serialize to JSON', () => {
+    const error = new HttpError('Unknown error', 599, {
+      details: { extra: 'info' },
+    });
+
+    const json = error.toJSON();
+    expect(json.name).toBe('HttpError');
+    expect(json.type).toBe('HttpError');
+    expect(json.message).toBe('Unknown error');
+    expect(json.retryable).toBe(false);
+    expect(json.details).toEqual({ extra: 'info' });
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // fromHttpResponse Helper
 // ─────────────────────────────────────────────────────────────────────────────
@@ -260,6 +295,68 @@ describe('fromHttpResponse', () => {
       headers: new Headers(),
     } as Response;
   }
+
+  it('should return ValidationError for 422 (Unprocessable Entity)', () => {
+    const response = createMockResponse(422, 'Validation failed');
+    const error = fromHttpResponse(response, 'Validation failed');
+
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(error.retryable).toBe(false);
+    expect(error.message).toBe('Validation failed');
+  });
+
+  it('should return HttpError for unknown 4xx status codes', () => {
+    const response = createMockResponse(418, "I'm a teapot");
+    const error = fromHttpResponse(response, "I'm a teapot");
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.retryable).toBe(false);
+    expect(error.type).toBe('HttpError');
+    expect((error as HttpError).statusCode).toBe(418);
+  });
+
+  it('should return ServiceError for 500', () => {
+    const response = createMockResponse(500, 'Internal server error');
+    const error = fromHttpResponse(response, 'Internal server error');
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect(error.retryable).toBe(true);
+    expect((error as ServiceError).statusCode).toBe(500);
+  });
+
+  it('should return ServiceError for 502', () => {
+    const response = createMockResponse(502, 'Bad gateway');
+    const error = fromHttpResponse(response, 'Bad gateway');
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect(error.retryable).toBe(true);
+  });
+
+  it('should return ServiceError for 503', () => {
+    const response = createMockResponse(503, 'Service unavailable');
+    const error = fromHttpResponse(response, 'Service unavailable');
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect(error.retryable).toBe(true);
+  });
+
+  it('should return ServiceError for 504', () => {
+    const response = createMockResponse(504, 'Gateway timeout');
+    const error = fromHttpResponse(response, 'Gateway timeout');
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect(error.retryable).toBe(true);
+  });
+
+  it('should return HttpError for unknown 5xx status codes', () => {
+    const response = createMockResponse(599, 'Unknown server error');
+    const error = fromHttpResponse(response, 'Unknown server error');
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.retryable).toBe(false);
+    expect(error.type).toBe('HttpError');
+    expect((error as HttpError).statusCode).toBe(599);
+  });
 
   it('should return ValidationError for 400', () => {
     const response = createMockResponse(400, 'Bad request');
@@ -319,55 +416,6 @@ describe('fromHttpResponse', () => {
     expect((error as RateLimitError).retryDelayMs).toBe(60000);
   });
 
-  it('should return ServiceError for 500', () => {
-    const response = createMockResponse(500, 'Internal server error');
-    const error = fromHttpResponse(response, 'Internal server error');
-
-    expect(error).toBeInstanceOf(ServiceError);
-    expect(error.retryable).toBe(true);
-    expect((error as ServiceError).statusCode).toBe(500);
-  });
-
-  it('should return ServiceError for 502', () => {
-    const response = createMockResponse(502, 'Bad gateway');
-    const error = fromHttpResponse(response, 'Bad gateway');
-
-    expect(error).toBeInstanceOf(ServiceError);
-    expect(error.retryable).toBe(true);
-  });
-
-  it('should return ServiceError for 503', () => {
-    const response = createMockResponse(503, 'Service unavailable');
-    const error = fromHttpResponse(response, 'Service unavailable');
-
-    expect(error).toBeInstanceOf(ServiceError);
-    expect(error.retryable).toBe(true);
-  });
-
-  it('should return ServiceError for 504', () => {
-    const response = createMockResponse(504, 'Gateway timeout');
-    const error = fromHttpResponse(response, 'Gateway timeout');
-
-    expect(error).toBeInstanceOf(ServiceError);
-    expect(error.retryable).toBe(true);
-  });
-
-  it('should return ValidationError for unknown 4xx', () => {
-    const response = createMockResponse(418, "I'm a teapot");
-    const error = fromHttpResponse(response, "I'm a teapot");
-
-    expect(error).toBeInstanceOf(ValidationError);
-    expect(error.retryable).toBe(false);
-  });
-
-  it('should return ServiceError for unknown 5xx', () => {
-    const response = createMockResponse(599, 'Unknown server error');
-    const error = fromHttpResponse(response, 'Unknown server error');
-
-    expect(error).toBeInstanceOf(ServiceError);
-    expect(error.retryable).toBe(true);
-  });
-
   it('should include URL and status in error details', () => {
     const response = createMockResponse(500, 'Error');
     const error = fromHttpResponse(response, 'Error');
@@ -418,6 +466,7 @@ describe('isRetryableError', () => {
     expect(isRetryableError(new ConfigurationError('test'))).toBe(false);
     expect(isRetryableError(new PermissionError('test'))).toBe(false);
     expect(isRetryableError(new ContainerError('test'))).toBe(false);
+    expect(isRetryableError(new HttpError('test', 418))).toBe(false);
   });
 
   it('should return false for regular errors', () => {
@@ -518,7 +567,8 @@ describe('Error Type Constants', () => {
     expect(NON_RETRYABLE_ERROR_TYPES).toContain('ConfigurationError');
     expect(NON_RETRYABLE_ERROR_TYPES).toContain('PermissionError');
     expect(NON_RETRYABLE_ERROR_TYPES).toContain('ContainerError');
-    expect(NON_RETRYABLE_ERROR_TYPES).toHaveLength(6);
+    expect(NON_RETRYABLE_ERROR_TYPES).toContain('HttpError');
+    expect(NON_RETRYABLE_ERROR_TYPES).toHaveLength(7);
   });
 
   it('should contain all retryable error types', () => {
@@ -531,9 +581,10 @@ describe('Error Type Constants', () => {
   });
 
   it('should have all error types combined', () => {
-    expect(ALL_ERROR_TYPES).toHaveLength(11);
+    expect(ALL_ERROR_TYPES).toHaveLength(12);
     expect(ALL_ERROR_TYPES).toContain('NetworkError');
     expect(ALL_ERROR_TYPES).toContain('AuthenticationError');
+    expect(ALL_ERROR_TYPES).toContain('HttpError');
   });
 });
 

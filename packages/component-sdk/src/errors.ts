@@ -390,6 +390,30 @@ export class ContainerError extends ComponentError {
 }
 
 /**
+ * HTTP errors for unknown or unexpected status codes.
+ * Used when a response status doesn't match known patterns.
+ */
+export class HttpError extends ComponentError {
+  readonly type = 'HttpError';
+  readonly retryable = false;
+
+  /** The HTTP status code that caused this error */
+  readonly statusCode: number;
+
+  constructor(
+    message: string,
+    statusCode: number,
+    options?: {
+      cause?: Error;
+      details?: Record<string, unknown>;
+    },
+  ) {
+    super(message, options);
+    this.statusCode = statusCode;
+  }
+}
+
+/**
  * Convert an HTTP response to the appropriate ComponentError type.
  *
  * @param response - The fetch Response object
@@ -440,17 +464,9 @@ export function fromHttpResponse(
       return new ServiceError(message, { statusCode: status, details });
 
     default:
-      // Default: 4xx → ValidationError (non-retryable), 5xx → ServiceError (retryable)
-      if (status >= 400 && status < 500) {
-        return new ValidationError(message, { details });
-      }
-
-      if (status >= 500) {
-        return new ServiceError(message, { statusCode: status, details });
-      }
-
-      // Fallback for unexpected status codes (treat as service error)
-      return new ServiceError(message, { statusCode: status, details });
+      // Unknown status code - classify as non-retryable HTTP error
+      // This preserves existing behavior for unexpected status codes
+      return new HttpError(message, status, { details });
   }
 }
 
@@ -558,6 +574,7 @@ export const NON_RETRYABLE_ERROR_TYPES = [
   'ConfigurationError',
   'PermissionError',
   'ContainerError',
+  'HttpError',
 ] as const;
 
 /**
