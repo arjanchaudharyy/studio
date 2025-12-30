@@ -17,6 +17,8 @@ interface CreateWorkflowRunInput {
   workflowVersionId: string;
   workflowVersion: number;
   temporalRunId?: string | null;
+  parentRunId?: string | null;
+  parentNodeRef?: string | null;
   totalActions: number;
   inputs: Record<string, unknown>;
   organizationId?: string | null;
@@ -48,6 +50,12 @@ export class WorkflowRunRepository {
       updatedAt: new Date(),
       organizationId: input.organizationId ?? null,
     };
+    if (input.parentRunId !== undefined) {
+      values.parentRunId = input.parentRunId ?? null;
+    }
+    if (input.parentNodeRef !== undefined) {
+      values.parentNodeRef = input.parentNodeRef ?? null;
+    }
 
     if (input.temporalRunId !== undefined) {
       values.temporalRunId = input.temporalRunId;
@@ -66,6 +74,12 @@ export class WorkflowRunRepository {
       updatedAt: new Date(),
       organizationId: input.organizationId ?? null,
     };
+    if (input.parentRunId !== undefined) {
+      updateValues.parentRunId = input.parentRunId ?? null;
+    }
+    if (input.parentNodeRef !== undefined) {
+      updateValues.parentNodeRef = input.parentNodeRef ?? null;
+    }
 
     if (input.temporalRunId !== undefined) {
       updateValues.temporalRunId = input.temporalRunId;
@@ -121,6 +135,23 @@ export class WorkflowRunRepository {
     return await filteredQuery
       .orderBy(desc(workflowRunsTable.createdAt))
       .limit(options.limit ?? 50);
+  }
+
+  async listChildren(
+    parentRunId: string,
+    options: { organizationId?: string | null; limit?: number } = {},
+  ): Promise<WorkflowRunRecord[]> {
+    let condition = eq(workflowRunsTable.parentRunId, parentRunId);
+    if (options.organizationId) {
+      condition = and(condition, eq(workflowRunsTable.organizationId, options.organizationId));
+    }
+
+    return this.db
+      .select()
+      .from(workflowRunsTable)
+      .where(condition)
+      .orderBy(desc(workflowRunsTable.createdAt))
+      .limit(options.limit ?? 200);
   }
 
   async hasPendingInputs(runId: string): Promise<boolean> {

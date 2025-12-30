@@ -132,6 +132,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflows/runs/{runId}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowsController_listChildRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflows/{workflowId}/versions/{versionId}": {
         parameters: {
             query?: never;
@@ -1418,6 +1434,8 @@ export interface components {
             };
             runId?: string;
             idempotencyKey?: string;
+            parentRunId?: string;
+            parentNodeRef?: string;
         };
         ArtifactListResponseDto: {
             artifacts: {
@@ -2135,6 +2153,40 @@ export interface operations {
                                 };
                             };
                         };
+                    };
+                };
+            };
+        };
+    };
+    WorkflowsController_listChildRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List direct child workflow runs spawned by a parent run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        runs: {
+                            runId: string;
+                            workflowId: string;
+                            workflowName: string;
+                            parentNodeRef: string | null;
+                            status: string;
+                            /** Format: date-time */
+                            startedAt: string;
+                            /** Format: date-time */
+                            completedAt?: string | null;
+                        }[];
                     };
                 };
             };
