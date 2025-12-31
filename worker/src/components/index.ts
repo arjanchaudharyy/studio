@@ -55,6 +55,7 @@ import './security/atlassian-offboarding';
 import './security/trufflehog';
 import './security/terminal-demo';
 import './security/virustotal';
+import './security/abusedb';
 
 // GitHub components
 import './github/connection-provider';
