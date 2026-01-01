@@ -1,6 +1,7 @@
 import {
   ApplicationFailure,
   condition,
+  getExternalWorkflowHandle,
   proxyActivities,
   setHandler,
   startChild,
@@ -356,13 +357,40 @@ export async function shipsecWorkflowRun(
           })
 
           const timeoutMs = timeoutSeconds * 1000
-          const outcome = await Promise.race([
-            child.result().then((result) => ({ kind: 'result' as const, result })),
-            sleep(timeoutMs).then(() => ({ kind: 'timeout' as const })),
-          ])
+          let outcome: { kind: 'result'; result: Awaited<ReturnType<typeof child.result>> } | { kind: 'timeout' }
+          try {
+            outcome = await Promise.race([
+              child.result().then((result) => ({ kind: 'result' as const, result })),
+              sleep(timeoutMs).then(() => ({ kind: 'timeout' as const })),
+            ])
+          } catch (childError) {
+            // child.result() rejects when the child workflow throws (shipsecWorkflowRun
+            // always throws on failure rather than returning { success: false }).
+            // Record NODE_FAILED so the UI shows the node as failed instead of stuck running.
+            const message = childError instanceof Error ? childError.message : String(childError)
+            await recordTraceEventActivity({
+              type: 'NODE_FAILED',
+              runId: input.runId,
+              nodeRef: action.ref,
+              timestamp: new Date().toISOString(),
+              message,
+              level: 'error',
+              error: {
+                message,
+                type: 'SubWorkflowError',
+                details: { childRunId },
+              },
+              context: {
+                activityId: 'workflow-orchestration',
+                childRunId,
+              },
+            })
+            throw childError
+          }
 
           if (outcome.kind === 'timeout') {
-            child.cancel()
+            const externalHandle = getExternalWorkflowHandle(child.workflowId)
+            await externalHandle.cancel()
 
             await recordTraceEventActivity({
               type: 'NODE_FAILED',

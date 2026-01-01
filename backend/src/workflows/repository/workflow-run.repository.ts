@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DRIZZLE_TOKEN } from '../../database/database.module';
@@ -141,15 +141,15 @@ export class WorkflowRunRepository {
     parentRunId: string,
     options: { organizationId?: string | null; limit?: number } = {},
   ): Promise<WorkflowRunRecord[]> {
-    let condition = eq(workflowRunsTable.parentRunId, parentRunId);
+    const conditions: SQL[] = [eq(workflowRunsTable.parentRunId, parentRunId)];
     if (options.organizationId) {
-      condition = and(condition, eq(workflowRunsTable.organizationId, options.organizationId));
+      conditions.push(eq(workflowRunsTable.organizationId, options.organizationId));
     }
 
     return this.db
       .select()
       .from(workflowRunsTable)
-      .where(condition)
+      .where(and(...conditions))
       .orderBy(desc(workflowRunsTable.createdAt))
       .limit(options.limit ?? 200);
   }
