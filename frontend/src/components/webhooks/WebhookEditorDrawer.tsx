@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -23,6 +22,10 @@ import { Badge } from '@/components/ui/badge'
 import { Loader2, Plus, Trash2, Code, Info } from 'lucide-react'
 import { api } from '@/services/api'
 import { cn } from '@/lib/utils'
+import Editor, { loader } from '@monaco-editor/react'
+
+// Configure Monaco to use CDN
+loader.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs' } })
 
 export interface WorkflowOption {
   id: string
@@ -91,19 +94,6 @@ const INPUT_TYPE_OPTIONS = [
   { value: 'file', label: 'File' },
 ]
 
-async function fetchWithHeaders(url: string, options: RequestInit = {}): Promise<Response> {
-  const { getApiAuthHeaders } = await import('@/services/api')
-  const headers = await getApiAuthHeaders()
-
-  return fetch(url, {
-    ...options,
-    headers: {
-      ...headers,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
-}
 
 export function WebhookEditorDrawer({
   open,
@@ -269,25 +259,9 @@ export function WebhookEditorDrawer({
       let savedWebhook: WebhookConfiguration
 
       if (mode === 'create') {
-        const response = await fetchWithHeaders('../../webhooks/configurations', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        })
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.message || 'Failed to create webhook')
-        }
-        savedWebhook = await response.json()
+        savedWebhook = (await api.webhooks.create(payload)) as unknown as WebhookConfiguration
       } else {
-        const response = await fetchWithHeaders(`../../webhooks/configurations/${webhook!.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        })
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.message || 'Failed to update webhook')
-        }
-        savedWebhook = await response.json()
+        savedWebhook = (await api.webhooks.update(webhook!.id, payload)) as unknown as WebhookConfiguration
       }
 
       onSaved?.(savedWebhook, mode)
@@ -403,14 +377,29 @@ export function WebhookEditorDrawer({
                 TypeScript
               </Badge>
             </div>
-            <Textarea
-              id="script"
-              rows={12}
-              value={form.parsingScript}
-              onChange={(e) => updateForm({ parsingScript: e.target.value })}
-              className="font-mono text-sm"
-              placeholder="export async function script(input) { ... }"
-            />
+            <div className="rounded-md border overflow-hidden">
+              <Editor
+                height="280px"
+                language="typescript"
+                value={form.parsingScript}
+                onChange={(value) => updateForm({ parsingScript: value ?? '' })}
+                theme="vs-dark"
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  lineNumbers: 'on',
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  tabSize: 2,
+                  wordWrap: 'off',
+                  padding: { top: 8, bottom: 8 },
+                  scrollbar: {
+                    verticalScrollbarSize: 8,
+                    horizontalScrollbarSize: 8,
+                  },
+                }}
+              />
+            </div>
             <p className="text-xs text-muted-foreground">
               This script runs in a secure sandbox. Use <code>input.payload</code> to access the webhook body and{' '}
               <code>input.headers</code> for HTTP headers. Return an object with keys matching your expected inputs.

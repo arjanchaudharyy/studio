@@ -794,6 +794,60 @@ export const api = {
     },
   },
 
+  webhooks: {
+    list: async () => {
+      const response = await apiClient.listWebhookConfigurations()
+      if (response.error) throw new Error('Failed to fetch webhook configurations')
+      return response.data || []
+    },
+
+    get: async (id: string) => {
+      const response = await apiClient.getWebhookConfiguration(id)
+      if (response.error || !response.data) throw new Error('Failed to fetch webhook configuration')
+      return response.data
+    },
+
+    create: async (payload: {
+      workflowId: string
+      name: string
+      description?: string
+      parsingScript: string
+      expectedInputs: Array<{
+        id: string
+        label: string
+        type: string
+        required: boolean
+        description?: string
+      }>
+    }) => {
+      const response = await apiClient.createWebhookConfiguration(payload as any)
+      if (response.error) throw new Error('Failed to create webhook configuration')
+      return response.data
+    },
+
+    update: async (id: string, payload: {
+      name?: string
+      description?: string
+      parsingScript?: string
+      expectedInputs?: Array<{
+        id: string
+        label: string
+        type: string
+        required: boolean
+        description?: string
+      }>
+    }) => {
+      const response = await apiClient.updateWebhookConfiguration(id, payload as any)
+      if (response.error) throw new Error('Failed to update webhook configuration')
+      return response.data
+    },
+
+    delete: async (id: string) => {
+      const response = await apiClient.deleteWebhookConfiguration(id)
+      if (response.error) throw new Error('Failed to delete webhook configuration')
+    },
+  },
+
 }
 
 export async function getApiAuthHeaders(): Promise<Record<string, string>> {

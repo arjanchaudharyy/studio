@@ -597,6 +597,37 @@ export class ShipSecApiClient {
       body: payload,
     });
   }
+
+  // ===== Webhook Configurations =====
+
+  async listWebhookConfigurations() {
+    return this.client.GET('/api/v1/webhooks/configurations');
+  }
+
+  async getWebhookConfiguration(id: string) {
+    return this.client.GET('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+    });
+  }
+
+  async createWebhookConfiguration(payload: components['schemas']['CreateWebhookRequestDto']) {
+    return this.client.POST('/api/v1/webhooks/configurations', {
+      body: payload,
+    });
+  }
+
+  async updateWebhookConfiguration(id: string, payload: components['schemas']['UpdateWebhookRequestDto']) {
+    return this.client.PUT('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+      body: payload,
+    });
+  }
+
+  async deleteWebhookConfiguration(id: string) {
+    return this.client.DELETE('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+    });
+  }
 }
 
 /**
