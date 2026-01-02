@@ -96,6 +96,12 @@ export class ShipSecApiClient {
     });
   }
 
+  async getWorkflowRuntimeInputs(workflowId: string) {
+    return this.client.GET('/api/v1/workflows/{id}/runtime-inputs', {
+      params: { path: { id: workflowId } },
+    });
+  }
+
   async createWorkflow(workflow: CreateWorkflowPayload) {
     return this.client.POST('/api/v1/workflows', {
       body: workflow,
@@ -589,6 +595,49 @@ export class ShipSecApiClient {
     return this.client.POST('/api/v1/human-inputs/resolve/{token}', {
       params: { path: { token } },
       body: payload,
+    });
+  }
+
+  // ===== Webhook Configurations =====
+
+  async listWebhookConfigurations() {
+    return this.client.GET('/api/v1/webhooks/configurations');
+  }
+
+  async getWebhookConfiguration(id: string) {
+    return this.client.GET('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+    });
+  }
+
+  async createWebhookConfiguration(payload: components['schemas']['CreateWebhookRequestDto']) {
+    return this.client.POST('/api/v1/webhooks/configurations', {
+      body: payload,
+    });
+  }
+
+  async updateWebhookConfiguration(id: string, payload: components['schemas']['UpdateWebhookRequestDto']) {
+    return this.client.PUT('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+      body: payload,
+    });
+  }
+
+  async testWebhookScript(payload: components['schemas']['TestWebhookScriptRequestDto']) {
+    return this.client.POST('/api/v1/webhooks/configurations/test-script', {
+      body: payload,
+    });
+  }
+
+  async deleteWebhookConfiguration(id: string) {
+    return this.client.DELETE('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+      });
+  }
+
+  async listDeliveries(id: string) {
+    return this.client.GET('/api/v1/webhooks/configurations/{id}/deliveries', {
+      params: { path: { id } },
     });
   }
 }

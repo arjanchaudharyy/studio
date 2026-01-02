@@ -61,6 +61,14 @@ export function AppTopBar({
       }
     }
 
+    if (location.pathname === '/webhooks') {
+      return {
+        title: 'Webhooks Manager',
+        shortTitle: 'Webhooks',
+        subtitle: 'Manage and debug incoming webhooks'
+      }
+    }
+
     if (location.pathname === '/api-keys') {
       return {
         title: 'API Keys',

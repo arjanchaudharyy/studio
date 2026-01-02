@@ -15,7 +15,7 @@ export type ExecutionStatus = (typeof EXECUTION_STATUS)[number];
 
 export const ExecutionStatusSchema = z.enum(EXECUTION_STATUS);
 
-export const EXECUTION_TRIGGER_TYPES = ['manual', 'schedule', 'api'] as const;
+export const EXECUTION_TRIGGER_TYPES = ['manual', 'schedule', 'api', 'webhook'] as const;
 export type ExecutionTriggerType = (typeof EXECUTION_TRIGGER_TYPES)[number];
 export const ExecutionTriggerTypeSchema = z.enum(EXECUTION_TRIGGER_TYPES);
 

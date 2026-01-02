@@ -1,6 +1,6 @@
 import * as LucideIcons from 'lucide-react'
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { X, ExternalLink, Loader2, Trash2, ChevronDown, ChevronRight, Circle, CheckCircle2, AlertCircle, Pencil, Check } from 'lucide-react'
+import { X, ExternalLink, Loader2, Trash2, ChevronDown, ChevronRight, Circle, CheckCircle2, AlertCircle, Pencil, Check, Globe } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +30,7 @@ import { API_BASE_URL, api } from '@/services/api'
 import { useWorkflowStore } from '@/store/workflowStore'
 import { useApiKeyStore } from '@/store/apiKeyStore'
 import type { WorkflowSchedule } from '@shipsec/shared'
+import { useOptionalWorkflowSchedulesContext } from '@/features/workflow-builder/contexts/WorkflowSchedulesContext'
 
 const ENTRY_COMPONENT_ID = 'core.workflow.entrypoint'
 
@@ -310,6 +311,7 @@ export function ConfigPanel({
   const fallbackWorkflowId = useWorkflowStore((state) => state.metadata.id)
   const workflowId = workflowIdProp ?? fallbackWorkflowId
   const navigate = useNavigate()
+  const schedulesContext = useOptionalWorkflowSchedulesContext()
 
   // Get API key for curl command
 
@@ -581,15 +583,6 @@ export function ConfigPanel({
   const workflowInvokeUrl = workflowId
     ? `${API_BASE_URL}/workflows/${workflowId}/run`
     : `${API_BASE_URL}/workflows/{workflowId}/run`
-
-  const safePayloadSingleLine = JSON.stringify(entryPointPayload).replace(/'/g, "\\'")
-
-  // Build curl command with actual API key if available
-  const apiKeyForCommand = activeApiKey || '<YOUR_API_KEY>'
-  const curlCommand = `curl -X POST '${workflowInvokeUrl}' \\
-  -H 'Authorization: Bearer ${apiKeyForCommand}' \\
-  -H 'Content-Type: application/json' \\
-  -d '${safePayloadSingleLine}'`
 
   return (
     <div className="config-panel border-l bg-background flex flex-col h-full overflow-hidden relative" style={{ width: effectiveWidth }}>
@@ -1025,8 +1018,9 @@ export function ConfigPanel({
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-primary" />
                       <h5 className="text-sm font-semibold text-foreground">
-                        Webhook Trigger
+                        Webhooks
                       </h5>
                       <Button
                         variant="ghost"
@@ -1038,31 +1032,44 @@ export function ConfigPanel({
                         <LucideIcons.Key className="h-3 w-3" />
                       </Button>
                     </div>
-                    <WebhookDetails
-                      url={workflowInvokeUrl}
-                      payload={entryPointPayload}
-                      apiKey={activeApiKey}
-                      triggerLabel="View Code"
-                      className="h-7 text-xs px-2.5 bg-background shadow-xs hover:bg-background/80"
-                    />
+                    <div className="flex items-center gap-1">
+                      <WebhookDetails
+                        url={workflowInvokeUrl}
+                        payload={entryPointPayload}
+                        apiKey={activeApiKey}
+                        triggerLabel="View Code"
+                        className="h-7 text-xs px-2.5 bg-background shadow-xs hover:bg-background/80"
+                      />
+                      {workflowId && schedulesContext?.onOpenWebhooksSidebar && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs px-2.5"
+                          onClick={schedulesContext.onOpenWebhooksSidebar}
+                        >
+                          Manage
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground mb-3">
-                    POST to this endpoint to trigger the workflow.
-                    Required header: <code className="text-[10px] bg-muted px-1 rounded border">Authorization: Bearer &lt;API_KEY&gt;</code>
+                    {workflowId
+                      ? 'Trigger this workflow via HTTP POST. Create custom webhooks to transform payloads.'
+                      : 'Save this workflow to get webhook URLs.'}
                   </p>
                 </div>
-                <div>
-                  <div className="text-[11px] uppercase text-muted-foreground mb-1">
-                    cURL
+                {workflowId && (
+                  <div>
+                    <div className="text-[11px] uppercase text-muted-foreground mb-1">
+                      Default Endpoint
+                    </div>
+                    <div className="relative group">
+                      <code className="block rounded-lg border bg-background px-3 py-2 text-xs font-mono text-foreground overflow-x-auto break-all">
+                        {workflowInvokeUrl}
+                      </code>
+                    </div>
                   </div>
-                  <div className="relative group">
-                    <pre className="rounded-lg border bg-background px-3 py-2.5 text-xs font-mono text-foreground overflow-x-auto whitespace-pre-wrap break-words">
-                      {curlCommand}
-                    </pre>
-                  </div>
-
-                </div>
-
+                )}
               </div>
               <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">

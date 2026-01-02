@@ -2,12 +2,12 @@
 // Placeholders: {{URL}}, {{API_KEY}}, {{PAYLOAD}}, {{PAYLOAD_SINGLE_LINE}}, {{PAYLOAD_JSON}}
 
 export const codeSnippets = {
-  curl: `curl -X POST '{{URL}}' \\
+  curl: `{{COMMENT}}curl -X POST '{{URL}}' \\
   -H 'Authorization: Bearer {{API_KEY}}' \\
   -H 'Content-Type: application/json' \\
   -d '{{PAYLOAD_SINGLE_LINE}}'`,
 
-  typescript: `async function invokeWorkflow() {
+  typescript: `{{COMMENT}}async function invokeWorkflow() {
   const url = '{{URL}}';
   const apiKey = '{{API_KEY}}';
   
@@ -37,7 +37,7 @@ export const codeSnippets = {
 // Call the function
 invokeWorkflow();`,
 
-  python: `import requests
+  python: `{{COMMENT}}import requests
 import json
 
 url = '{{URL}}'
@@ -60,7 +60,7 @@ except requests.exceptions.RequestException as e:
     print(f'Error invoking workflow: {e}')
     raise`,
 
-  go: `package main
+  go: `{{COMMENT}}package main
 
 import (
     "bytes"

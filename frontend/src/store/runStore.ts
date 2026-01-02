@@ -78,6 +78,7 @@ const TRIGGER_LABELS: Record<ExecutionTriggerType, string> = {
   manual: 'Manual run',
   schedule: 'Scheduled run',
   api: 'API run',
+  webhook: 'Webhook trigger',
 }
 
 const normalizeRun = (run: any): ExecutionRun => {

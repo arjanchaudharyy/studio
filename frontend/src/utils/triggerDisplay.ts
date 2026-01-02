@@ -22,6 +22,11 @@ const TRIGGER_META: Record<ExecutionTriggerType, TriggerMeta> = {
     variant: 'outline',
     fallbackLabel: 'API trigger',
   },
+  webhook: {
+    icon: '🔗',
+    variant: 'default',
+    fallbackLabel: 'Webhook trigger',
+  },
 }
 
 export type TriggerDisplay = {

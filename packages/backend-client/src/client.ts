@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflows/{id}/runtime-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowsController_getRuntimeInputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflows/{workflowId}/versions/{versionId}": {
         parameters: {
             query?: never;
@@ -996,6 +1012,148 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/webhooks/inbound/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive inbound webhook
+         * @description Public endpoint for receiving webhook deliveries. No authentication required - security relies on the unguessable webhook path.
+         */
+        post: operations["InboundWebhookController_receive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/configurations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all webhook configurations */
+        get: operations["WebhooksAdminController_list"];
+        put?: never;
+        /** Create a new webhook configuration */
+        post: operations["WebhooksAdminController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/configurations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a webhook configuration by ID */
+        get: operations["WebhooksAdminController_get"];
+        /** Update a webhook configuration */
+        put: operations["WebhooksAdminController_update"];
+        post?: never;
+        /** Delete a webhook configuration */
+        delete: operations["WebhooksAdminController_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/configurations/{id}/regenerate-path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate webhook path (creates new URL) */
+        post: operations["WebhooksAdminController_regeneratePath"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/configurations/{id}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the webhook URL for a configuration */
+        get: operations["WebhooksAdminController_getUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/configurations/test-script": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test a parsing script with sample data */
+        post: operations["WebhooksAdminController_testScript"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/configurations/{id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List delivery history for a webhook */
+        get: operations["WebhooksAdminController_listDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/configurations/{id}/deliveries/{deliveryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get details of a specific delivery */
+        get: operations["WebhooksAdminController_getDelivery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/human-inputs": {
         parameters: {
             query?: never;
@@ -1274,6 +1432,19 @@ export interface components {
             name: string;
             description?: string | null;
         };
+        WorkflowRuntimeInputsResponseDto: {
+            workflowId: string;
+            inputs: {
+                id: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "string" | "number" | "json" | "array" | "file" | "boolean";
+                /** @default true */
+                required: boolean;
+                description?: string;
+                defaultValue?: unknown;
+            }[];
+        };
         WorkflowVersionResponseDto: {
             id: string;
             workflowId: string;
@@ -1428,7 +1599,7 @@ export interface components {
             };
             trigger?: {
                 /** @enum {string} */
-                type: "manual" | "schedule" | "api";
+                type: "manual" | "schedule" | "api" | "webhook";
                 sourceId?: string | null;
                 label?: string | null;
             };
@@ -1795,6 +1966,133 @@ export interface components {
             };
             versionId?: string;
             version?: number;
+        };
+        WebhookConfigurationResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workflowId: string;
+            /** Format: uuid */
+            workflowVersionId: string | null;
+            workflowVersion: number | null;
+            name: string;
+            description: string | null;
+            webhookPath: string;
+            parsingScript: string;
+            expectedInputs: {
+                id: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "json" | "array" | "file";
+                /** @default true */
+                required: boolean;
+                description?: string;
+            }[];
+            /** @enum {string} */
+            status: "active" | "inactive";
+            organizationId: string | null;
+            createdBy: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateWebhookRequestDto: {
+            /** Format: uuid */
+            workflowId: string;
+            /** Format: uuid */
+            workflowVersionId?: string;
+            name: string;
+            description?: string;
+            parsingScript: string;
+            /** @default [] */
+            expectedInputs: {
+                id: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "json" | "array" | "file";
+                /** @default true */
+                required: boolean;
+                description?: string;
+            }[];
+        };
+        UpdateWebhookRequestDto: {
+            /** Format: uuid */
+            workflowId?: string;
+            /** Format: uuid */
+            workflowVersionId?: string;
+            name?: string;
+            description?: string;
+            parsingScript?: string;
+            expectedInputs?: {
+                id: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "json" | "array" | "file";
+                /** @default true */
+                required: boolean;
+                description?: string;
+            }[];
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        RegeneratePathResponseDto: {
+            /** Format: uuid */
+            id: string;
+            webhookPath: string;
+            /** Format: uri */
+            url: string;
+        };
+        GetWebhookUrlResponseDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            webhookPath: string;
+            /** Format: uri */
+            url: string;
+        };
+        TestWebhookScriptRequestDto: {
+            parsingScript: string;
+            testPayload: {
+                [key: string]: unknown;
+            };
+            testHeaders?: {
+                [key: string]: string;
+            };
+        };
+        TestWebhookScriptResponseDto: {
+            success: boolean;
+            parsedData: {
+                [key: string]: unknown;
+            } | null;
+            errorMessage: string | null;
+            validationErrors?: {
+                inputId: string;
+                message: string;
+            }[];
+        };
+        WebhookDeliveryResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            webhookId: string;
+            workflowRunId: string | null;
+            /** @enum {string} */
+            status: "processing" | "delivered" | "failed";
+            payload: {
+                [key: string]: unknown;
+            };
+            headers?: {
+                [key: string]: string;
+            };
+            parsedData: {
+                [key: string]: unknown;
+            } | null;
+            errorMessage: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            completedAt: string | null;
         };
         HumanInputResponseDto: {
             /** Format: uuid */
@@ -2188,6 +2486,28 @@ export interface operations {
                             completedAt?: string | null;
                         }[];
                     };
+                };
+            };
+        };
+    };
+    WorkflowsController_getRuntimeInputs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Get the runtime inputs defined in the workflow Entry Point */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRuntimeInputsResponseDto"];
                 };
             };
         };
@@ -4018,6 +4338,261 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    InboundWebhookController_receive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook processed successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example delivered */
+                        status?: string;
+                        /** @example shipsec-run-123 */
+                        runId?: string;
+                    };
+                };
+            };
+            /** @description Invalid payload or parsing failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Webhook not found or inactive */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WebhooksAdminController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookConfigurationResponseDto"][];
+                };
+            };
+        };
+    };
+    WebhooksAdminController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWebhookRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookConfigurationResponseDto"];
+                };
+            };
+        };
+    };
+    WebhooksAdminController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookConfigurationResponseDto"];
+                };
+            };
+        };
+    };
+    WebhooksAdminController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWebhookRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookConfigurationResponseDto"];
+                };
+            };
+        };
+    };
+    WebhooksAdminController_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WebhooksAdminController_regeneratePath: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegeneratePathResponseDto"];
+                };
+            };
+        };
+    };
+    WebhooksAdminController_getUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetWebhookUrlResponseDto"];
+                };
+            };
+        };
+    };
+    WebhooksAdminController_testScript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestWebhookScriptRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestWebhookScriptResponseDto"];
+                };
+            };
+        };
+    };
+    WebhooksAdminController_listDeliveries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDeliveryResponseDto"][];
+                };
+            };
+        };
+    };
+    WebhooksAdminController_getDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDeliveryResponseDto"];
+                };
             };
         };
     };

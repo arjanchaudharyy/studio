@@ -237,3 +237,29 @@ export const WorkflowVersionResponseSchema = z.object({
 })
 
 export class WorkflowVersionResponseDto extends createZodDto(WorkflowVersionResponseSchema) {}
+
+// Runtime input definition for Entry Point
+export const RuntimeInputSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  type: z.enum(['text', 'string', 'number', 'json', 'array', 'file', 'boolean']),
+  required: z.boolean().default(true),
+  description: z.string().optional(),
+  defaultValue: z.unknown().optional(),
+});
+
+export type RuntimeInput = z.infer<typeof RuntimeInputSchema>;
+
+export const WorkflowRuntimeInputsResponseSchema = z.object({
+  workflowId: z.string(),
+  inputs: z.array(RuntimeInputSchema),
+});
+
+export class WorkflowRuntimeInputsResponseDto extends createZodDto(WorkflowRuntimeInputsResponseSchema) {}
+
+// Constants for entry point component identification
+export const ENTRY_POINT_COMPONENT_IDS = [
+  'core.workflow.entrypoint',
+  'entry-point',
+] as const;
+

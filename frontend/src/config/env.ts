@@ -8,6 +8,7 @@ type FrontendEnv = {
   VITE_LOGO_DEV_PUBLIC_KEY: string
   VITE_ENABLE_CONNECTIONS: boolean
   VITE_ENABLE_IT_OPS: boolean
+  VITE_API_URL: string
 }
 
 export const env: FrontendEnv = {
@@ -17,5 +18,6 @@ export const env: FrontendEnv = {
   VITE_LOGO_DEV_PUBLIC_KEY: (import.meta.env.VITE_LOGO_DEV_PUBLIC_KEY as string | undefined) ?? '',
   VITE_ENABLE_CONNECTIONS: import.meta.env.VITE_ENABLE_CONNECTIONS === 'true',
   VITE_ENABLE_IT_OPS: import.meta.env.VITE_ENABLE_IT_OPS === 'true',
+  VITE_API_URL: (import.meta.env.VITE_API_URL as string | undefined) ?? '',
 }
 

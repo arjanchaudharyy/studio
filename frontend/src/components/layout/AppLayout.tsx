@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarItem } from '@/components/ui/sidebar'
 import { AppTopBar } from '@/components/layout/AppTopBar'
 import { Button } from '@/components/ui/button'
-import { Workflow, KeyRound, Plus, Plug, Archive, CalendarClock, Sun, Moon, Shield, Search, Command, Zap } from 'lucide-react'
+import { Workflow, KeyRound, Plus, Plug, Archive, CalendarClock, Sun, Moon, Shield, Search, Command, Zap, Webhook } from 'lucide-react'
 import React, { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { hasAdminRole } from '@/utils/auth'
@@ -83,7 +83,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       setSidebarOpen(false)
       setWasExplicitlyOpened(false)
     } else {
-      const isWorkflowRoute = location.pathname.startsWith('/workflows') && location.pathname !== '/'
+      const isWorkflowRoute = (location.pathname.startsWith('/workflows') || location.pathname.startsWith('/webhooks/')) && location.pathname !== '/'
       setSidebarOpen(!isWorkflowRoute)
       setWasExplicitlyOpened(!isWorkflowRoute)
     }
@@ -226,6 +226,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       name: 'Schedules',
       href: '/schedules',
       icon: CalendarClock,
+    },
+    {
+      name: 'Webhooks',
+      href: '/webhooks',
+      icon: Webhook,
     },
     {
       name: 'Action Center',
@@ -494,8 +499,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           // On mobile, main content takes full width since sidebar is overlay
           isMobile ? 'w-full' : ''
         )}>
-          {/* Only show AppTopBar for non-workflow-builder pages */}
-          {!location.pathname.startsWith('/workflows') && (
+          {/* Only show AppTopBar for non-workflow-builder and non-webhook-editor pages */}
+          {!location.pathname.startsWith('/workflows') && !location.pathname.startsWith('/webhooks/') && (
             <AppTopBar
               sidebarOpen={sidebarOpen}
               onSidebarToggle={handleToggle}

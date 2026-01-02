@@ -16,6 +16,12 @@ if (typeof window !== 'undefined' && window.HTMLElement) {
   })
 }
 
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = function() {
+    return null
+  }
+}
+
 if (typeof globalThis.EventSource === 'undefined') {
   function MockEventSource(this: any, url: string) {
     this.url = url
@@ -43,4 +49,13 @@ if (typeof globalThis.EventSource === 'undefined') {
   }
 
   globalThis.EventSource = MockEventSource as any
+}
+
+if (typeof globalThis.HTMLCanvasElement === 'undefined') {
+  class HTMLCanvasElementStub {
+    getContext() {
+      return null
+    }
+  }
+  globalThis.HTMLCanvasElement = HTMLCanvasElementStub as any
 }

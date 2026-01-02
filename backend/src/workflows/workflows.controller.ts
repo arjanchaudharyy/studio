@@ -43,6 +43,9 @@ import {
   WorkflowResponseDto,
   ServiceWorkflowResponse,
   WorkflowVersionResponseDto,
+  WorkflowRuntimeInputsResponseDto,
+  ENTRY_POINT_COMPONENT_IDS,
+  type RuntimeInput,
 } from './dto/workflow-graph.dto';
 import {
   TerminalArchiveRequestDto,
@@ -446,6 +449,42 @@ export class WorkflowsController {
   ): Promise<WorkflowResponseDto> {
     const serviceResponse = await this.workflowsService.findById(id, auth);
     return this.transformServiceResponseToApi(serviceResponse);
+  }
+
+  @Get(':id/runtime-inputs')
+  @ApiOkResponse({ 
+    type: WorkflowRuntimeInputsResponseDto,
+    description: 'Get the runtime inputs defined in the workflow Entry Point' 
+  })
+  async getRuntimeInputs(
+    @CurrentAuth() auth: AuthContext | null,
+    @Param('id') id: string,
+  ): Promise<WorkflowRuntimeInputsResponseDto> {
+    const workflow = await this.workflowsService.findById(id, auth);
+    
+    // Find the entry point node by checking the component type
+    const entryNode = workflow.graph.nodes.find(node => 
+      ENTRY_POINT_COMPONENT_IDS.includes(node.type as any)
+    );
+    
+    // Extract runtime inputs from the entry point's config
+    const config = entryNode?.data?.config as Record<string, unknown> | undefined;
+    const rawInputs = (config?.runtimeInputs as RuntimeInput[]) || [];
+    
+    // Normalize and validate the inputs
+    const inputs: RuntimeInput[] = rawInputs.map(input => ({
+      id: input.id,
+      label: input.label || input.id,
+      type: input.type === 'string' ? 'text' : input.type,
+      required: input.required ?? true,
+      description: input.description,
+      defaultValue: input.defaultValue,
+    }));
+    
+    return {
+      workflowId: workflow.id,
+      inputs,
+    };
   }
 
   @Get(':workflowId/versions/:versionId')

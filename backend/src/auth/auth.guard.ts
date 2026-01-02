@@ -1,9 +1,11 @@
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
 import { Injectable, Logger, UnauthorizedException, Inject, forwardRef } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 
 import { AuthService } from './auth.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
+import { IS_PUBLIC_KEY } from './public.decorator';
 import type { AuthContext } from './types';
 import { DEFAULT_ROLES } from './types';
 import { DEFAULT_ORGANIZATION_ID } from './constants';
@@ -20,9 +22,19 @@ export class AuthGuard implements CanActivate {
     private readonly authService: AuthService,
     @Inject(forwardRef(() => ApiKeysService))
     private readonly apiKeysService: ApiKeysService,
+    private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+
     const http = context.switchToHttp();
     const request = http.getRequest<RequestWithAuthContext>();
     if (!request) {
