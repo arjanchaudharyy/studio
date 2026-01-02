@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
     ArrowLeft,
-    Save,
     Play,
     History as LucideHistory,
     Settings,
@@ -25,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast'
 import Editor, { loader } from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
+import { SaveButton } from '@/components/ui/save-button'
 import type { WebhookConfiguration } from '@shipsec/shared'
 
 // Configure Monaco
@@ -59,7 +59,7 @@ export function WebhookEditorPage() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const { toast } = useToast()
-    const isNew = id === 'new'
+    const isNew = !id || id === 'new'
 
     const [isLoading, setIsLoading] = useState(!isNew)
     const [isSaving, setIsSaving] = useState(false)
@@ -73,6 +73,25 @@ export function WebhookEditorPage() {
         parsingScript: DEFAULT_PARSING_SCRIPT,
         expectedInputs: []
     })
+
+    const [initialForm, setInitialForm] = useState<WebhookFormState | null>(
+        isNew ? {
+            workflowId: '',
+            name: 'New Webhook',
+            description: '',
+            parsingScript: DEFAULT_PARSING_SCRIPT,
+            expectedInputs: []
+        } : null
+    )
+
+    const isDirty = useMemo(() => {
+        if (!initialForm) return false
+        try {
+            return JSON.stringify(form) !== JSON.stringify(initialForm)
+        } catch (e) {
+            return true
+        }
+    }, [form, initialForm])
 
     // Test State
     const [testPayload, setTestPayload] = useState('{\n  "message": "Hello World"\n}')
@@ -90,19 +109,33 @@ export function WebhookEditorPage() {
     useEffect(() => {
         const loadResources = async () => {
             try {
+                if (!isNew) setIsLoading(true)
+
                 const workflowsList = await api.workflows.list()
                 setWorkflows(workflowsList.map(w => ({ id: w.id, name: w.name })))
 
-                if (!isNew && id) {
+                if (isNew) {
+                    const defaultState = {
+                        workflowId: '',
+                        name: 'New Webhook',
+                        description: '',
+                        parsingScript: DEFAULT_PARSING_SCRIPT,
+                        expectedInputs: []
+                    }
+                    setForm(defaultState)
+                    setInitialForm(defaultState)
+                } else if (id) {
                     const loadedWebhook = (await api.webhooks.get(id)) as unknown as WebhookConfiguration
                     setWebhook(loadedWebhook)
-                    setForm({
+                    const loadedForm = {
                         workflowId: loadedWebhook.workflowId,
                         name: loadedWebhook.name,
                         description: loadedWebhook.description || '',
                         parsingScript: loadedWebhook.parsingScript,
                         expectedInputs: loadedWebhook.expectedInputs,
-                    })
+                    }
+                    setForm(loadedForm)
+                    setInitialForm(loadedForm)
                 }
             } catch (error) {
                 toast({
@@ -110,7 +143,7 @@ export function WebhookEditorPage() {
                     description: String(error),
                     variant: 'destructive',
                 })
-                navigate('/webhooks')
+                if (!isNew) navigate('/webhooks')
             } finally {
                 setIsLoading(false)
             }
@@ -118,12 +151,26 @@ export function WebhookEditorPage() {
         loadResources()
     }, [id, isNew, navigate, toast])
 
-    // Load Workflow Runtime Inputs
+    // Load Workflow Runtime Inputs and sync to expectedInputs
     useEffect(() => {
         if (!form.workflowId) return
 
         api.workflows.getRuntimeInputs(form.workflowId)
-            .then(res => setWorkflowRuntimeInputs(res.inputs))
+            .then(res => {
+                const inputs = res.inputs || []
+                setWorkflowRuntimeInputs(inputs)
+
+                // Automatically populate expectedInputs from workflow runtime inputs
+                // This ensures the backend validation passes
+                const mappedInputs = inputs.map((input: any) => ({
+                    id: input.id,
+                    label: input.label || input.id,
+                    type: input.type || 'string',
+                    required: input.required !== false,
+                    description: input.description || '',
+                }))
+                setForm(prev => ({ ...prev, expectedInputs: mappedInputs }))
+            })
             .catch(console.error)
     }, [form.workflowId])
 
@@ -148,9 +195,11 @@ export function WebhookEditorPage() {
             if (isNew) {
                 const created = await api.webhooks.create(payload) as any
                 toast({ title: 'Webhook created' })
+                setInitialForm(payload)
                 navigate(`/webhooks/${created.id}`, { replace: true })
             } else {
                 await api.webhooks.update(id!, payload)
+                setInitialForm(payload)
                 toast({ title: 'Webhook saved' })
             }
         } catch (error) {
@@ -163,6 +212,22 @@ export function WebhookEditorPage() {
             setIsSaving(false)
         }
     }
+
+    // Keyboard shortcut
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault()
+                // Only save if action is valid (dirty or new) and not saving
+                const canSave = (isDirty || isNew) && !isSaving
+                if (canSave) {
+                    handleSave()
+                }
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [handleSave, isDirty, isNew, isSaving])
 
     const handleTest = async () => {
         setIsTesting(true)
@@ -205,7 +270,10 @@ export function WebhookEditorPage() {
     return (
         <div className="flex flex-col h-full bg-background no-scrollbar overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur z-10 shrink-0">
+            <div className={cn(
+                "h-[56px] md:h-[60px] border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+                "flex items-center justify-between px-3 md:px-4 gap-2 md:gap-4 shrink-0 z-10"
+            )}>
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" onClick={() => navigate('/webhooks')}>
                         <ArrowLeft className="h-5 w-5" />
@@ -215,9 +283,8 @@ export function WebhookEditorPage() {
                             <Input
                                 value={form.name}
                                 onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-                                className="h-8 font-semibold text-lg border-transparent hover:border-border focus:border-input px-2 -ml-2 w-[300px]"
+                                className="h-7 text-lg font-semibold border-transparent hover:border-input focus:border-input px-1 w-[300px]"
                             />
-                            <Badge variant="outline" className="text-xs">v1</Badge>
                         </div>
                         <div className="text-xs text-muted-foreground">
                             {webhook?.webhookPath ? (
@@ -235,15 +302,17 @@ export function WebhookEditorPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <SaveButton
+                        onClick={handleSave}
+                        isSaving={isSaving}
+                        isDirty={isDirty || isNew}
+                        label={isNew ? 'Create' : undefined}
+                    />
                     {!isNew && (
-                        <Button variant="ghost" size="icon" onClick={handleDelete} className="text-destructive">
+                        <Button variant="ghost" size="icon" onClick={handleDelete} className="text-destructive hover:text-destructive hover:bg-destructive/10">
                             <Trash2 className="h-5 w-5" />
                         </Button>
                     )}
-                    <Button onClick={handleSave} disabled={isSaving}>
-                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                        {isNew ? 'Create Webhook' : 'Save Changes'}
-                    </Button>
                 </div>
             </div>
 
@@ -382,21 +451,27 @@ export function WebhookEditorPage() {
                                                     <div className="text-destructive whitespace-pre-wrap">{testResult.error}</div>
                                                 ) : (
                                                     <div className="space-y-2">
-                                                        <div className="flex items-center gap-2 text-emerald-600 font-medium pb-2 border-b">
-                                                            <CheckCircle2 className="h-4 w-4" /> Successfully Parsed
+                                                        <div className={cn("flex items-center gap-2 font-medium pb-2 border-b", testResult.success ? "text-emerald-600" : "text-destructive")}>
+                                                            {testResult.success ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                                                            {testResult.success ? 'Successfully Parsed' : 'Parsing Failed'}
                                                         </div>
                                                         <pre>{JSON.stringify(testResult, null, 2)}</pre>
 
                                                         {/* Validation against workflow inputs */}
                                                         <div className="pt-4 border-t mt-4">
                                                             <span className="text-muted-foreground mb-2 block font-sans">Workflow Input Matching:</span>
+                                                            {testResult.errorMessage && (
+                                                                <div className="text-destructive text-xs mb-4 p-2 bg-destructive/10 rounded">
+                                                                    Error: {testResult.errorMessage}
+                                                                </div>
+                                                            )}
                                                             {workflowRuntimeInputs.map(input => {
-                                                                const value = testResult[input.id]
+                                                                const value = testResult.parsedData?.[input.id]
                                                                 const isMissing = input.required && value === undefined
                                                                 return (
                                                                     <div key={input.id} className={cn("flex items-center gap-2 py-1", isMissing ? "text-destructive" : "text-foreground")}>
                                                                         {isMissing ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
-                                                                        <span>{input.id}: {value !== undefined ? String(value) : 'undefined'}</span>
+                                                                        <span>{input.id}: {value !== undefined ? (typeof value === 'object' ? JSON.stringify(value) : String(value)) : 'undefined'}</span>
                                                                     </div>
                                                                 )
                                                             })}

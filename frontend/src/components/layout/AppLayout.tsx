@@ -83,7 +83,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       setSidebarOpen(false)
       setWasExplicitlyOpened(false)
     } else {
-      const isWorkflowRoute = location.pathname.startsWith('/workflows') && location.pathname !== '/'
+      const isWorkflowRoute = (location.pathname.startsWith('/workflows') || location.pathname.startsWith('/webhooks/')) && location.pathname !== '/'
       setSidebarOpen(!isWorkflowRoute)
       setWasExplicitlyOpened(!isWorkflowRoute)
     }
@@ -499,8 +499,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           // On mobile, main content takes full width since sidebar is overlay
           isMobile ? 'w-full' : ''
         )}>
-          {/* Only show AppTopBar for non-workflow-builder pages */}
-          {!location.pathname.startsWith('/workflows') && (
+          {/* Only show AppTopBar for non-workflow-builder and non-webhook-editor pages */}
+          {!location.pathname.startsWith('/workflows') && !location.pathname.startsWith('/webhooks/') && (
             <AppTopBar
               sidebarOpen={sidebarOpen}
               onSidebarToggle={handleToggle}
