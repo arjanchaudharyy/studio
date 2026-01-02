@@ -10,6 +10,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 import { WebhooksService } from './webhooks.service';
+import { Public } from '../auth/public.decorator';
 
 @ApiTags('webhooks')
 @Controller('webhooks/inbound')
@@ -18,6 +19,7 @@ export class InboundWebhookController {
 
   constructor(private readonly webhooksService: WebhooksService) {}
 
+  @Public()
   @Post(':path')
   @ApiOperation({
     summary: 'Receive inbound webhook',

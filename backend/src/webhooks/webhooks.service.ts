@@ -320,14 +320,22 @@ export class WebhooksService {
         );
       }
 
-      // Trigger workflow
+      // Trigger workflow with organization context from webhook
+      const triggerAuth: AuthContext = {
+        userId: 'webhook-trigger',
+        organizationId: webhook.organizationId,
+        roles: ['MEMBER'],
+        isAuthenticated: true,
+        provider: 'internal',
+      };
+
       const prepared = await this.workflowsService.prepareRunPayload(
         webhook.workflowId,
         {
           inputs: parsedData,
           versionId: webhook.workflowVersionId ?? undefined,
         },
-        null, // No auth context for webhook triggers
+        triggerAuth,
         {
           trigger: {
             type: 'webhook',
