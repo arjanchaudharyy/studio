@@ -94,6 +94,17 @@ export function WorkflowDesignerPane({
     ? `${API_BASE_URL}/workflows/${workflowId}/run`
     : ''
 
+  // Auto-open webhooks sidebar if navigated back with query param
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('openWebhooksSidebar') === 'true') {
+      setWebhooksPanelExpanded(true)
+      // Clean up the URL by removing the query param
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, '', newUrl)
+    }
+  }, [])
+
   // Sync selection state with UI store for mobile bottom sheet visibility
   useEffect(() => {
     setSchedulesPanelOpen(schedulePanelExpanded)

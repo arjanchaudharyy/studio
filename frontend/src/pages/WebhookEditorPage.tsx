@@ -62,6 +62,11 @@ export function WebhookEditorPage() {
     const { toast } = useToast()
     const isNew = !id || id === 'new'
 
+    // Get returnTo state for back button (if navigated from workflow webhooks sidebar)
+    const navigationState = location.state as { returnTo?: { path: string; openWebhooksSidebar?: boolean } } | null
+    const returnToPath = navigationState?.returnTo?.path
+    const openWebhooksSidebarOnReturn = navigationState?.returnTo?.openWebhooksSidebar
+
     // Derive active tab from URL
     const activeTab = useMemo(() => {
         if (location.pathname.endsWith('/deliveries')) return 'deliveries'
@@ -293,7 +298,21 @@ export function WebhookEditorPage() {
                 "flex items-center justify-between px-3 md:px-4 gap-2 md:gap-4 shrink-0 z-10"
             )}>
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate('/webhooks')}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                            if (returnToPath) {
+                                // Navigate back to workflow with query param to re-open sidebar
+                                const url = openWebhooksSidebarOnReturn
+                                    ? `${returnToPath}?openWebhooksSidebar=true`
+                                    : returnToPath
+                                navigate(url)
+                            } else {
+                                navigate('/webhooks')
+                            }
+                        }}
+                    >
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                     <div className="flex flex-col">

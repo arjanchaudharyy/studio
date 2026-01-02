@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Loader2, Plus, X, Copy, Check, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,14 @@ import type { WebhookConfiguration } from '@shipsec/shared'
 import { env } from '@/config/env'
 
 const WEBHOOK_BASE_URL = env.VITE_API_URL || 'https://api.shipsec.ai'
+
+// State passed when navigating to webhook editor from workflow
+export interface WebhookNavigationState {
+    returnTo?: {
+        path: string
+        openWebhooksSidebar?: boolean
+    }
+}
 
 export interface WorkflowWebhooksSidebarProps {
     workflowId: string
@@ -21,6 +29,7 @@ export function WorkflowWebhooksSidebar({
     onClose,
 }: WorkflowWebhooksSidebarProps) {
     const navigate = useNavigate()
+    const location = useLocation()
     const [webhooks, setWebhooks] = useState<WebhookConfiguration[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -54,12 +63,20 @@ export function WorkflowWebhooksSidebar({
         }
     }
 
+    // Build navigation state that tells webhook editor to return here with sidebar open
+    const buildNavigationState = (): WebhookNavigationState => ({
+        returnTo: {
+            path: location.pathname,
+            openWebhooksSidebar: true,
+        }
+    })
+
     const handleCreateWebhook = () => {
-        navigate(`/webhooks/new?workflowId=${workflowId}`)
+        navigate(`/webhooks/new?workflowId=${workflowId}`, { state: buildNavigationState() })
     }
 
     const handleViewWebhook = (webhookId: string) => {
-        navigate(`/webhooks/${webhookId}`)
+        navigate(`/webhooks/${webhookId}`, { state: buildNavigationState() })
     }
 
     const handleViewAllWebhooks = () => {
