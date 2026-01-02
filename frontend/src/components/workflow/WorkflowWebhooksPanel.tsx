@@ -210,11 +210,19 @@ export function WorkflowWebhooksSidebar({
                 {/* Custom Webhooks List */}
                 {!isLoading && !error && webhooks.map((webhook) => {
                     const webhookUrl = `${WEBHOOK_BASE_URL}/webhooks/inbound/${webhook.webhookPath}`
-                    // Generate a sample payload from expectedInputs
-                    const samplePayload = (webhook.expectedInputs as any[])?.reduce((acc: any, input: any) => {
-                        acc[input.id] = input.type === 'number' ? 0 : input.type === 'boolean' ? false : 'value'
-                        return acc
-                    }, {}) || {}
+
+                    // Generate a sample payload that combines expectedInputs with generic fields
+                    // to show it can accept "whatever payload"
+                    const samplePayload: any = {
+                        event_type: 'webhook_event',
+                        timestamp: new Date().toISOString(),
+                    }
+
+                    if (Array.isArray(webhook.expectedInputs)) {
+                        webhook.expectedInputs.forEach((input: any) => {
+                            samplePayload[input.id] = input.type === 'number' ? 0 : input.type === 'boolean' ? false : 'value'
+                        })
+                    }
 
                     return (
                         <div
@@ -260,9 +268,10 @@ export function WorkflowWebhooksSidebar({
                                         <WebhookDetails
                                             url={webhookUrl}
                                             payload={samplePayload}
-                                            apiKey={lastCreatedKey}
+                                            apiKey={null}
                                             triggerLabel=""
                                             className="h-7 w-7 p-0 shrink-0"
+                                            hideAuth={true}
                                         />
                                     </div>
                                 </div>

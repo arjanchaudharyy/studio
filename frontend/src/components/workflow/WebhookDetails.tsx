@@ -23,9 +23,19 @@ interface WebhookDetailsProps {
     apiKey?: string | null;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
+    hideAuth?: boolean;
 }
 
-export function WebhookDetails({ url, payload, triggerLabel = "View Integration Code", className, apiKey, open, onOpenChange }: WebhookDetailsProps) {
+export function WebhookDetails({
+    url,
+    payload,
+    triggerLabel = "View Integration Code",
+    className,
+    apiKey,
+    open,
+    onOpenChange,
+    hideAuth = false
+}: WebhookDetailsProps) {
     const [copied, setCopied] = useState(false);
     const navigate = useNavigate();
     const safePayload = JSON.stringify(payload, null, 2);
@@ -54,21 +64,40 @@ export function WebhookDetails({ url, payload, triggerLabel = "View Integration 
         .join('\n        ');
 
     // Replace placeholders in snippet templates
-    const replacePlaceholders = (template: string): string => {
-        return template
+    const replacePlaceholders = (template: string, lang: string): string => {
+        let snippet = template
             .replace(/{{URL}}/g, url)
             .replace(/{{API_KEY}}/g, apiKeyForSnippets)
             .replace(/{{PAYLOAD}}/g, safePayload)
             .replace(/{{PAYLOAD_SINGLE_LINE}}/g, safePayloadSingleLine)
             .replace(/{{PAYLOAD_JSON}}/g, pythonPayloadJson)
             .replace(/{{GO_PAYLOAD}}/g, goPayloadLines);
+
+        if (hideAuth) {
+            // Remove authorization lines
+            if (lang === 'curl') {
+                snippet = snippet.replace(/-H 'Authorization: Bearer .*?' \\\s+/, '');
+            } else if (lang === 'typescript') {
+                snippet = snippet.replace(/const apiKey = '.*?';\s+/, '');
+                snippet = snippet.replace(/'Authorization': `Bearer \${apiKey}`,?\s+/, '');
+            } else if (lang === 'python') {
+                snippet = snippet.replace(/api_key = '.*?';?\s+/, '');
+                snippet = snippet.replace(/'Authorization': f'Bearer {api_key}',?\s+/, '');
+            } else if (lang === 'go') {
+                snippet = snippet.replace(/const apiKey = ".*?";?\s+/, '');
+                snippet = snippet.replace(/apiKey := ".*?";?\s+/, '');
+                snippet = snippet.replace(/req\.Header\.Set\("Authorization", .*?\)\s+/, '');
+            }
+        }
+
+        return snippet;
     };
 
     const snippets = {
-        curl: replacePlaceholders(codeSnippets.curl),
-        typescript: replacePlaceholders(codeSnippets.typescript),
-        python: replacePlaceholders(codeSnippets.python),
-        go: replacePlaceholders(codeSnippets.go),
+        curl: replacePlaceholders(codeSnippets.curl, 'curl'),
+        typescript: replacePlaceholders(codeSnippets.typescript, 'typescript'),
+        python: replacePlaceholders(codeSnippets.python, 'python'),
+        go: replacePlaceholders(codeSnippets.go, 'go'),
     };
 
     const copyToClipboard = (text: string) => {
@@ -87,30 +116,35 @@ export function WebhookDetails({ url, payload, triggerLabel = "View Integration 
             </DialogTrigger>
             <DialogContent className="flex flex-col gap-0 p-0 sm:max-w-[800px] sm:h-[600px]">
                 <DialogHeader className="px-6 py-6 border-b relative">
-                    <DialogTitle>Invoke Workflow</DialogTitle>
+                    <DialogTitle>{hideAuth ? 'Receive Webhook' : 'Invoke Workflow'}</DialogTitle>
                     <DialogDescription>
-                        Use the code snippets below to trigger this workflow from your application.
-                        {!apiKey && (
+                        {hideAuth
+                            ? "Configure your external service (like GitHub) to send HTTP POST requests to this URL."
+                            : "Use the code snippets below to trigger this workflow from your application."
+                        }
+                        {!hideAuth && !apiKey && (
                             <span className="block mt-1">
                                 Replace <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">&lt;YOUR_API_KEY&gt;</code> with your actual API key.
                             </span>
                         )}
                     </DialogDescription>
                     {/* Manage API Keys button - bottom right of header */}
-                    <div className="absolute bottom-4 right-6">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs gap-1.5"
-                            onClick={() => {
-                                navigate('/api-keys');
-                                onOpenChange?.(false);
-                            }}
-                        >
-                            <Key className="h-3 w-3" />
-                            Manage API Keys
-                        </Button>
-                    </div>
+                    {!hideAuth && (
+                        <div className="absolute bottom-4 right-6">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1.5"
+                                onClick={() => {
+                                    navigate('/api-keys');
+                                    onOpenChange?.(false);
+                                }}
+                            >
+                                <Key className="h-3 w-3" />
+                                Manage API Keys
+                            </Button>
+                        </div>
+                    )}
                 </DialogHeader>
 
                 <div className="flex-1 min-h-0 p-6">
