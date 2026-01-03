@@ -104,6 +104,12 @@ export class TraceService {
         return 'AWAITING_INPUT';
       case 'NODE_SKIPPED':
         return 'SKIPPED';
+      case 'HTTP_REQUEST_SENT':
+        return 'HTTP_REQUEST_SENT';
+      case 'HTTP_RESPONSE_RECEIVED':
+        return 'HTTP_RESPONSE_RECEIVED';
+      case 'HTTP_REQUEST_ERROR':
+        return 'HTTP_REQUEST_ERROR';
       case 'NODE_PROGRESS':
       default:
         return 'PROGRESS';
@@ -114,7 +120,7 @@ export class TraceService {
     if (storedLevel === 'error' || storedLevel === 'warn' || storedLevel === 'debug') {
       return storedLevel;
     }
-    if (type === 'FAILED') {
+    if (type === 'FAILED' || type === 'HTTP_REQUEST_ERROR') {
       return 'error';
     }
     return 'info';

@@ -55,6 +55,7 @@
     "@nestjs/testing": "^10.4.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/express-serve-static-core": "^4.19.6",
+    "@types/har-format": "^1.2.16",
     "@types/multer": "^2.0.0",
     "@types/node": "^20.16.11",
     "@types/pg": "^8.15.5",

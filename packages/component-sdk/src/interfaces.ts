@@ -155,7 +155,16 @@ export interface TraceEventData {
 }
 
 export interface TraceEvent {
-  type: 'NODE_STARTED' | 'NODE_COMPLETED' | 'NODE_FAILED' | 'NODE_PROGRESS' | 'AWAITING_INPUT' | 'NODE_SKIPPED';
+  type:
+    | 'NODE_STARTED'
+    | 'NODE_COMPLETED'
+    | 'NODE_FAILED'
+    | 'NODE_PROGRESS'
+    | 'AWAITING_INPUT'
+    | 'NODE_SKIPPED'
+    | 'HTTP_REQUEST_SENT'
+    | 'HTTP_RESPONSE_RECEIVED'
+    | 'HTTP_REQUEST_ERROR';
   runId: string;
   nodeRef: string;
   timestamp: string;
