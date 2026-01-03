@@ -351,6 +351,11 @@ const calculateNodeStates = (
       case 'PROGRESS':
         status = 'running'
         break
+      case 'HTTP_REQUEST_SENT':
+      case 'HTTP_RESPONSE_RECEIVED':
+      case 'HTTP_REQUEST_ERROR':
+        status = 'running'
+        break
       case 'AWAITING_INPUT':
         status = 'awaiting_input'
         if (lastEvent.data && typeof lastEvent.data.requestId === 'string') {
