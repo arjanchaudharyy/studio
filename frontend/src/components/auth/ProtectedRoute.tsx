@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth, useAuthProvider } from '../../auth/auth-context';
 import { AuthModal, useAuthModal } from './AuthModal';
 import { AdminLoginForm } from './AdminLoginForm';
@@ -30,14 +30,31 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { openSignIn, isOpen, close } = useAuthModal();
   const adminUsername = useAuthStore((state) => state.adminUsername);
   const adminPassword = useAuthStore((state) => state.adminPassword);
+  
+  // Track whether we've attempted to open the sign-in dialog
+  const [signInAttempted, setSignInAttempted] = useState(false);
 
-  // Automatically trigger sign-in for Clerk when not authenticated
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated && requireAuth && authProvider.name === 'clerk') {
-      // Use Clerk's sign-in directly instead of modal
+  // Function to trigger sign-in (can be called manually)
+  const triggerSignIn = useCallback(() => {
+    if (authProvider.name === 'clerk') {
+      setSignInAttempted(true);
       authProvider.signIn();
     }
-  }, [isLoading, isAuthenticated, requireAuth, authProvider]);
+  }, [authProvider]);
+
+  // Automatically trigger sign-in for Clerk when not authenticated (only once on mount)
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && requireAuth && authProvider.name === 'clerk' && !signInAttempted) {
+      triggerSignIn();
+    }
+  }, [isLoading, isAuthenticated, requireAuth, authProvider, signInAttempted, triggerSignIn]);
+  
+  // Reset signInAttempted when user becomes authenticated (for future sign-outs)
+  useEffect(() => {
+    if (isAuthenticated) {
+      setSignInAttempted(false);
+    }
+  }, [isAuthenticated]);
 
   // Compute derived values after hooks
   const isLocalAuth = authProvider.name === 'local';
@@ -83,12 +100,25 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-              <p className="text-xs text-center text-muted-foreground">
-                Opening sign-in dialog...
-              </p>
+              {!signInAttempted ? (
+                <>
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Opening sign-in dialog...
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Button onClick={triggerSignIn} className="w-full">
+                    Sign In
+                  </Button>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Click to open the sign-in dialog
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
