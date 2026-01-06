@@ -68,6 +68,7 @@ import { RequireWorkflowRole, WorkflowRoleGuard } from './workflow-role.guard';
 import { RunArtifactsResponseDto } from '../storage/dto/artifact.dto';
 import { ArtifactIdParamDto, ArtifactIdParamSchema } from '../storage/dto/artifacts.dto';
 import type { WorkflowTerminalRecord } from '../database/schema';
+import { NodeIOService } from '../node-io/node-io.service';
 
 const TERMINAL_COMPLETION_STATUSES = new Set([
   'COMPLETED',
@@ -254,6 +255,7 @@ export class WorkflowsController {
     private readonly artifactsService: ArtifactsService,
     private readonly terminalStreamService: TerminalStreamService,
     private readonly terminalArchiveService: TerminalArchiveService,
+    private readonly nodeIOService: NodeIOService,
   ) {}
 
   @Post()
@@ -769,6 +771,81 @@ export class WorkflowsController {
     res.setHeader('Content-Length', file.size.toString());
 
     return new StreamableFile(buffer);
+  }
+
+  @Get('/runs/:runId/node-io')
+  @ApiOkResponse({
+    description: 'Node inputs/outputs for a workflow run',
+    schema: {
+      type: 'object',
+      properties: {
+        runId: { type: 'string' },
+        nodes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              nodeRef: { type: 'string' },
+              componentId: { type: 'string' },
+              status: { type: 'string', enum: ['running', 'completed', 'failed', 'skipped'] },
+              startedAt: { type: 'string', format: 'date-time', nullable: true },
+              completedAt: { type: 'string', format: 'date-time', nullable: true },
+              durationMs: { type: 'number', nullable: true },
+              inputs: { type: 'object', additionalProperties: true, nullable: true },
+              outputs: { type: 'object', additionalProperties: true, nullable: true },
+              inputsSize: { type: 'number' },
+              outputsSize: { type: 'number' },
+              inputsSpilled: { type: 'boolean' },
+              outputsSpilled: { type: 'boolean' },
+              errorMessage: { type: 'string', nullable: true },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getNodeIO(
+    @Param('runId') runId: string,
+    @CurrentAuth() auth: AuthContext | null,
+  ) {
+    await this.workflowsService.ensureRunAccess(runId, auth);
+    const nodes = await this.nodeIOService.listDetails(runId, auth?.organizationId);
+    return { runId, nodes };
+  }
+
+  @Get('/runs/:runId/node-io/:nodeRef')
+  @ApiOkResponse({
+    description: 'Specific node input/output for a workflow run',
+    schema: {
+      type: 'object',
+      properties: {
+        nodeRef: { type: 'string' },
+        componentId: { type: 'string' },
+        status: { type: 'string', enum: ['running', 'completed', 'failed', 'skipped'] },
+        startedAt: { type: 'string', format: 'date-time', nullable: true },
+        completedAt: { type: 'string', format: 'date-time', nullable: true },
+        durationMs: { type: 'number', nullable: true },
+        inputs: { type: 'object', additionalProperties: true, nullable: true },
+        outputs: { type: 'object', additionalProperties: true, nullable: true },
+        inputsSize: { type: 'number' },
+        outputsSize: { type: 'number' },
+        inputsSpilled: { type: 'boolean' },
+        outputsSpilled: { type: 'boolean' },
+        errorMessage: { type: 'string', nullable: true },
+      },
+    },
+  })
+  async getNodeIODetail(
+    @Param('runId') runId: string,
+    @Param('nodeRef') nodeRef: string,
+    @CurrentAuth() auth: AuthContext | null,
+  ) {
+    await this.workflowsService.ensureRunAccess(runId, auth);
+    const nodeIO = await this.nodeIOService.getNodeIO(runId, nodeRef);
+    if (!nodeIO) {
+      throw new BadRequestException(`Node I/O not found for node ${nodeRef} in run ${runId}`);
+    }
+    return nodeIO;
   }
 
   @Get('/runs/:runId/stream')

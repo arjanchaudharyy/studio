@@ -83,6 +83,11 @@ describe('WorkflowsController contract coverage', () => {
     download: vi.fn(),
   } as const;
 
+  const nodeIOService = {
+    listDetails: vi.fn().mockResolvedValue([]),
+    getNodeIO: vi.fn().mockResolvedValue(null),
+  } as const;
+
   beforeEach(() => {
     controller = new WorkflowsController(
       workflowService as any,
@@ -91,6 +96,7 @@ describe('WorkflowsController contract coverage', () => {
       artifactsService as any,
       terminalStreamService as any,
       terminalArchiveService as any,
+      nodeIOService as any,
     );
     vi.clearAllMocks();
   });

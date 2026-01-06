@@ -405,6 +405,10 @@ describe('WorkflowsController', () => {
         file: { mimeType: 'text/plain', fileName: 'terminal.cast', size: 0 },
       }),
     };
+    const nodeIOService = {
+      listDetails: vi.fn().mockResolvedValue([]),
+      getNodeIO: vi.fn().mockResolvedValue(null),
+    };
     controller = new WorkflowsController(
       workflowsService,
       traceService,
@@ -412,6 +416,7 @@ describe('WorkflowsController', () => {
       artifactsService as any,
       terminalStreamService as any,
       terminalArchiveService as any,
+      nodeIOService as any,
     );
   });
 
