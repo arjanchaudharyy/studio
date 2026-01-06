@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { NodeIORepository } from './node-io.repository';
+import { StorageService } from '../storage/storage.service';
 import type { NodeIORecord } from '../database/schema';
 
 export interface NodeIOSummary {
@@ -34,14 +35,19 @@ export interface NodeIODetail {
 
 @Injectable()
 export class NodeIOService {
-  constructor(private readonly repository: NodeIORepository) {}
+  private readonly logger = new Logger(NodeIOService.name);
+
+  constructor(
+    private readonly repository: NodeIORepository,
+    private readonly storage: StorageService,
+  ) {}
 
   /**
    * Get summaries of all node I/O for a run (without full data)
    */
   async listSummaries(runId: string, organizationId?: string | null): Promise<NodeIOSummary[]> {
     const records = await this.repository.listByRunId(runId, organizationId);
-    return records.map(this.toSummary);
+    return records.map((r) => this.toSummary(r));
   }
 
   /**
@@ -60,7 +66,7 @@ export class NodeIOService {
    */
   async listDetails(runId: string, organizationId?: string | null): Promise<NodeIODetail[]> {
     const records = await this.repository.listByRunId(runId, organizationId);
-    return records.map(this.toDetail);
+    return Promise.all(records.map((r) => this.toDetail(r)));
   }
 
   private toSummary(record: NodeIORecord): NodeIOSummary {
@@ -79,7 +85,30 @@ export class NodeIOService {
     };
   }
 
-  private toDetail(record: NodeIORecord): NodeIODetail {
+  private async toDetail(record: NodeIORecord): Promise<NodeIODetail> {
+    let inputs = record.inputs ?? null;
+    let outputs = record.outputs ?? null;
+
+    if (record.inputsSpilled && record.inputsStorageRef) {
+      try {
+        const buffer = await this.storage.downloadFile(record.inputsStorageRef);
+        inputs = JSON.parse(buffer.toString('utf8'));
+      } catch (err) {
+        this.logger.error(`Failed to fetch spilled inputs from ${record.inputsStorageRef}`, err);
+        inputs = { _error: 'Failed to fetch spilled data', _ref: record.inputsStorageRef };
+      }
+    }
+
+    if (record.outputsSpilled && record.outputsStorageRef) {
+      try {
+        const buffer = await this.storage.downloadFile(record.outputsStorageRef);
+        outputs = JSON.parse(buffer.toString('utf8'));
+      } catch (err) {
+        this.logger.error(`Failed to fetch spilled outputs from ${record.outputsStorageRef}`, err);
+        outputs = { _error: 'Failed to fetch spilled data', _ref: record.outputsStorageRef };
+      }
+    }
+
     return {
       nodeRef: record.nodeRef,
       componentId: record.componentId,
@@ -87,8 +116,8 @@ export class NodeIOService {
       startedAt: record.startedAt?.toISOString() ?? null,
       completedAt: record.completedAt?.toISOString() ?? null,
       durationMs: record.durationMs,
-      inputs: record.inputs ?? null,
-      outputs: record.outputs ?? null,
+      inputs,
+      outputs,
       inputsSize: record.inputsSize,
       outputsSize: record.outputsSize,
       inputsSpilled: record.inputsSpilled,

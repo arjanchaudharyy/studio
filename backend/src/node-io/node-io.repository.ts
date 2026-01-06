@@ -39,10 +39,17 @@ export class NodeIORepository {
     organizationId?: string | null;
     componentId: string;
     inputs?: Record<string, unknown>;
+    inputsSpilled?: boolean;
+    inputsStorageRef?: string | null;
+    inputsSize?: number;
   }): Promise<void> {
     const inputsJson = data.inputs ? JSON.stringify(data.inputs) : null;
-    const inputsSize = inputsJson ? Buffer.byteLength(inputsJson, 'utf8') : 0;
-    const inputsSpilled = inputsSize > SPILL_THRESHOLD_BYTES;
+    const computedInputsSize = inputsJson ? Buffer.byteLength(inputsJson, 'utf8') : 0;
+    
+    // Favor provided spilled info from worker, fallback to local calculation
+    const inputsSize = data.inputsSize ?? computedInputsSize;
+    const inputsSpilled = data.inputsSpilled ?? (inputsSize > SPILL_THRESHOLD_BYTES);
+    const inputsStorageRef = data.inputsStorageRef ?? (inputsSpilled ? `node-io/${data.runId}/${data.nodeRef}/inputs.json` : null);
 
     const insert: NodeIOInsert = {
       runId: data.runId,
@@ -53,18 +60,18 @@ export class NodeIORepository {
       inputs: inputsSpilled ? { _spilled: true, size: inputsSize } : data.inputs,
       inputsSize,
       inputsSpilled,
-      inputsStorageRef: inputsSpilled ? `node-io/${data.runId}/${data.nodeRef}/inputs.json` : null,
+      inputsStorageRef,
       startedAt: new Date(),
       status: 'running',
     };
 
-    await this.db.insert(nodeIOTable).values(insert);
-
-    // TODO: If spilled, actually write to object storage
-    // For now we just mark it as spilled but keep inline
-    if (inputsSpilled) {
-      console.warn(`[NodeIO] Large inputs for ${data.nodeRef} (${inputsSize} bytes) - spilling not yet implemented`);
-    }
+    await this.db.insert(nodeIOTable).values(insert).onConflictDoUpdate({
+      target: [nodeIOTable.runId, nodeIOTable.nodeRef],
+      set: {
+        ...insert,
+        updatedAt: new Date(),
+      }
+    });
   }
 
   /**
@@ -76,10 +83,17 @@ export class NodeIORepository {
     outputs: Record<string, unknown>;
     status: 'completed' | 'failed' | 'skipped';
     errorMessage?: string;
+    outputsSpilled?: boolean;
+    outputsStorageRef?: string | null;
+    outputsSize?: number;
   }): Promise<void> {
     const outputsJson = JSON.stringify(data.outputs);
-    const outputsSize = Buffer.byteLength(outputsJson, 'utf8');
-    const outputsSpilled = outputsSize > SPILL_THRESHOLD_BYTES;
+    const computedOutputsSize = Buffer.byteLength(outputsJson, 'utf8');
+    
+    // Favor provided spilled info from worker, fallback to local calculation
+    const outputsSize = data.outputsSize ?? computedOutputsSize;
+    const outputsSpilled = data.outputsSpilled ?? (outputsSize > SPILL_THRESHOLD_BYTES);
+    const outputsStorageRef = data.outputsStorageRef ?? (outputsSpilled ? `node-io/${data.runId}/${data.nodeRef}/outputs.json` : null);
 
     const completedAt = new Date();
 
@@ -95,7 +109,7 @@ export class NodeIORepository {
         outputs: outputsSpilled ? { _spilled: true, size: outputsSize } : data.outputs,
         outputsSize,
         outputsSpilled,
-        outputsStorageRef: outputsSpilled ? `node-io/${data.runId}/${data.nodeRef}/outputs.json` : null,
+        outputsStorageRef,
         completedAt,
         durationMs,
         status: data.status,
@@ -108,11 +122,6 @@ export class NodeIORepository {
           eq(nodeIOTable.nodeRef, data.nodeRef),
         ),
       );
-
-    // TODO: If spilled, actually write to object storage
-    if (outputsSpilled) {
-      console.warn(`[NodeIO] Large outputs for ${data.nodeRef} (${outputsSize} bytes) - spilling not yet implemented`);
-    }
   }
 
   /**

@@ -11,7 +11,13 @@ interface SerializedNodeIOEvent {
   organizationId?: string | null;
   componentId?: string;
   inputs?: Record<string, unknown>;
+  inputsSize?: number;
+  inputsSpilled?: boolean;
+  inputsStorageRef?: string | null;
   outputs?: Record<string, unknown>;
+  outputsSize?: number;
+  outputsSpilled?: boolean;
+  outputsStorageRef?: string | null;
   status?: 'completed' | 'failed' | 'skipped';
   errorMessage?: string;
   timestamp: string;
@@ -113,6 +119,9 @@ export class NodeIOIngestService implements OnModuleInit, OnModuleDestroy {
         organizationId: event.organizationId,
         componentId: event.componentId || 'unknown',
         inputs: event.inputs || {},
+        inputsSize: event.inputsSize,
+        inputsSpilled: event.inputsSpilled,
+        inputsStorageRef: event.inputsStorageRef,
       });
     } else if (event.type === 'NODE_IO_COMPLETION') {
       await this.nodeIORepository.recordCompletion({
@@ -121,6 +130,9 @@ export class NodeIOIngestService implements OnModuleInit, OnModuleDestroy {
         outputs: event.outputs || {},
         status: event.status || 'completed',
         errorMessage: event.errorMessage,
+        outputsSize: event.outputsSize,
+        outputsSpilled: event.outputsSpilled,
+        outputsStorageRef: event.outputsStorageRef,
       });
     }
   }

@@ -1,6 +1,7 @@
 import { Kafka, logLevel as KafkaLogLevel, type Producer } from 'kafkajs';
-import type { INodeIOService, NodeIOStartEvent, NodeIOCompletionEvent } from '@shipsec/component-sdk';
+import type { INodeIOService, NodeIOStartEvent, NodeIOCompletionEvent, IFileStorageService } from '@shipsec/component-sdk';
 import { ConfigurationError } from '@shipsec/component-sdk';
+import { randomUUID } from 'node:crypto';
 
 interface KafkaNodeIOAdapterConfig {
   brokers: string[];
@@ -17,11 +18,22 @@ type SerializedNodeIOEvent = {
   organizationId?: string | null;
   componentId?: string;
   inputs?: Record<string, unknown>;
+  inputsSize?: number;
+  inputsSpilled?: boolean;
+  inputsStorageRef?: string | null;
   outputs?: Record<string, unknown>;
+  outputsSize?: number;
+  outputsSpilled?: boolean;
+  outputsStorageRef?: string | null;
   status?: 'completed' | 'failed' | 'skipped';
   errorMessage?: string;
   timestamp: string;
 };
+
+// Size threshold for spilling to object storage (100KB)
+const SPILL_THRESHOLD_BYTES = 100 * 1024;
+// Maximum Kafka message size (900KB)
+const MAX_KAFKA_MESSAGE_BYTES = 900 * 1024;
 
 /**
  * Kafka adapter for publishing node I/O events.
@@ -33,6 +45,7 @@ export class KafkaNodeIOAdapter implements INodeIOService {
 
   constructor(
     private readonly config: KafkaNodeIOAdapterConfig,
+    private readonly storage?: any, // Using any for now to avoid circular dependency or complex type issues with FileStorageAdapter
     private readonly logger: Pick<Console, 'log' | 'error'> = console,
   ) {
     if (!config.brokers.length) {
@@ -70,7 +83,7 @@ export class KafkaNodeIOAdapter implements INodeIOService {
       timestamp: new Date().toISOString(),
     };
 
-    void this.send(payload);
+    void this.processAndSend(payload);
   }
 
   recordCompletion(data: NodeIOCompletionEvent): void {
@@ -84,41 +97,88 @@ export class KafkaNodeIOAdapter implements INodeIOService {
       timestamp: new Date().toISOString(),
     };
 
-    void this.send(payload);
+    void this.processAndSend(payload);
   }
 
-  private async send(payload: SerializedNodeIOEvent): Promise<void> {
+  private async processAndSend(payload: SerializedNodeIOEvent): Promise<void> {
     try {
-      await this.connectPromise;
+      // 1. Handle Spilling if necessary
+      if (payload.inputs) {
+        const inputsStr = JSON.stringify(payload.inputs);
+        const size = Buffer.byteLength(inputsStr, 'utf8');
+        payload.inputsSize = size;
+        
+        if (size > SPILL_THRESHOLD_BYTES && this.storage) {
+          const fileId = randomUUID();
+          const storageRef = `node-io/${payload.runId}/${payload.nodeRef}/inputs.json`;
+          
+          await this.storage.uploadFile(
+            fileId,
+            'inputs.json',
+            Buffer.from(inputsStr),
+            'application/json'
+          );
+          
+          payload.inputsSpilled = true;
+          payload.inputsStorageRef = storageRef;
+          // Replace large inputs with marker for Kafka
+          payload.inputs = { _spilled: true, size };
+        }
+      }
 
+      if (payload.outputs) {
+        const outputsStr = JSON.stringify(payload.outputs);
+        const size = Buffer.byteLength(outputsStr, 'utf8');
+        payload.outputsSize = size;
+        
+        if (size > SPILL_THRESHOLD_BYTES && this.storage) {
+          const fileId = randomUUID();
+          const storageRef = `node-io/${payload.runId}/${payload.nodeRef}/outputs.json`;
+          
+          await this.storage.uploadFile(
+            fileId,
+            'outputs.json',
+            Buffer.from(outputsStr),
+            'application/json'
+          );
+          
+          payload.outputsSpilled = true;
+          payload.outputsStorageRef = storageRef;
+          // Replace large outputs with marker for Kafka
+          payload.outputs = { _spilled: true, size };
+        }
+      }
+
+      // 2. Final safety check for Kafka message size
       const message = JSON.stringify(payload);
       const messageSize = Buffer.byteLength(message, 'utf8');
 
-      // If message is too large (> 900KB), truncate the data
-      if (messageSize > 900 * 1024) {
+      if (messageSize > MAX_KAFKA_MESSAGE_BYTES) {
         this.logger.error(
-          `[KafkaNodeIOAdapter] Payload too large (${messageSize} bytes) for ${payload.nodeRef}, truncating`,
+          `[KafkaNodeIOAdapter] Even after spilling, payload too large (${messageSize} bytes) for ${payload.nodeRef}, truncating payloads`,
         );
 
         const truncated: SerializedNodeIOEvent = {
           ...payload,
-          inputs: payload.inputs ? { _truncated: true, _originalSize: messageSize } : undefined,
-          outputs: payload.outputs ? { _truncated: true, _originalSize: messageSize } : undefined,
+          inputs: payload.inputsSpilled ? payload.inputs : { _truncated: true, _originalSize: messageSize },
+          outputs: payload.outputsSpilled ? payload.outputs : { _truncated: true, _originalSize: messageSize },
         };
 
-        await this.producer.send({
-          topic: this.config.topic,
-          messages: [{ value: JSON.stringify(truncated) }],
-        });
+        await this.sendRaw(JSON.stringify(truncated));
         return;
       }
 
-      await this.producer.send({
-        topic: this.config.topic,
-        messages: [{ value: message }],
-      });
+      await this.sendRaw(message);
     } catch (error) {
-      this.logger.error('[KafkaNodeIOAdapter] Failed to send node I/O event', error);
+      this.logger.error('[KafkaNodeIOAdapter] Failed to process or send node I/O event', error);
     }
+  }
+
+  private async sendRaw(message: string): Promise<void> {
+    await this.connectPromise;
+    await this.producer.send({
+      topic: this.config.topic,
+      messages: [{ value: message }],
+    });
   }
 }

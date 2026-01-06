@@ -133,7 +133,7 @@ async function main() {
     brokers: kafkaBrokers,
     topic: process.env.NODE_IO_KAFKA_TOPIC ?? 'telemetry.node-io',
     clientId: process.env.NODE_IO_KAFKA_CLIENT_ID ?? 'shipsec-worker-node-io',
-  });
+  }, storageAdapter);
 
   let logAdapter: KafkaLogAdapter;
   try {
