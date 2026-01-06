@@ -12,6 +12,7 @@ import {
 } from '@shipsec/component-sdk';
 import type { DockerRunnerConfig } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
+import { awsCredentialSchema, awsCredentialContractName } from '../core/credentials/aws-contract';
 
 const recommendedFlagOptions = [
   {
@@ -62,11 +63,7 @@ type NormalisedSeverity = (typeof severityLevels)[number];
 const statusLevels = ['FAILED', 'PASSED', 'WARNING', 'NOT_APPLICABLE', 'NOT_AVAILABLE', 'UNKNOWN'] as const;
 type NormalisedStatus = (typeof statusLevels)[number];
 
-const awsCredentialSchema = z.object({
-  accessKeyId: z.string().min(16, 'Access key ID is required'),
-  secretAccessKey: z.string().min(16, 'Secret access key is required'),
-  sessionToken: z.string().min(10).optional(),
-});
+// Using shared awsCredentialSchema from '../core/credentials/aws-contract'
 
 const inputSchema = z.object({
   accountId: z
@@ -245,6 +242,48 @@ async function listVolumeFiles(volume: IsolatedContainerVolume): Promise<string[
   });
 }
 
+/**
+ * Sets ownership of volume contents for the Prowler container.
+ * Prowler runs as user 'prowler' with UID 1000, so we need to chown
+ * the output directory to allow Prowler to create subdirectories.
+ */
+async function setVolumeOwnership(volume: IsolatedContainerVolume, uid = 1000, gid = 1000): Promise<void> {
+  const volumeName = volume.getVolumeName();
+  if (!volumeName) return;
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn('docker', [
+      'run',
+      '--rm',
+      '-v',
+      `${volumeName}:/data`,
+      '--entrypoint',
+      'sh',
+      'alpine:3.20',
+      '-c',
+      `chown -R ${uid}:${gid} /data && chmod -R 755 /data`,
+    ]);
+
+    let stderr = '';
+
+    proc.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on('error', (error) => {
+      reject(new Error(`Failed to set volume ownership: ${error.message}`));
+    });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Failed to set volume ownership: ${stderr.trim()}`));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
 // Retry policy for Prowler - AWS security scans
 const prowlerRetryPolicy: ComponentRetryPolicy = {
   maxAttempts: 2,
@@ -260,7 +299,10 @@ const definition: ComponentDefinition<Input, Output> = {
   category: 'security',
   retryPolicy: prowlerRetryPolicy,
   runner: {
-    kind: 'inline',
+    kind: 'docker',
+    image: 'prowlercloud/prowler:5.14.2',
+    platform: 'linux/amd64',
+    command: [], // Placeholder - actual command built dynamically in execute()
   },
   inputSchema,
   outputSchema,
@@ -292,9 +334,9 @@ const definition: ComponentDefinition<Input, Output> = {
       {
         id: 'credentials',
         label: 'AWS Credentials',
-        dataType: port.json(),
+        dataType: port.credential(awsCredentialContractName),
         required: false,
-        description: 'Structured credentials object (`{ accessKeyId, secretAccessKey, sessionToken? }`).',
+        description: 'AWS credentials bundle from the AWS Credentials component.',
       },
       {
         id: 'regions',
@@ -547,11 +589,13 @@ const definition: ComponentDefinition<Input, Output> = {
       // Initialize output volume
       await outputVolume.initialize({});
       outputVolumeInitialized = true;
-        context.logger.info(`[ProwlerScan] Created isolated output volume: ${outputVolume.getVolumeName()}`);
-        dockerRunner.volumes = [
-          ...(dockerRunner.volumes ?? []),
-          outputVolume.getVolumeConfig('/output', false),
-        ];
+      // Set ownership to prowler user (UID 1000) so Prowler can create subdirectories
+      await setVolumeOwnership(outputVolume, 1000, 1000);
+      context.logger.info(`[ProwlerScan] Created isolated output volume: ${outputVolume.getVolumeName()}`);
+      dockerRunner.volumes = [
+        ...(dockerRunner.volumes ?? []),
+        outputVolume.getVolumeConfig('/output', false),
+      ];
 
       const raw = await runComponentWithRunner<Record<string, unknown>, unknown>(
         dockerRunner,

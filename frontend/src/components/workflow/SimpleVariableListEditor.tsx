@@ -100,7 +100,10 @@ function SortableRow({ item, onUpdate, onRemove }: SortableRowProps) {
                     <SelectItem value="number">Number</SelectItem>
                     <SelectItem value="boolean">Boolean</SelectItem>
                     <SelectItem value="json">JSON</SelectItem>
-                    <SelectItem value="list">List</SelectItem>
+                    <SelectItem value="list-text">List&lt;Text&gt;</SelectItem>
+                    <SelectItem value="list-number">List&lt;Number&gt;</SelectItem>
+                    <SelectItem value="list-boolean">List&lt;Boolean&gt;</SelectItem>
+                    <SelectItem value="list-json">List&lt;JSON&gt;</SelectItem>
                 </SelectContent>
             </Select>
 
