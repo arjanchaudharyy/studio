@@ -29,6 +29,9 @@ jobs:
         with:
           fetch-depth: 0  # Full history for changelog generation
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -115,6 +118,7 @@ jobs:
           file: ./Dockerfile
           target: backend
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.tags.outputs.backend_tags }}
           build-args: |
             VITE_GIT_SHA=${{ steps.git_sha.outputs.sha }}
@@ -130,6 +134,7 @@ jobs:
           file: ./Dockerfile
           target: worker
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.tags.outputs.worker_tags }}
           build-args: |
             VITE_GIT_SHA=${{ steps.git_sha.outputs.sha }}
@@ -145,6 +150,7 @@ jobs:
           file: ./Dockerfile
           target: frontend
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.tags.outputs.frontend_tags }}
           build-args: |
             VITE_GIT_SHA=${{ steps.git_sha.outputs.sha }}
