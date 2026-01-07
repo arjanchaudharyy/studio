@@ -180,8 +180,8 @@ install_docker() {
     macos)
       info "On macOS, you can install Docker in two ways:"
       printf "\n"
-      info "  ${BOLD}Option 1: Docker Desktop${NC} (GUI app, easiest)"
-      info "  ${BOLD}Option 2: Colima${NC} (CLI-only, lightweight)"
+      info "  ${BOLD} Option 1: Docker Desktop${NC} (GUI app, easiest)"
+      info "  ${BOLD} Option 2: Colima${NC} (CLI-only, lightweight)"
       printf "\n"
       
       if ! ask_yes_no "Would you like to install Docker now?" "y"; then
@@ -302,11 +302,11 @@ install_docker() {
       printf "\n"
       info "For WSL, you have two options:"
       printf "\n"
-      info "  ${BOLD}Option 1: Docker Desktop for Windows (Recommended)${NC}"
+      info "  ${BOLD} Option 1: Docker Desktop for Windows (Recommended)${NC}"
       info "    - Install Docker Desktop from: https://www.docker.com/products/docker-desktop"
       info "    - Enable WSL2 integration in Docker Desktop Settings > Resources > WSL Integration"
       printf "\n"
-      info "  ${BOLD}Option 2: Docker Engine in WSL${NC}"
+      info "  ${BOLD} Option 2: Docker Engine in WSL${NC}"
       
       if ! ask_yes_no "Would you like to install Docker Engine directly in WSL?" "y"; then
         info "Docker installation skipped."
@@ -717,10 +717,17 @@ start_docker_daemon() {
         fi
       fi
       
-      # Try Docker Desktop
+      # Try Docker Desktop - check multiple possible locations
+      local docker_app=""
       if [ -d "/Applications/Docker.app" ]; then
+        docker_app="/Applications/Docker.app"
+      elif [ -d "$HOME/Applications/Docker.app" ]; then
+        docker_app="$HOME/Applications/Docker.app"
+      fi
+      
+      if [ -n "$docker_app" ]; then
         info "Starting Docker Desktop..."
-        open -g "/Applications/Docker.app"
+        open -g "$docker_app"
         
         printf "    Waiting for Docker to be ready"
         local start=$(date +%s)
@@ -730,6 +737,9 @@ start_docker_daemon() {
           if [ "$elapsed" -ge "$WAIT_DOCKER_SEC" ]; then
             printf "\n\n"
             err "Docker did not start within ${WAIT_DOCKER_SEC} seconds."
+            info "Docker Desktop may need to complete first-time setup."
+            info "Please open Docker Desktop manually from Applications, complete the setup,"
+            info "then run this script again."
             return 1
           fi
           printf "."
@@ -739,16 +749,36 @@ start_docker_daemon() {
         return 0
       fi
       
-      # Neither Colima nor Docker Desktop found
-      err "No Docker runtime found."
+      # Docker CLI exists but no runtime - user probably installed just 'docker' via brew
+      if command_exists docker; then
+        printf "\n"
+        warn "Docker CLI is installed, but no Docker runtime is running."
+        info "The 'docker' command needs a runtime (Docker Desktop or Colima) to work."
+        printf "\n"
+        info "Please choose one of these options:"
+        printf "\n"
+        info "  ${BOLD} Option 1: Install & start Colima (CLI-only, lightweight)${NC}"
+        printf "    brew install colima docker-compose\n"
+        printf "    colima start\n"
+        printf "\n"
+        info "  ${BOLD} Option 2: Install & open Docker Desktop${NC}"
+        printf "    brew install --cask docker\n"
+        printf "    # Then open Docker Desktop from Applications\n"
+        printf "\n"
+        return 1
+      fi
+      
+      # Neither Colima nor Docker Desktop found, and no docker CLI
+      err "No Docker installation found."
       info "Please install Docker using one of these methods:"
       printf "\n"
-      info "  ${BOLD}Option 1: Colima (CLI-only, recommended for terminal users)${NC}"
+      info "  ${BOLD} Option 1: Colima (CLI-only, recommended for terminal users)${NC}"
       printf "    brew install colima docker docker-compose\n"
       printf "    colima start\n"
       printf "\n"
-      info "  ${BOLD}Option 2: Docker Desktop${NC}"
+      info "  ${BOLD} Option 2: Docker Desktop${NC}"
       printf "    brew install --cask docker\n"
+      printf "    # Then open Docker Desktop from Applications\n"
       printf "\n"
       return 1
       ;;
@@ -875,24 +905,24 @@ show_install_instructions() {
     docker)
       case "$PLATFORM" in
         macos)
-          printf "    ${CYAN}Option 1: Download Docker Desktop${NC}\n"
+          printf "    ${CYAN} Option 1: Download Docker Desktop${NC}\n"
           printf "      https://www.docker.com/products/docker-desktop\n"
           printf "\n"
-          printf "    ${CYAN}Option 2: Install via Homebrew${NC}\n"
+          printf "    ${CYAN} Option 2: Install via Homebrew${NC}\n"
           printf "      brew install --cask docker\n"
           ;;
         linux)
-          printf "    ${CYAN}Install Docker Engine:${NC}\n"
+          printf "    ${CYAN} Install Docker Engine:${NC}\n"
           printf "      curl -fsSL https://get.docker.com | sudo sh\n"
           printf "      sudo usermod -aG docker \$USER\n"
           printf "      # Log out and back in for group changes to take effect\n"
           ;;
         wsl)
-          printf "    ${CYAN}Option 1: Use Docker Desktop for Windows${NC}\n"
+          printf "    ${CYAN} Option 1: Use Docker Desktop for Windows${NC}\n"
           printf "      Install Docker Desktop and enable WSL2 integration in Settings\n"
           printf "      https://www.docker.com/products/docker-desktop\n"
           printf "\n"
-          printf "    ${CYAN}Option 2: Install Docker Engine in WSL${NC}\n"
+          printf "    ${CYAN} Option 2: Install Docker Engine in WSL${NC}\n"
           printf "      curl -fsSL https://get.docker.com | sudo sh\n"
           printf "      sudo usermod -aG docker \$USER\n"
           ;;
@@ -908,26 +938,26 @@ show_install_instructions() {
     just)
       case "$PLATFORM" in
         macos)
-          printf "    ${CYAN}Install via Homebrew:${NC}\n"
+          printf "    ${CYAN} Install via Homebrew:${NC}\n"
           printf "      brew install just\n"
           ;;
         linux|wsl)
-          printf "    ${CYAN}Option 1: Install via script${NC}\n"
+          printf "    ${CYAN} Option 1: Install via script${NC}\n"
           printf "      curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin\n"
           printf "      # Add ~/.local/bin to your PATH if not already\n"
           printf "\n"
-          printf "    ${CYAN}Option 2: Install via package manager${NC}\n"
+          printf "    ${CYAN} Option 2: Install via package manager${NC}\n"
           printf "      # Debian/Ubuntu (if available)\n"
           printf "      sudo apt install just\n"
           ;;
         windows)
-          printf "    ${CYAN}Option 1: Install via Scoop${NC}\n"
+          printf "    ${CYAN} Option 1: Install via Scoop${NC}\n"
           printf "      scoop install just\n"
           printf "\n"
-          printf "    ${CYAN}Option 2: Install via Chocolatey${NC}\n"
+          printf "    ${CYAN} Option 2: Install via Chocolatey${NC}\n"
           printf "      choco install just\n"
           printf "\n"
-          printf "    ${CYAN}Option 3: Download from GitHub${NC}\n"
+          printf "    ${CYAN} Option 3: Download from GitHub${NC}\n"
           printf "      https://github.com/casey/just/releases\n"
           ;;
       esac
@@ -954,21 +984,21 @@ show_install_instructions() {
     jq)
       case "$PLATFORM" in
         macos)
-          printf "    ${CYAN}Install via Homebrew:${NC}\n"
+          printf "    ${CYAN} Install via Homebrew:${NC}\n"
           printf "      brew install jq\n"
           ;;
         linux|wsl)
-          printf "    ${CYAN}Debian/Ubuntu:${NC}\n"
+          printf "    ${CYAN} Debian/Ubuntu:${NC}\n"
           printf "      sudo apt-get update && sudo apt-get install -y jq\n"
           printf "\n"
-          printf "    ${CYAN}RHEL/CentOS/Fedora:${NC}\n"
+          printf "    ${CYAN} RHEL/CentOS/Fedora:${NC}\n"
           printf "      sudo dnf install jq\n"
           ;;
         windows)
-          printf "    ${CYAN}Option 1: Install via Scoop${NC}\n"
+          printf "    ${CYAN} Option 1: Install via Scoop${NC}\n"
           printf "      scoop install jq\n"
           printf "\n"
-          printf "    ${CYAN}Option 2: Install via Chocolatey${NC}\n"
+          printf "    ${CYAN} Option 2: Install via Chocolatey${NC}\n"
           printf "      choco install jq\n"
           ;;
       esac
@@ -976,24 +1006,24 @@ show_install_instructions() {
     git)
       case "$PLATFORM" in
         macos)
-          printf "    ${CYAN}Install via Xcode Command Line Tools:${NC}\n"
+          printf "    ${CYAN} Install via Xcode Command Line Tools:${NC}\n"
           printf "      xcode-select --install\n"
           printf "\n"
-          printf "    ${CYAN}Or via Homebrew:${NC}\n"
+          printf "    ${CYAN} Or via Homebrew:${NC}\n"
           printf "      brew install git\n"
           ;;
         linux|wsl)
-          printf "    ${CYAN}Debian/Ubuntu:${NC}\n"
+          printf "    ${CYAN} Debian/Ubuntu:${NC}\n"
           printf "      sudo apt-get update && sudo apt-get install -y git\n"
           printf "\n"
-          printf "    ${CYAN}RHEL/CentOS/Fedora:${NC}\n"
+          printf "    ${CYAN} RHEL/CentOS/Fedora:${NC}\n"
           printf "      sudo dnf install git\n"
           ;;
         windows)
-          printf "    ${CYAN}Download Git for Windows:${NC}\n"
+          printf "    ${CYAN} Download Git for Windows:${NC}\n"
           printf "      https://git-scm.com/download/win\n"
           printf "\n"
-          printf "    ${CYAN}Or via winget:${NC}\n"
+          printf "    ${CYAN} Or via winget:${NC}\n"
           printf "      winget install Git.Git\n"
           ;;
       esac
