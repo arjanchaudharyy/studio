@@ -126,7 +126,744 @@ detect_platform() {
   esac
 }
 
-# ---------- Dependency Installation Instructions ----------
+# ---------- Dependency Installation ----------
+
+# Check if we can use sudo
+can_sudo() {
+  if command_exists sudo; then
+    # Check if user can sudo without password or is root
+    if [ "$(id -u)" = "0" ] || sudo -n true 2>/dev/null; then
+      return 0
+    fi
+    # In interactive mode, try to get sudo access
+    if [ -t 0 ]; then
+      info "Some operations require administrator privileges."
+      if sudo -v 2>/dev/null; then
+        return 0
+      fi
+    fi
+  fi
+  return 1
+}
+
+# Check if current user is in docker group (for Linux/WSL)
+check_docker_group() {
+  # Skip on macOS and Windows - they don't use docker group
+  if [ "$PLATFORM" = "macos" ] || [ "$PLATFORM" = "windows" ]; then
+    return 0
+  fi
+  
+  # Root doesn't need docker group
+  if [ "$(id -u)" = "0" ]; then
+    return 0
+  fi
+  
+  # Check if docker group exists and user is a member
+  if command_exists docker && getent group docker >/dev/null 2>&1; then
+    if ! groups 2>/dev/null | grep -qw docker; then
+      return 1  # User not in docker group
+    fi
+  fi
+  
+  return 0
+}
+
+# Install Docker - always asks for permission
+install_docker() {
+  log "Installing Docker"
+  
+  printf "\n"
+  warn "Docker installation requires your permission."
+  printf "\n"
+  
+  case "$PLATFORM" in
+    macos)
+      info "On macOS, you can install Docker in two ways:"
+      printf "\n"
+      info "  ${BOLD}Option 1: Docker Desktop${NC} (GUI app, easiest)"
+      info "  ${BOLD}Option 2: Colima${NC} (CLI-only, lightweight)"
+      printf "\n"
+      
+      if ! ask_yes_no "Would you like to install Docker now?" "y"; then
+        info "Docker installation skipped."
+        show_install_instructions "docker"
+        return 1
+      fi
+      
+      if command_exists brew; then
+        printf "\n"
+        info "Which Docker runtime would you prefer?"
+        printf "\n"
+        info "  1) Docker Desktop (GUI application)"
+        info "  2) Colima (CLI-only, runs in terminal)"
+        printf "\n"
+        
+        local choice=""
+        if [ -t 0 ]; then
+          printf "    Enter choice [1/2]: "
+          read -r choice || choice="1"
+        else
+          choice="1"
+        fi
+        
+        case "$choice" in
+          2)
+            info "Installing Colima and Docker CLI via Homebrew..."
+            printf "\n"
+            if brew install colima docker docker-compose; then
+              printf "\n"
+              info "${GREEN}Colima and Docker CLI installed successfully!${NC}"
+              info "Starting Colima..."
+              if colima start; then
+                info "${GREEN}Colima is running! Docker daemon is ready.${NC}"
+                return 0
+              else
+                warn "Colima installed but failed to start. Try: colima start"
+                return 0
+              fi
+            else
+              err "Failed to install Colima"
+              return 1
+            fi
+            ;;
+          *)
+            info "Installing Docker Desktop via Homebrew..."
+            printf "\n"
+            if brew install --cask docker; then
+              printf "\n"
+              info "${GREEN}Docker Desktop installed successfully!${NC}"
+              return 0
+            else
+              err "Failed to install Docker via Homebrew"
+              return 1
+            fi
+            ;;
+        esac
+      else
+        printf "\n"
+        warn "Homebrew is not installed."
+        info "Please install Docker Desktop manually from:"
+        printf "\n"
+        printf "    https://www.docker.com/products/docker-desktop\n"
+        printf "\n"
+        info "Or install Homebrew first:"
+        printf "\n"
+        printf "    /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n"
+        printf "\n"
+        return 1
+      fi
+      ;;
+    linux)
+      if ! ask_yes_no "Would you like to install Docker Engine now?" "y"; then
+        info "Docker installation skipped."
+        show_install_instructions "docker"
+        return 1
+      fi
+      
+      if can_sudo; then
+        info "Installing Docker Engine via official script..."
+        printf "\n"
+        if curl -fsSL https://get.docker.com | sudo sh; then
+          printf "\n"
+          info "Adding current user to docker group..."
+          sudo usermod -aG docker "$USER" 2>/dev/null || true
+          printf "\n"
+          printf "${GREEN}┌─────────────────────────────────────────────────────────────────┐${NC}\n"
+          printf "${GREEN}│${NC}  ${BOLD}🚨 Docker installed but requires logout/login${NC}                  ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}                                                                 ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}  Your user has been added to the 'docker' group, but this      ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}  change won't take effect until you log out and back in.       ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}                                                                 ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}  ${BOLD}➡️  Please log out, log back in, then run:${NC}                     ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}                                                                 ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}      curl -fsSL https://raw.githubusercontent.com/ShipSecAI/   ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}      studio/main/install.sh | bash                              ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}                                                                 ${GREEN}│${NC}\n"
+          printf "${GREEN}└─────────────────────────────────────────────────────────────────┘${NC}\n"
+          printf "\n"
+          info "Exiting now to avoid permission issues."
+          exit 0
+        else
+          err "Failed to install Docker"
+          return 1
+        fi
+      else
+        printf "\n"
+        err "Cannot install Docker without sudo access."
+        info "Please install Docker manually:"
+        printf "\n"
+        printf "    curl -fsSL https://get.docker.com | sudo sh\n"
+        printf "    sudo usermod -aG docker \$USER\n"
+        printf "\n"
+        return 1
+      fi
+      ;;
+    wsl)
+      printf "\n"
+      info "For WSL, you have two options:"
+      printf "\n"
+      info "  ${BOLD}Option 1: Docker Desktop for Windows (Recommended)${NC}"
+      info "    - Install Docker Desktop from: https://www.docker.com/products/docker-desktop"
+      info "    - Enable WSL2 integration in Docker Desktop Settings > Resources > WSL Integration"
+      printf "\n"
+      info "  ${BOLD}Option 2: Docker Engine in WSL${NC}"
+      
+      if ! ask_yes_no "Would you like to install Docker Engine directly in WSL?" "y"; then
+        info "Docker installation skipped."
+        info "Please install Docker Desktop for Windows and enable WSL2 integration."
+        return 1
+      fi
+      
+      if can_sudo; then
+        info "Installing Docker Engine..."
+        printf "\n"
+        if curl -fsSL https://get.docker.com | sudo sh; then
+          printf "\n"
+          info "Adding current user to docker group..."
+          sudo usermod -aG docker "$USER" 2>/dev/null || true
+          printf "\n"
+          printf "${GREEN}┌─────────────────────────────────────────────────────────────────┐${NC}\n"
+          printf "${GREEN}│${NC}  ${BOLD}🚨 Docker installed but requires logout/login${NC}                  ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}                                                                 ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}  Your user has been added to the 'docker' group, but this      ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}  change won't take effect until you log out and back in.       ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}                                                                 ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}  ${BOLD}➡️  Please log out, log back in, then run:${NC}                     ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}                                                                 ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}      curl -fsSL https://raw.githubusercontent.com/ShipSecAI/   ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}      studio/main/install.sh | bash                              ${GREEN}│${NC}\n"
+          printf "${GREEN}│${NC}                                                                 ${GREEN}│${NC}\n"
+          printf "${GREEN}└─────────────────────────────────────────────────────────────────┘${NC}\n"
+          printf "\n"
+          info "Exiting now to avoid permission issues."
+          exit 0
+        else
+          err "Failed to install Docker"
+          return 1
+        fi
+      else
+        err "Cannot install Docker without sudo access."
+        return 1
+      fi
+      ;;
+    windows)
+      printf "\n"
+      info "Docker Desktop for Windows is required."
+      printf "\n"
+      
+      if ! ask_yes_no "Would you like to install Docker Desktop now?" "y"; then
+        info "Docker installation skipped."
+        show_install_instructions "docker"
+        return 1
+      fi
+      
+      if command_exists winget; then
+        info "Installing Docker Desktop via winget..."
+        printf "\n"
+        if winget install Docker.DockerDesktop --accept-source-agreements --accept-package-agreements; then
+          printf "\n"
+          info "${GREEN}Docker Desktop installed successfully!${NC}"
+          info "Please restart your terminal and run this script again."
+          return 0
+        else
+          err "Failed to install Docker Desktop"
+          return 1
+        fi
+      fi
+      
+      info "Please install Docker Desktop manually from:"
+      printf "\n"
+      printf "    https://www.docker.com/products/docker-desktop\n"
+      printf "\n"
+      return 1
+      ;;
+    *)
+      err "Automatic Docker installation not supported on this platform."
+      info "Please install Docker manually."
+      return 1
+      ;;
+  esac
+}
+
+# Install just automatically
+install_just() {
+  log "Installing just"
+  
+  case "$PLATFORM" in
+    macos)
+      if command_exists brew; then
+        info "Installing just via Homebrew..."
+        if brew install just; then
+          info "${GREEN}just installed successfully!${NC}"
+          return 0
+        else
+          err "Failed to install just"
+          return 1
+        fi
+      else
+        warn "Homebrew is not installed. Installing just via script..."
+        mkdir -p ~/.local/bin
+        if curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin; then
+          export PATH="$HOME/.local/bin:$PATH"
+          info "${GREEN}just installed to ~/.local/bin${NC}"
+          warn "Add ~/.local/bin to your PATH permanently by adding this to your shell profile:"
+          printf "    export PATH=\"\$HOME/.local/bin:\$PATH\"\n"
+          return 0
+        else
+          err "Failed to install just"
+          return 1
+        fi
+      fi
+      ;;
+    linux|wsl)
+      info "Installing just via official script..."
+      mkdir -p ~/.local/bin
+      if curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin; then
+        export PATH="$HOME/.local/bin:$PATH"
+        info "${GREEN}just installed to ~/.local/bin${NC}"
+        # Check if ~/.local/bin is in PATH
+        if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+          warn "Add ~/.local/bin to your PATH permanently by adding this to your shell profile:"
+          printf "    export PATH=\"\$HOME/.local/bin:\$PATH\"\n"
+        fi
+        return 0
+      else
+        err "Failed to install just"
+        return 1
+      fi
+      ;;
+    windows)
+      if command_exists scoop; then
+        info "Installing just via Scoop..."
+        if scoop install just; then
+          info "${GREEN}just installed successfully!${NC}"
+          return 0
+        fi
+      elif command_exists choco; then
+        info "Installing just via Chocolatey..."
+        if choco install just -y; then
+          info "${GREEN}just installed successfully!${NC}"
+          return 0
+        fi
+      fi
+      
+      err "Could not install just automatically."
+      info "Please install just manually from: https://github.com/casey/just/releases"
+      return 1
+      ;;
+    *)
+      err "Automatic just installation not supported on this platform."
+      return 1
+      ;;
+  esac
+}
+
+# Install jq automatically
+install_jq() {
+  log "Installing jq"
+  
+  case "$PLATFORM" in
+    macos)
+      if command_exists brew; then
+        info "Installing jq via Homebrew..."
+        if brew install jq; then
+          info "${GREEN}jq installed successfully!${NC}"
+          return 0
+        fi
+      fi
+      err "Failed to install jq"
+      return 1
+      ;;
+    linux|wsl)
+      if can_sudo; then
+        # Detect package manager
+        if command_exists apt-get; then
+          info "Installing jq via apt..."
+          if sudo apt-get update -qq && sudo apt-get install -y jq; then
+            info "${GREEN}jq installed successfully!${NC}"
+            return 0
+          fi
+        elif command_exists dnf; then
+          info "Installing jq via dnf..."
+          if sudo dnf install -y jq; then
+            info "${GREEN}jq installed successfully!${NC}"
+            return 0
+          fi
+        elif command_exists yum; then
+          info "Installing jq via yum..."
+          if sudo yum install -y jq; then
+            info "${GREEN}jq installed successfully!${NC}"
+            return 0
+          fi
+        elif command_exists pacman; then
+          info "Installing jq via pacman..."
+          if sudo pacman -S --noconfirm jq; then
+            info "${GREEN}jq installed successfully!${NC}"
+            return 0
+          fi
+        fi
+      fi
+      err "Failed to install jq"
+      return 1
+      ;;
+    windows)
+      if command_exists scoop; then
+        info "Installing jq via Scoop..."
+        if scoop install jq; then
+          info "${GREEN}jq installed successfully!${NC}"
+          return 0
+        fi
+      elif command_exists choco; then
+        info "Installing jq via Chocolatey..."
+        if choco install jq -y; then
+          info "${GREEN}jq installed successfully!${NC}"
+          return 0
+        fi
+      fi
+      err "Failed to install jq"
+      return 1
+      ;;
+    *)
+      err "Automatic jq installation not supported on this platform."
+      return 1
+      ;;
+  esac
+}
+
+# Install git automatically
+install_git() {
+  log "Installing git"
+  
+  case "$PLATFORM" in
+    macos)
+      info "Installing git via Xcode Command Line Tools..."
+      if xcode-select --install 2>/dev/null; then
+        info "Please complete the Xcode Command Line Tools installation and run this script again."
+        return 1
+      elif command_exists brew; then
+        info "Installing git via Homebrew..."
+        if brew install git; then
+          info "${GREEN}git installed successfully!${NC}"
+          return 0
+        fi
+      fi
+      err "Failed to install git"
+      return 1
+      ;;
+    linux|wsl)
+      if can_sudo; then
+        if command_exists apt-get; then
+          info "Installing git via apt..."
+          if sudo apt-get update -qq && sudo apt-get install -y git; then
+            info "${GREEN}git installed successfully!${NC}"
+            return 0
+          fi
+        elif command_exists dnf; then
+          info "Installing git via dnf..."
+          if sudo dnf install -y git; then
+            info "${GREEN}git installed successfully!${NC}"
+            return 0
+          fi
+        elif command_exists yum; then
+          info "Installing git via yum..."
+          if sudo yum install -y git; then
+            info "${GREEN}git installed successfully!${NC}"
+            return 0
+          fi
+        elif command_exists pacman; then
+          info "Installing git via pacman..."
+          if sudo pacman -S --noconfirm git; then
+            info "${GREEN}git installed successfully!${NC}"
+            return 0
+          fi
+        fi
+      fi
+      err "Failed to install git"
+      return 1
+      ;;
+    windows)
+      if command_exists winget; then
+        info "Installing git via winget..."
+        if winget install Git.Git --accept-source-agreements --accept-package-agreements; then
+          info "${GREEN}git installed successfully!${NC}"
+          info "Please restart your terminal for git to be available."
+          return 0
+        fi
+      fi
+      err "Failed to install git"
+      info "Please install git from: https://git-scm.com/download/win"
+      return 1
+      ;;
+    *)
+      err "Automatic git installation not supported on this platform."
+      return 1
+      ;;
+  esac
+}
+
+# Install curl automatically
+install_curl() {
+  log "Installing curl"
+  
+  case "$PLATFORM" in
+    macos)
+      # curl is pre-installed on macOS
+      if command_exists brew; then
+        info "Installing curl via Homebrew..."
+        if brew install curl; then
+          info "${GREEN}curl installed successfully!${NC}"
+          return 0
+        fi
+      fi
+      err "Failed to install curl"
+      return 1
+      ;;
+    linux|wsl)
+      if can_sudo; then
+        if command_exists apt-get; then
+          info "Installing curl via apt..."
+          if sudo apt-get update -qq && sudo apt-get install -y curl; then
+            info "${GREEN}curl installed successfully!${NC}"
+            return 0
+          fi
+        elif command_exists dnf; then
+          info "Installing curl via dnf..."
+          if sudo dnf install -y curl; then
+            info "${GREEN}curl installed successfully!${NC}"
+            return 0
+          fi
+        elif command_exists yum; then
+          info "Installing curl via yum..."
+          if sudo yum install -y curl; then
+            info "${GREEN}curl installed successfully!${NC}"
+            return 0
+          fi
+        fi
+      fi
+      err "Failed to install curl"
+      return 1
+      ;;
+    windows)
+      # curl is included in Windows 10+ and Git Bash
+      if command_exists choco; then
+        info "Installing curl via Chocolatey..."
+        if choco install curl -y; then
+          info "${GREEN}curl installed successfully!${NC}"
+          return 0
+        fi
+      fi
+      err "Failed to install curl"
+      return 1
+      ;;
+    *)
+      err "Automatic curl installation not supported on this platform."
+      return 1
+      ;;
+  esac
+}
+
+# Try to install a missing dependency
+try_install_dep() {
+  local dep="$1"
+  
+  case "$dep" in
+    docker) install_docker ;;
+    just)   install_just ;;
+    jq)     install_jq ;;
+    git)    install_git ;;
+    curl)   install_curl ;;
+    *)      return 1 ;;
+  esac
+}
+
+# Start Docker daemon
+start_docker_daemon() {
+  log "Starting Docker daemon"
+  
+  case "$PLATFORM" in
+    macos)
+      # Check for Colima first (CLI-based, can start from terminal)
+      if command_exists colima; then
+        info "Found Colima - starting Docker runtime from terminal..."
+        printf "\n"
+        
+        # Check if Colima is already running
+        if colima status 2>/dev/null | grep -q "Running"; then
+          info "${GREEN}Colima is already running!${NC}"
+          return 0
+        fi
+        
+        info "Starting Colima..."
+        if colima start 2>&1; then
+          printf "\n"
+          # Wait for Docker to be ready
+          printf "    Waiting for Docker to be ready"
+          local start=$(date +%s)
+          while ! docker info >/dev/null 2>&1; do
+            local now=$(date +%s)
+            local elapsed=$((now - start))
+            if [ "$elapsed" -ge "$WAIT_DOCKER_SEC" ]; then
+              printf "\n\n"
+              err "Docker did not become ready within ${WAIT_DOCKER_SEC} seconds."
+              return 1
+            fi
+            printf "."
+            sleep 2
+          done
+          printf " ${GREEN}ready!${NC}\n"
+          return 0
+        else
+          warn "Failed to start Colima, trying Docker Desktop..."
+        fi
+      fi
+      
+      # Try Docker Desktop
+      if [ -d "/Applications/Docker.app" ]; then
+        info "Starting Docker Desktop..."
+        open -g "/Applications/Docker.app"
+        
+        printf "    Waiting for Docker to be ready"
+        local start=$(date +%s)
+        while ! docker info >/dev/null 2>&1; do
+          local now=$(date +%s)
+          local elapsed=$((now - start))
+          if [ "$elapsed" -ge "$WAIT_DOCKER_SEC" ]; then
+            printf "\n\n"
+            err "Docker did not start within ${WAIT_DOCKER_SEC} seconds."
+            return 1
+          fi
+          printf "."
+          sleep 2
+        done
+        printf " ${GREEN}ready!${NC}\n"
+        return 0
+      fi
+      
+      # Neither Colima nor Docker Desktop found
+      err "No Docker runtime found."
+      info "Please install Docker using one of these methods:"
+      printf "\n"
+      info "  ${BOLD}Option 1: Colima (CLI-only, recommended for terminal users)${NC}"
+      printf "    brew install colima docker docker-compose\n"
+      printf "    colima start\n"
+      printf "\n"
+      info "  ${BOLD}Option 2: Docker Desktop${NC}"
+      printf "    brew install --cask docker\n"
+      printf "\n"
+      return 1
+      ;;
+    linux)
+      if can_sudo; then
+        # Try systemctl first (systemd) - preferred method
+        if command_exists systemctl; then
+          info "Starting Docker via systemctl..."
+          if sudo systemctl start docker 2>/dev/null; then
+            # Wait for Docker to be ready (use sudo for docker info if needed)
+            printf "    Waiting for Docker to be ready"
+            local start=$(date +%s)
+            while ! sudo docker info >/dev/null 2>&1; do
+              local now=$(date +%s)
+              local elapsed=$((now - start))
+              if [ "$elapsed" -ge "$WAIT_DOCKER_SEC" ]; then
+                printf "\n\n"
+                err "Docker did not start within ${WAIT_DOCKER_SEC} seconds."
+                return 1
+              fi
+              printf "."
+              sleep 2
+            done
+            printf " ${GREEN}ready!${NC}\n"
+            
+            # Enable Docker to start on boot
+            sudo systemctl enable docker 2>/dev/null || true
+            return 0
+          fi
+        fi
+        
+        # Try service command (SysVinit) - fallback for non-systemd systems
+        if command_exists service; then
+          info "Starting Docker via service command..."
+          if sudo service docker start 2>/dev/null; then
+            sleep 3
+            if sudo docker info >/dev/null 2>&1; then
+              info "${GREEN}Docker daemon started!${NC}"
+              return 0
+            fi
+          fi
+        fi
+      fi
+      
+      # No backgrounding dockerd - it's dangerous and conflicts with init systems
+      err "Failed to start Docker daemon."
+      info "Please start Docker manually using your system's init system:"
+      printf "\n"
+      printf "    # For systemd (most modern Linux):\n"
+      printf "    sudo systemctl start docker\n"
+      printf "\n"
+      printf "    # For SysVinit:\n"
+      printf "    sudo service docker start\n"
+      return 1
+      ;;
+    wsl)
+      # In WSL, try service command
+      if can_sudo; then
+        if command_exists service; then
+          info "Starting Docker via service command..."
+          if sudo service docker start 2>/dev/null; then
+            sleep 3
+            if sudo docker info >/dev/null 2>&1; then
+              info "${GREEN}Docker daemon started!${NC}"
+              return 0
+            fi
+          fi
+        fi
+      fi
+      
+      # No backgrounding dockerd - it's dangerous
+      printf "\n"
+      warn "Could not start Docker daemon automatically in WSL."
+      info "Please use one of these options:"
+      printf "\n"
+      info "  1. Start Docker Desktop for Windows (with WSL2 integration enabled)"
+      info "  2. Start the Docker service manually: sudo service docker start"
+      return 1
+      ;;
+    windows)
+      # On Windows (Git Bash), try to start Docker Desktop via cmd.exe
+      # This is more robust than hardcoding paths (handles non-C drives, localized Windows, etc.)
+      info "Attempting to start Docker Desktop..."
+      
+      if cmd.exe /c start "" "Docker Desktop" 2>/dev/null; then
+        printf "    Waiting for Docker to be ready"
+        local start=$(date +%s)
+        while ! docker info >/dev/null 2>&1; do
+          local now=$(date +%s)
+          local elapsed=$((now - start))
+          if [ "$elapsed" -ge "$WAIT_DOCKER_SEC" ]; then
+            printf "\n\n"
+            warn "Docker did not become ready within ${WAIT_DOCKER_SEC} seconds."
+            info "Docker Desktop may still be starting. Please wait and try again."
+            return 1
+          fi
+          printf "."
+          sleep 2
+        done
+        printf " ${GREEN}ready!${NC}\n"
+        return 0
+      else
+        warn "Could not start Docker Desktop automatically."
+        info "Please start Docker Desktop manually from the Start menu."
+        return 1
+      fi
+      ;;
+    *)
+      err "Cannot start Docker daemon on this platform automatically."
+      return 1
+      ;;
+  esac
+}
+
+# ---------- Dependency Installation Instructions (fallback) ----------
 show_install_instructions() {
   local dep="$1"
   
@@ -281,6 +1018,23 @@ info "Platform: ${BOLD}$PLATFORM_NAME${NC}"
 info "Documentation: https://docs.shipsec.ai"
 printf "\n"
 
+# ---------- Early Check: Non-interactive mode without sudo ----------
+# In CI / curl | bash scenarios, fail early if we can't get sudo and might need it
+if [ ! -t 0 ]; then
+  # Non-interactive mode - check if we have sudo access
+  if [ "$PLATFORM" = "linux" ] || [ "$PLATFORM" = "wsl" ]; then
+    if [ "$(id -u)" != "0" ] && ! sudo -n true 2>/dev/null; then
+      warn "Running in non-interactive mode without sudo access."
+      info "If dependencies need to be installed, the script will fail."
+      info "For unattended installation, either:"
+      info "  - Run as root"
+      info "  - Configure passwordless sudo"
+      info "  - Pre-install all dependencies (docker, just, curl, jq, git)"
+      printf "\n"
+    fi
+  fi
+fi
+
 # ---------- Check Prerequisites ----------
 log "Checking prerequisites"
 printf "\n"
@@ -313,27 +1067,110 @@ for dep in docker just curl jq git; do
   fi
 done
 
-# If dependencies are missing, show installation instructions
+# If dependencies are missing, offer to install them
 if [ "$ALL_OK" = false ]; then
   MISSING_DEPS="${MISSING_DEPS# }"  # trim leading space
   
   printf "\n"
-  err "Missing required dependencies: ${BOLD}$MISSING_DEPS${NC}"
+  warn "Missing required dependencies: ${BOLD}$MISSING_DEPS${NC}"
+  printf "\n"
   
-  for dep in $MISSING_DEPS; do
-    show_install_instructions "$dep"
-  done
-  
+  # Check if we're in interactive mode
+  if [ -t 0 ]; then
+    if ask_yes_no "Would you like to install the missing dependencies automatically?" "y"; then
+      INSTALL_FAILED=""
+      
+      for dep in $MISSING_DEPS; do
+        printf "\n"
+        if try_install_dep "$dep"; then
+          # Re-check if the command is now available
+          if command_exists "$dep"; then
+            printf "    ${GREEN}✓${NC} $dep is now available\n"
+          else
+            # Some installations require PATH update or terminal restart
+            warn "$dep was installed but may require a terminal restart to be available."
+            INSTALL_FAILED="$INSTALL_FAILED $dep"
+          fi
+        else
+          INSTALL_FAILED="$INSTALL_FAILED $dep"
+        fi
+      done
+      
+      # Check if any installations failed
+      if [ -n "$INSTALL_FAILED" ]; then
+        INSTALL_FAILED="${INSTALL_FAILED# }"  # trim leading space
+        printf "\n"
+        err "Could not install: ${BOLD}$INSTALL_FAILED${NC}"
+        printf "\n"
+        info "Please install these dependencies manually:"
+        
+        for dep in $INSTALL_FAILED; do
+          show_install_instructions "$dep"
+        done
+        
+        printf "\n"
+        info "After installing, run this script again:"
+        printf "\n"
+        printf "    curl -fsSL https://raw.githubusercontent.com/ShipSecAI/studio/main/install.sh | bash\n"
+        printf "\n"
+        exit 1
+      fi
+      
+      printf "\n"
+      info "${GREEN}All dependencies installed successfully!${NC}"
+    else
+      # User declined automatic installation
+      printf "\n"
+      info "Manual installation instructions:"
+      
+      for dep in $MISSING_DEPS; do
+        show_install_instructions "$dep"
+      done
+      
+      printf "\n"
+      info "After installing the missing dependencies, run this script again:"
+      printf "\n"
+      printf "    curl -fsSL https://raw.githubusercontent.com/ShipSecAI/studio/main/install.sh | bash\n"
+      printf "\n"
+      exit 1
+    fi
+  else
+    # Non-interactive mode - show instructions and exit
+    err "Missing required dependencies: ${BOLD}$MISSING_DEPS${NC}"
+    
+    for dep in $MISSING_DEPS; do
+      show_install_instructions "$dep"
+    done
+    
+    printf "\n"
+    info "After installing the missing dependencies, run this script again:"
+    printf "\n"
+    printf "    curl -fsSL https://raw.githubusercontent.com/ShipSecAI/studio/main/install.sh | bash\n"
+    printf "\n"
+    exit 1
+  fi
+else
   printf "\n"
-  info "After installing the missing dependencies, run this script again:"
-  printf "\n"
-  printf "    curl -fsSL https://raw.githubusercontent.com/ShipSecAI/studio/main/install.sh | bash\n"
-  printf "\n"
-  exit 1
+  info "${GREEN}All prerequisites are installed!${NC}"
 fi
 
-printf "\n"
-info "${GREEN}All prerequisites are installed!${NC}"
+# ---------- Check Docker Group Membership (Linux/WSL only) ----------
+if [ "$PLATFORM" = "linux" ] || [ "$PLATFORM" = "wsl" ]; then
+  if ! check_docker_group; then
+    printf "\n"
+    warn "You are not in the 'docker' group."
+    info "Docker group membership is required to run Docker commands without sudo."
+    printf "\n"
+    info "To fix this, run:"
+    printf "\n"
+    printf "    sudo usermod -aG docker \$USER\n"
+    printf "\n"
+    info "Then ${BOLD}log out and log back in${NC} for the change to take effect."
+    info "After logging back in, run this script again."
+    printf "\n"
+    exit 1
+  fi
+fi
 
 # ---------- Check Docker Daemon ----------
 log "Checking Docker daemon"
@@ -343,71 +1180,104 @@ if ! docker info >/dev/null 2>&1; then
   warn "Docker daemon is not running."
   printf "\n"
   
-  case "$PLATFORM" in
-    macos)
-      info "Please start Docker Desktop from your Applications folder."
+  # Check if we're in interactive mode
+  if [ -t 0 ]; then
+    if ask_yes_no "Would you like to start Docker automatically?" "y"; then
       printf "\n"
-      
-      if [ -d "/Applications/Docker.app" ]; then
-        if ask_yes_no "Would you like to start Docker Desktop now?" "y"; then
-          printf "\n"
-          info "Starting Docker Desktop..."
-          open -g "/Applications/Docker.app"
-          
-          printf "    Waiting for Docker to be ready"
-          start=$(date +%s)
-          while ! docker info >/dev/null 2>&1; do
-            now=$(date +%s)
-            elapsed=$((now - start))
-            if [ "$elapsed" -ge "$WAIT_DOCKER_SEC" ]; then
-              printf "\n\n"
-              err "Docker did not start within ${WAIT_DOCKER_SEC} seconds."
-              err "Please start Docker Desktop manually and run this script again."
-              exit 1
-            fi
-            printf "."
-            sleep 2
-          done
-          printf " ${GREEN}ready!${NC}\n"
-        else
-          printf "\n"
-          info "Please start Docker Desktop and run this script again."
-          exit 1
-        fi
+      if start_docker_daemon; then
+        printf "\n"
+        info "${GREEN}Docker daemon is now running!${NC}"
       else
-        err "Docker Desktop not found at /Applications/Docker.app"
-        info "Please install Docker Desktop from: https://www.docker.com/products/docker-desktop"
+        printf "\n"
+        err "Failed to start Docker daemon automatically."
+        printf "\n"
+        
+        case "$PLATFORM" in
+          macos)
+            info "Please start Docker Desktop from your Applications folder and run this script again."
+            ;;
+          linux)
+            info "Please start Docker manually:"
+            printf "    sudo systemctl start docker\n"
+            printf "\n"
+            info "Then run this script again."
+            ;;
+          wsl)
+            info "To use Docker in WSL, you have two options:"
+            printf "\n"
+            info "  1. Start Docker Desktop for Windows (with WSL2 integration enabled)"
+            info "  2. Start the Docker service in WSL: sudo service docker start"
+            printf "\n"
+            info "Then run this script again."
+            ;;
+          windows)
+            info "Please start Docker Desktop for Windows and run this script again."
+            ;;
+        esac
         exit 1
       fi
-      ;;
-    linux)
-      info "To start Docker, run:"
+    else
       printf "\n"
-      printf "    sudo systemctl start docker\n"
-      printf "\n"
-      info "Then run this script again."
+      case "$PLATFORM" in
+        macos)
+          info "Please start Docker Desktop from your Applications folder and run this script again."
+          ;;
+        linux)
+          info "To start Docker, run:"
+          printf "\n"
+          printf "    sudo systemctl start docker\n"
+          printf "\n"
+          info "Then run this script again."
+          ;;
+        wsl)
+          info "To use Docker in WSL, you have two options:"
+          printf "\n"
+          info "  1. Start Docker Desktop for Windows (with WSL2 integration enabled)"
+          info "  2. Start the Docker service in WSL: sudo service docker start"
+          printf "\n"
+          info "Then run this script again."
+          ;;
+        windows)
+          info "Please start Docker Desktop for Windows and run this script again."
+          ;;
+      esac
       exit 1
-      ;;
-    wsl)
-      info "To use Docker in WSL, you have two options:"
+    fi
+  else
+    # Non-interactive mode - try to start automatically
+    printf "\n"
+    info "Attempting to start Docker daemon automatically..."
+    printf "\n"
+    
+    if start_docker_daemon; then
       printf "\n"
-      info "  1. Start Docker Desktop for Windows (with WSL2 integration enabled)"
-      info "  2. Start the Docker service in WSL: sudo service docker start"
+      info "${GREEN}Docker daemon is now running!${NC}"
+    else
       printf "\n"
-      info "Then run this script again."
+      err "Failed to start Docker daemon."
+      printf "\n"
+      
+      case "$PLATFORM" in
+        macos)
+          info "Please start Docker Desktop and run this script again."
+          ;;
+        linux)
+          info "Please start Docker manually: sudo systemctl start docker"
+          ;;
+        wsl)
+          info "Please start Docker Desktop for Windows or run: sudo service docker start"
+          ;;
+        windows)
+          info "Please start Docker Desktop for Windows."
+          ;;
+      esac
       exit 1
-      ;;
-    windows)
-      info "Please start Docker Desktop for Windows."
-      printf "\n"
-      info "Then run this script again."
-      exit 1
-      ;;
-  esac
+    fi
+  fi
+else
+  printf "\n"
+  info "${GREEN}Docker daemon is running!${NC}"
 fi
-
-printf "\n"
-info "${GREEN}Docker daemon is running!${NC}"
 
 # ---------- Repository Setup ----------
 log "Setting up repository"
