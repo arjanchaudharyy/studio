@@ -4,7 +4,7 @@ import { ExecutionTimeline } from '@/components/timeline/ExecutionTimeline'
 import { EventInspector } from '@/components/timeline/EventInspector'
 import { Button } from '@/components/ui/button'
 import { MessageModal } from '@/components/ui/MessageModal'
-import { StopCircle, RefreshCw, Link2 } from 'lucide-react'
+import { StopCircle, RefreshCw, Link2, Globe } from 'lucide-react'
 
 // Custom hook to detect mobile viewport
 function useIsMobile(breakpoint = 768) {
@@ -36,6 +36,7 @@ import type { ExecutionLog } from '@/schemas/execution'
 import { RunArtifactsPanel } from '@/components/artifacts/RunArtifactsPanel'
 import { AgentTracePanel } from '@/components/timeline/AgentTracePanel'
 import { NodeIOInspector } from '@/components/timeline/NodeIOInspector'
+import { NetworkPanel } from '@/components/timeline/NetworkPanel'
 import { getTriggerDisplay } from '@/utils/triggerDisplay'
 import { RunInfoDisplay } from '@/components/timeline/RunInfoDisplay'
 
@@ -399,6 +400,15 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
             >
               I/O
             </Button>
+            <Button
+              variant={inspectorTab === 'network' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-6 px-2.5 text-xs gap-1"
+              onClick={() => setInspectorTab('network')}
+            >
+              <Globe className="h-3 w-3" />
+              Network
+            </Button>
           </div>
           {inspectorTab === 'logs' && (
             <select
@@ -537,6 +547,10 @@ export function ExecutionInspector({ onRerunRun }: ExecutionInspectorProps = {})
 
           {inspectorTab === 'io' && (
             <NodeIOInspector />
+          )}
+
+          {inspectorTab === 'network' && (
+            <NetworkPanel />
           )}
         </div>
       </aside>
