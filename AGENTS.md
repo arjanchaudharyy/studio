@@ -41,9 +41,11 @@ bun --cwd backend run db:studio            # View data
 ```
 
 ## Rules
-- TypeScript, 2-space indent
-- Conventional commits with DCO: `git commit -s -m "feat: ..."`
-- Tests alongside code in `__tests__/` folders
+1. TypeScript, 2-space indent
+2. Conventional commits with DCO: `git commit -s -m "feat: ..."`
+3. Tests alongside code in `__tests__/` folders
+4. **E2E Tests**: Mandatory for significant features. Place in `e2e-tests/` folder.
+5. **GitHub CLI**: Use `gh` for all GitHub operations (issues, PRs, actions, releases). Never use browser automation for GitHub tasks.
 
 ---
 
