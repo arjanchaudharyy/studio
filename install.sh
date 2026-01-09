@@ -10,7 +10,8 @@
 # Supported platforms: macOS, Linux, Windows (Git Bash/MSYS2/WSL)
 
 set -u -o pipefail
-IFS=$'\n\t'
+# Note: We intentionally keep the default IFS (space, tab, newline) 
+# because we use space-separated lists for MISSING_DEPS and INSTALL_FAILED
 
 # ---------- Config ----------
 REPO_URL="https://github.com/ShipSecAI/studio"
@@ -40,10 +41,11 @@ setup_colors() {
 setup_colors
 
 # ---------- Logging ----------
+# Note: Using %b to interpret escape sequences in the argument
 log()  { printf "\n${GREEN}==>${NC} ${BOLD}%s${NC}\n" "$1"; }
-info() { printf "    %s\n" "$1"; }
-warn() { printf "    ${YELLOW}Warning:${NC} %s\n" "$1"; }
-err()  { printf "    ${RED}Error:${NC} %s\n" "$1"; }
+info() { printf "    %b\n" "$1"; }
+warn() { printf "    ${YELLOW}Warning:${NC} %b\n" "$1"; }
+err()  { printf "    ${RED}Error:${NC} %b\n" "$1"; }
 
 # ---------- Traps ----------
 on_err() {
@@ -64,7 +66,18 @@ trap 'on_int' INT
 # ---------- Utility ----------
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
+# Check if we can interact with user (even when piped via curl | bash)
+is_interactive() {
+  # stdin is a terminal
+  [ -t 0 ] && return 0
+  # stdin is piped but /dev/tty exists (curl | bash scenario)
+  [ -e /dev/tty ] && return 0
+  # Truly non-interactive
+  return 1
+}
+
 # Cross-platform user input
+# Uses /dev/tty to allow prompts even when script is piped (curl | bash)
 ask_yes_no() {
   local prompt="$1"
   local default="${2:-n}"
@@ -76,8 +89,15 @@ ask_yes_no() {
     yn_hint="[y/N]"
   fi
   
-  # Non-interactive mode (piped input)
-  if [ ! -t 0 ]; then
+  # Check if we can read from /dev/tty (works even when script is piped)
+  if [ -t 0 ]; then
+    # stdin is a terminal
+    :
+  elif [ -e /dev/tty ]; then
+    # stdin is piped but /dev/tty exists - we can still prompt
+    exec < /dev/tty
+  else
+    # Truly non-interactive (no terminal available)
     case "$default" in
       y|Y) return 0 ;;
       *) return 1 ;;
@@ -135,10 +155,10 @@ can_sudo() {
     if [ "$(id -u)" = "0" ] || sudo -n true 2>/dev/null; then
       return 0
     fi
-    # In interactive mode, try to get sudo access
-    if [ -t 0 ]; then
+    # In interactive mode, try to get sudo access (let user see password prompt)
+    if is_interactive; then
       info "Some operations require administrator privileges."
-      if sudo -v 2>/dev/null; then
+      if sudo -v; then
         return 0
       fi
     fi
@@ -199,7 +219,7 @@ install_docker() {
         printf "\n"
         
         local choice=""
-        if [ -t 0 ]; then
+        if is_interactive; then
           printf "    Enter choice [1/2]: "
           read -r choice || choice="1"
         else
@@ -1048,10 +1068,10 @@ info "Platform: ${BOLD}$PLATFORM_NAME${NC}"
 info "Documentation: https://docs.shipsec.ai"
 printf "\n"
 
-# ---------- Early Check: Non-interactive mode without sudo ----------
-# In CI / curl | bash scenarios, fail early if we can't get sudo and might need it
-if [ ! -t 0 ]; then
-  # Non-interactive mode - check if we have sudo access
+# ---------- Early Check: Truly non-interactive mode without sudo ----------
+# Only warn if we truly can't interact (no /dev/tty available)
+if ! is_interactive; then
+  # Truly non-interactive mode - check if we have sudo access
   if [ "$PLATFORM" = "linux" ] || [ "$PLATFORM" = "wsl" ]; then
     if [ "$(id -u)" != "0" ] && ! sudo -n true 2>/dev/null; then
       warn "Running in non-interactive mode without sudo access."
@@ -1105,8 +1125,8 @@ if [ "$ALL_OK" = false ]; then
   warn "Missing required dependencies: ${BOLD}$MISSING_DEPS${NC}"
   printf "\n"
   
-  # Check if we're in interactive mode
-  if [ -t 0 ]; then
+  # Check if we can interact with user (works even with curl | bash)
+  if is_interactive; then
     if ask_yes_no "Would you like to install the missing dependencies automatically?" "y"; then
       INSTALL_FAILED=""
       
@@ -1210,8 +1230,8 @@ if ! docker info >/dev/null 2>&1; then
   warn "Docker daemon is not running."
   printf "\n"
   
-  # Check if we're in interactive mode
-  if [ -t 0 ]; then
+  # Check if we can interact with user (works even with curl | bash)
+  if is_interactive; then
     if ask_yes_no "Would you like to start Docker automatically?" "y"; then
       printf "\n"
       if start_docker_daemon; then
