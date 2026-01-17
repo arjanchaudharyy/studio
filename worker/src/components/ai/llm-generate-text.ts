@@ -197,7 +197,7 @@ const definition = defineComponent({
       usage: result.usage,
     };
   },
-};
+});
 
 function buildModelFactory(
   config: LlmProviderConfig,

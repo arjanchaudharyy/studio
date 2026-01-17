@@ -966,7 +966,7 @@ function attemptJsonFix(text: string): unknown | null {
   }
 }
 
-const definition = defineComponent({
+const definition = defineComponent<Input, Output, Params>({
   id: 'core.ai.agent',
   label: 'AI SDK Agent',
   category: 'ai',

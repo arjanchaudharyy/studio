@@ -118,6 +118,6 @@ const definition = defineComponent({
       preview,
     };
   },
-};
+});
 
 componentRegistry.register(definition);

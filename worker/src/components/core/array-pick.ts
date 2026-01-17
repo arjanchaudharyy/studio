@@ -91,6 +91,6 @@ const definition = defineComponent({
       total: items.length,
     };
   },
-};
+});
 
 componentRegistry.register(definition);

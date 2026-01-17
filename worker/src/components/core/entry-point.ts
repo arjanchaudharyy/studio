@@ -151,7 +151,7 @@ const definition = defineComponent({
     context.emitProgress(`Collected ${Object.keys(outputs).length} runtime inputs`);
     return outputs;
   },
-};
+});
 
 componentRegistry.register(definition);
 

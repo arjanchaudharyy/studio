@@ -53,7 +53,7 @@ const definition = defineComponent({
   async execute() {
     return {};
   },
-};
+});
 
 componentRegistry.register(definition);
 

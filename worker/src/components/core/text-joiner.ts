@@ -169,6 +169,6 @@ Expected workflow: Entry Point → File Loader → Text Joiner`, {
       count: itemsArray.length,
     };
   },
-};
+});
 
 componentRegistry.register(definition);

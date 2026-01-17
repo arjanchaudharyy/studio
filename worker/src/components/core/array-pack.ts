@@ -76,6 +76,6 @@ const definition = defineComponent({
       count: entries.length,
     };
   },
-};
+});
 
 componentRegistry.register(definition);

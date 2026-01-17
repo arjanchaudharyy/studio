@@ -145,6 +145,6 @@ const definition = defineComponent({
       } satisfies LlmProviderConfig,
     };
   },
-};
+});
 
 componentRegistry.register(definition);

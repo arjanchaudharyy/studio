@@ -70,7 +70,7 @@ type GoogleWorkspaceUserDeleteResult = {
   error?: string;
   userDeleted: boolean;
   message: string;
-});
+};
 
 export type GoogleWorkspaceUserDeleteOutput = GoogleWorkspaceUserDeleteResult & {
   result: GoogleWorkspaceUserDeleteResult;
@@ -405,6 +405,6 @@ const definition = defineComponent({
       };
     }
   },
-};
+});
 
 componentRegistry.register(definition);

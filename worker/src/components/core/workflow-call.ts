@@ -140,7 +140,7 @@ const definition = defineComponent({
       'core.workflow.call must be executed by the Temporal workflow orchestrator (shipsecWorkflowRun)',
     )
   },
-}
+})
 
 componentRegistry.register(definition)
 

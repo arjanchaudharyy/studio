@@ -140,6 +140,6 @@ Expected workflow: Entry Point → File Loader → Text Splitter`, {
       count: items.length,
     };
   },
-};
+});
 
 componentRegistry.register(definition);

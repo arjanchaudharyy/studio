@@ -123,7 +123,7 @@ const definition = defineComponent({
       textContent,
     };
   },
-};
+});
 
 componentRegistry.register(definition);
 

@@ -193,7 +193,7 @@ const definition = defineComponent({
       attempt: currentAttempt,
     };
   },
-};
+});
 
 componentRegistry.register(definition);
 

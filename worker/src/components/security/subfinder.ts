@@ -52,7 +52,7 @@ type Output = {
   rawOutput: string;
   domainCount: number;
   subdomainCount: number;
-});
+};
 
 const outputSchema = outputs({
   subdomains: port(z.array(z.string()), {
@@ -285,7 +285,7 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
       context.logger.info('[Subfinder] Cleaned up isolated volume.');
     }
   },
-};
+});
 
 componentRegistry.register(definition);
 

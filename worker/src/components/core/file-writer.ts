@@ -217,7 +217,7 @@ const definition = defineComponent({
       savedToArtifactLibrary: destinations.includes('library'),
     };
   },
-};
+});
 
 componentRegistry.register(definition);
 
