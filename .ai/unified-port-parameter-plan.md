@@ -24,28 +24,37 @@ Todos:
 - [x] Update `ComponentDefinition` + `defineComponent` typing to use new shapes.
 - [x] Update port/parameter metadata extraction helpers for UI/validation.
 - [x] Add or update component-sdk unit tests.
-- [ ] Commit checkpoint.
+- [x] Commit checkpoint.
 
 ### Phase Notes
 - Introduced `defineComponent` + unified schema builders without breaking legacy `ComponentDefinition`.
 - Registry now extracts parameters from `parameters()` schemas, with legacy UI parameters as fallback.
+- Committed SDK/type updates.
 
 ## Phase 2: Backend Compiler + Workflow Schema
 Intent: Compile params + input overrides into workflow actions.
 Todos:
-- [ ] Extend workflow action schema to store `params` and port override values.
-- [ ] Update DSL compiler to extract params + overrides from node config.
-- [ ] Update DSL validation to use separated schemas.
-- [ ] Add/adjust backend tests (compiler + validation).
-- [ ] Commit checkpoint.
+- [x] Extend workflow action schema to store `params` and port override values.
+- [x] Update DSL compiler to extract params + overrides from node config.
+- [x] Update DSL validation to use separated schemas.
+- [x] Add/adjust backend tests (compiler + validation).
+- [x] Commit checkpoint.
+
+### Phase Notes
+- Backend workflow schema and compiler now persist params and input overrides.
+- DSL validator and tests updated to reflect separated inputs/params.
 
 ## Phase 3: Worker Runtime
 Intent: Execute components with separated inputs/params and override rules.
 Todos:
-- [ ] Update activity payload to `{ inputs, params }`.
-- [ ] Resolve inputs from mappings + overrides (respect `valuePriority`).
-- [ ] Update worker tests or add coverage for overrides.
-- [ ] Commit checkpoint.
+- [x] Update activity payload to `{ inputs, params }`.
+- [x] Resolve inputs from mappings + overrides (respect `valuePriority`).
+- [x] Update worker tests or add coverage for overrides.
+- [x] Commit checkpoint.
+
+### Phase Notes
+- Worker activity payload now carries `inputs` + `params` and honors override priority.
+- Worker tests updated to cover override handling.
 
 ## Phase 4: Frontend UI + Data Model
 Intent: Surface inputs + parameters with clear status and overrides.
@@ -60,10 +69,14 @@ Todos:
 ## Phase 5: Component Migration
 Intent: Migrate all components to the unified API.
 Todos:
-- [ ] Split each component into `inputs`, `outputs`, `parameters`.
-- [ ] Update `execute` signatures to `{ inputs, params }`.
-- [ ] Remove `ui.parameters` from component definitions.
-- [ ] Commit checkpoint (can be multiple commits by component group).
+- [x] Split each component into `inputs`, `outputs`, `parameters`.
+- [x] Update `execute` signatures to `{ inputs, params }`.
+- [x] Remove `ui.parameters` from component definitions.
+- [x] Commit checkpoint (can be multiple commits by component group).
+
+### Phase Notes
+- Migrated components by category (core, ai, github, it-automation, manual-action, notification, security, test).
+- Committed each category as a separate checkpoint.
 
 ## Phase 6: Cleanup + Enforcement
 Intent: Remove legacy paths and lock the new system.
