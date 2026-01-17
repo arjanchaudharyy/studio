@@ -1365,7 +1365,17 @@ export class WorkflowsService {
     nodeOverrides?: Record<string, { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }>,
   ): ExecutionInputPreview {
     const runtimeInputs = inputs ? { ...inputs } : {};
-    const overrides = nodeOverrides ? { ...nodeOverrides } : {};
+    const overrides: Record<string, { params: Record<string, unknown>; inputOverrides: Record<string, unknown> }> = {};
+
+    if (nodeOverrides) {
+      for (const [key, value] of Object.entries(nodeOverrides)) {
+        overrides[key] = {
+          params: value.params ?? {},
+          inputOverrides: value.inputOverrides ?? {},
+        };
+      }
+    }
+
     return {
       runtimeInputs,
       nodeOverrides: overrides,

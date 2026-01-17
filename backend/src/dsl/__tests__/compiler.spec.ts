@@ -18,9 +18,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Trigger',
             config: {
-              runtimeInputs: [
-                { id: 'fileId', label: 'File ID', type: 'file', required: true },
-              ],
+              params: {},
+              inputOverrides: {
+                runtimeInputs: [
+                  { id: 'fileId', label: 'File ID', type: 'file', required: true },
+                ],
+              },
             },
           },
         },
@@ -31,7 +34,10 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'File loader',
             config: {
-              fileId: '11111111-1111-4111-8111-111111111111',
+              params: {},
+              inputOverrides: {
+                fileId: '11111111-1111-4111-8111-111111111111',
+              },
             },
           },
         },
@@ -42,9 +48,13 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Webhook',
             config: {
-              url: 'https://example.com/webhook',
-              method: 'POST',
-              body: JSON.stringify({ from: 'loader' }),
+              params: {
+                method: 'POST',
+                body: JSON.stringify({ from: 'loader' }),
+              },
+              inputOverrides: {
+                url: 'https://example.com/webhook',
+              },
             },
           },
         },
@@ -105,7 +115,10 @@ describe('compileWorkflowGraph', () => {
           position: { x: 0, y: 0 },
           data: {
             label: 'Missing',
-            config: {},
+            config: {
+              params: {},
+              inputOverrides: {},
+            },
           },
         },
       ],
@@ -134,9 +147,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'A',
             config: {
-              runtimeInputs: [
-                { id: 'inputA', label: 'Input A', type: 'text', required: false },
-              ],
+              params: {},
+              inputOverrides: {
+                runtimeInputs: [
+                  { id: 'inputA', label: 'Input A', type: 'text', required: false },
+                ],
+              },
             },
           },
         },
@@ -147,9 +163,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'B',
             config: {
-              runtimeInputs: [
-                { id: 'inputB', label: 'Input B', type: 'text', required: false },
-              ],
+              params: {},
+              inputOverrides: {
+                runtimeInputs: [
+                  { id: 'inputB', label: 'Input B', type: 'text', required: false },
+                ],
+              },
             },
           },
         },
@@ -177,9 +196,13 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Console',
             config: {
-              label: 'Log',
-              data: 'hello',
-              level: 'info',
+              params: {
+                label: 'Log',
+                level: 'info',
+              },
+              inputOverrides: {
+                data: 'hello',
+              },
             },
           },
         },
@@ -190,9 +213,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Entry Point',
             config: {
-              runtimeInputs: [
-                { id: 'inputA', label: 'Input A', type: 'text', required: true },
-              ],
+              params: {},
+              inputOverrides: {
+                runtimeInputs: [
+                  { id: 'inputA', label: 'Input A', type: 'text', required: true },
+                ],
+              },
             },
           },
         },
@@ -217,9 +243,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Start',
             config: {
-              runtimeInputs: [
-                { id: 'branchSeed', label: 'Seed', type: 'text', required: false },
-              ],
+              params: {},
+              inputOverrides: {
+                runtimeInputs: [
+                  { id: 'branchSeed', label: 'Seed', type: 'text', required: false },
+                ],
+              },
             },
           },
         },
@@ -230,8 +259,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Branch A',
             config: {
-              text: 'Branch A payload',
-              separator: '\n',
+              params: {
+                separator: '\n',
+              },
+              inputOverrides: {
+                text: 'Branch A payload',
+              },
             },
           },
         },
@@ -242,8 +275,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Branch B',
             config: {
-              text: 'Branch B payload',
-              separator: '\n',
+              params: {
+                separator: '\n',
+              },
+              inputOverrides: {
+                text: 'Branch B payload',
+              },
             },
           },
         },
@@ -254,8 +291,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Merge',
             config: {
-              text: 'Merge payload',
-              separator: '\n',
+              params: {
+                separator: '\n',
+              },
+              inputOverrides: {
+                text: 'Merge payload',
+              },
             },
           },
         },

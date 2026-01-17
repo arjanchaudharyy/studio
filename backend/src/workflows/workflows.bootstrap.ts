@@ -59,9 +59,12 @@ export class WorkflowsBootstrapService implements OnModuleInit {
           data: {
             label: 'Entry Point',
             config: {
-              runtimeInputs: [
-                { id: 'fileId', label: 'File ID', type: 'file', required: true },
-              ],
+              params: {},
+              inputOverrides: {
+                runtimeInputs: [
+                  { id: 'fileId', label: 'File ID', type: 'file', required: true },
+                ],
+              },
             },
           },
         },
@@ -71,7 +74,10 @@ export class WorkflowsBootstrapService implements OnModuleInit {
           position: { x: 200, y: 0 },
           data: {
             label: 'Load Sample File',
-            config: { fileId: '00000000-0000-4000-8000-000000000001' },
+            config: {
+              params: {},
+              inputOverrides: { fileId: '00000000-0000-4000-8000-000000000001' },
+            },
           },
         },
       ],

@@ -31,7 +31,14 @@ const normalizeNode = (override: Partial<WorkflowNodeDto> = {}): WorkflowNodeDto
   position: override.position ?? { x: 0, y: 0 },
   data: {
     label: override.data?.label ?? 'Entry Point',
-    config: override.data?.config ?? {},
+    config: {
+      params: override.data?.config?.params ?? {},
+      inputOverrides: override.data?.config?.inputOverrides ?? {},
+      joinStrategy: override.data?.config?.joinStrategy,
+      streamId: override.data?.config?.streamId,
+      groupId: override.data?.config?.groupId,
+      maxConcurrency: override.data?.config?.maxConcurrency,
+    },
   },
 });
 
@@ -260,7 +267,13 @@ interface Component {
         nodes: [
           {
             id: originalGraph.nodes[0].id,
-            data: { label: 'Updated Trigger', config: { message: 'hello' } },
+            data: {
+              label: 'Updated Trigger',
+              config: {
+                params: { message: 'hello' },
+                inputOverrides: {}
+              }
+            },
             position: { x: 42, y: 24 },
             type: originalGraph.nodes[0].type,
           },
@@ -278,7 +291,7 @@ interface Component {
       expect(updated.name).toBe('Updated Title');
       expect(updated.description).toBe('Updated description');
       expect(updated.graph.nodes[0].data.label).toBe('Updated Trigger');
-      expect(updated.graph.nodes[0].data.config).toEqual({ message: 'hello' });
+      expect(updated.graph.nodes[0].data.config.params).toEqual({ message: 'hello' });
     });
   });
 

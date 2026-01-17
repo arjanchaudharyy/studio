@@ -37,6 +37,7 @@ const workflowDefinition: WorkflowDefinition = {
           { id: 'environment', label: 'Environment', type: 'text', required: false },
         ],
       },
+      inputOverrides: {},
       dependsOn: [],
       inputMappings: {},
     },
@@ -265,7 +266,7 @@ describe('WebhooksService', () => {
       definition: workflowDefinition,
       inputs: { prTitle: 'Test PR', prNumber: 42 },
       trigger: { type: 'webhook', sourceId: 'webhook-1', label: 'GitHub PR Webhook' },
-      inputPreview: { runtimeInputs: {}, nodeOverrides: {} },
+      inputPreview: { runtimeInputs: {}, nodeOverrides: { testNode: { params: {}, inputOverrides: {} } } },
     };
   };
 
