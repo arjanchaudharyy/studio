@@ -47,7 +47,7 @@ describe('file-loader component', () => {
       storage: mockStorage,
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       fileId: testFileId,
     });
 
@@ -71,7 +71,7 @@ describe('file-loader component', () => {
       // No storage service
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       fileId: '223e4567-e89b-12d3-a456-426614174001',
     });
 
@@ -108,7 +108,7 @@ describe('file-loader component', () => {
       storage: mockStorage,
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       fileId: imageFileId,
     });
 

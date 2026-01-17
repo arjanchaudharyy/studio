@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, port, ValidationError } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  ValidationError,
+  withPortMeta,
+} from '@shipsec/component-sdk';
 
 // Support both direct text and file objects from entry point
 const manualTriggerFileSchema = z.object({
@@ -21,7 +26,16 @@ const fileLoaderFileSchema = z.object({
 });
 
 const inputSchema = z.object({
-  text: z.union([z.string(), manualTriggerFileSchema, fileLoaderFileSchema]).describe('Text content to split (string or file object)'),
+  text: withPortMeta(
+    z.union([z.string(), manualTriggerFileSchema, fileLoaderFileSchema])
+      .describe('Text content to split (string or file object)'),
+    {
+      label: 'Text Input',
+      description:
+        'Text content to be split into lines or items. Accepts either plain text string or file object with content property.',
+      connectionType: { kind: 'primitive', name: 'text' },
+    },
+  ),
   separator: z.string().default('\n').describe('Separator to split by'),
 });
 
@@ -33,8 +47,14 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  items: z.array(z.string()),
-  count: z.number(),
+  items: withPortMeta(z.array(z.string()), {
+    label: 'Items',
+    description: 'Array of strings after splitting.',
+  }),
+  count: withPortMeta(z.number(), {
+    label: 'Count',
+    description: 'Number of items after splitting.',
+  }),
 });
 
 const definition: ComponentDefinition<Input, Output> = {
@@ -42,10 +62,10 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Text Splitter',
   category: 'transform',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Splits text into an array of strings based on a separator character or pattern.',
-  metadata: {
+  ui: {
     slug: 'text-splitter',
     version: '1.0.0',
     type: 'process',
@@ -58,29 +78,6 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'text',
-        label: 'Text Input',
-        dataType: port.text(),
-        required: true,
-        description: 'Text content to be split into lines or items. Accepts either plain text string or file object with content property.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'items',
-        label: 'Items',
-        dataType: port.list(port.text()),
-        description: 'Array of strings after splitting.',
-      },
-      {
-        id: 'count',
-        label: 'Count',
-        dataType: port.number({ coerceFrom: [] }),
-        description: 'Number of items after splitting.',
-      },
-    ],
     examples: [
       'Split newline-delimited subdomains before enrichment components.',
       'Break CSV exports into individual entries for looping workflows.',

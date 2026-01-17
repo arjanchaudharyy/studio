@@ -19,7 +19,7 @@ describe('shuffledns-massdns component', () => {
     expect(component).toBeDefined();
     expect(component!.label).toBe('Shuffledns + MassDNS');
     expect(component!.category).toBe('security');
-    expect(component!.metadata?.slug).toBe('shuffledns-massdns');
+    expect(component!.ui?.slug).toBe('shuffledns-massdns');
   });
 
   it('normalises plain text output into subdomains array', async () => {
@@ -30,7 +30,7 @@ describe('shuffledns-massdns component', () => {
 
     const context = sdk.createExecutionContext({ runId: 'run-1', componentRef: 'shuffledns-test' });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       domains: ['example.com'],
       mode: 'bruteforce',
       words: ['www', 'api', 'dev'],
@@ -40,7 +40,7 @@ describe('shuffledns-massdns component', () => {
       'www.example.com\napi.example.com\napi.example.com\n',
     );
 
-    const result = component.outputSchema.parse(await component.execute(params, context));
+    const result = component.outputs.parse(await component.execute(params, context));
     expect(result.domainCount).toBe(1);
     // Deduped
     expect(result.subdomains).toEqual(['www.example.com', 'api.example.com']);

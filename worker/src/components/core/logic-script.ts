@@ -3,9 +3,12 @@ import {
   componentRegistry,
   ComponentDefinition,
   ContainerError,
-  port,
   runComponentWithRunner,
   type DockerRunnerConfig,
+  ValidationError,
+  withPortMeta,
+  coerceBooleanFromText,
+  coerceNumberFromText,
 } from '@shipsec/component-sdk';
 
 const variableConfigSchema = z.object({
@@ -38,19 +41,31 @@ const inputSchema = parameterSchema.passthrough();
 type Input = z.infer<typeof inputSchema>;
 type Output = Record<string, unknown>;
 
-const mapTypeToPort = (type: string, id: string, label: string) => {
+const mapTypeToSchema = (type: string, label: string) => {
   switch (type) {
-    case 'string': return { id, label, dataType: port.text(), required: true };
-    case 'number': return { id, label, dataType: port.number(), required: true };
-    case 'boolean': return { id, label, dataType: port.boolean(), required: true };
-    case 'secret': return { id, label, dataType: port.secret(), required: true };
-    // List types with subtypes
+    case 'string':
+      return withPortMeta(z.string(), { label });
+    case 'number':
+      return withPortMeta(coerceNumberFromText(), { label });
+    case 'boolean':
+      return withPortMeta(coerceBooleanFromText(), { label });
+    case 'secret':
+      return withPortMeta(z.unknown(), {
+        label,
+        editor: 'secret',
+        allowAny: true,
+        reason: 'Script inputs may receive secrets as strings or JSON objects.',
+        connectionType: { kind: 'primitive', name: 'secret' },
+      });
     case 'list':
-    case 'list-text': return { id, label, dataType: port.list(port.text()), required: true };
-    case 'list-number': return { id, label, dataType: port.list(port.number()), required: true };
-    case 'list-boolean': return { id, label, dataType: port.list(port.boolean()), required: true };
-    case 'list-json': return { id, label, dataType: port.list(port.json()), required: true };
-    default: return { id, label, dataType: port.json(), required: true };
+      return withPortMeta(z.array(z.string()), { label });
+    default:
+      return withPortMeta(z.unknown(), {
+        label,
+        allowAny: true,
+        reason: 'Script inputs can accept arbitrary JSON payloads.',
+        connectionType: { kind: 'primitive', name: 'json' },
+      });
   }
 };
 
@@ -172,10 +187,10 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Script / Logic',
   category: 'transform',
   runner: baseRunner,
-  inputSchema,
-  outputSchema: z.record(z.string(), z.unknown()),
+  inputs: inputSchema,
+  outputs: z.record(z.string(), z.unknown()),
   docs: 'Execute custom TypeScript code in a secure Docker container. Supports fetch(), async/await, and modern JS.',
-  metadata: {
+  ui: {
     slug: 'logic-script',
     version: '1.0.0',
     type: 'process',
@@ -185,8 +200,6 @@ const definition: ComponentDefinition<Input, Output> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    inputs: [],
-    outputs: [],
     parameters: [
       {
         id: 'variables',
@@ -214,15 +227,24 @@ const definition: ComponentDefinition<Input, Output> = {
     ],
   },
   resolvePorts(params: any) {
-    const inputs: any[] = [];
-    const outputs: any[] = [];
+    const inputShape: Record<string, z.ZodTypeAny> = {};
+    const outputShape: Record<string, z.ZodTypeAny> = {};
     if (Array.isArray(params.variables)) {
-      params.variables.forEach((v: any) => { if (v.name) inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
+      params.variables.forEach((v: any) => {
+        if (!v?.name) return;
+        inputShape[v.name] = mapTypeToSchema(v.type || 'json', v.name);
+      });
     }
     if (Array.isArray(params.returns)) {
-      params.returns.forEach((v: any) => { if (v.name) outputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
+      params.returns.forEach((v: any) => {
+        if (!v?.name) return;
+        outputShape[v.name] = mapTypeToSchema(v.type || 'json', v.name);
+      });
     }
-    return { inputs, outputs };
+    return {
+      inputs: z.object(inputShape),
+      outputs: z.object(outputShape),
+    };
   },
   async execute(params, context) {
     const { code, variables = [], returns = [] } = params;

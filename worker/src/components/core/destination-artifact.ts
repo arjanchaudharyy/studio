@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, port } from '@shipsec/component-sdk';
-import { DestinationConfigSchema, type DestinationConfig } from '@shipsec/shared';
+import { componentRegistry, ComponentDefinition, withPortMeta } from '@shipsec/component-sdk';
+import { destinationWriterSchema } from '@shipsec/contracts';
+import { type DestinationConfig } from '@shipsec/shared';
 
 const inputSchema = z.object({
   saveToRunArtifacts: z.boolean().default(true),
@@ -12,7 +13,10 @@ const inputSchema = z.object({
 type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  destination: DestinationConfigSchema,
+  destination: withPortMeta(destinationWriterSchema(), {
+    label: 'Destination',
+    description: 'Connect this to writer components to store outputs in the artifact store.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -22,25 +26,16 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Artifact Destination',
   category: 'output',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Produces a destination configuration that saves files to the run timeline and/or the shared Artifact Library.',
-  metadata: {
+  ui: {
     slug: 'destination-artifact',
     version: '1.0.0',
     type: 'process',
     category: 'output',
     description: 'Configure the built-in artifact destination for writers.',
     icon: 'HardDriveDownload',
-    inputs: [],
-    outputs: [
-      {
-        id: 'destination',
-        label: 'Destination',
-        dataType: port.contract('destination.writer'),
-        description: 'Connect this to writer components to store outputs in the artifact store.',
-      },
-    ],
     parameters: [
       {
         id: 'saveToRunArtifacts',

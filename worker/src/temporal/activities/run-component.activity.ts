@@ -246,8 +246,7 @@ export async function runComponentActivity(
     });
   }
 
-  const parsedParams = component.inputSchema.parse(resolvedParams);
-
+  const parsedParams = component.inputs.parse(params);
 
   try {
     // Execute the component logic directly so that any

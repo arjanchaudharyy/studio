@@ -1,21 +1,47 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, port, ValidationError } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  ValidationError,
+  withPortMeta,
+  coerceNumberFromText,
+} from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
-  items: z.array(z.string()).min(1, 'Provide at least one item').describe('Array of text values to pick from'),
-  index: z
-    .number()
-    .int()
-    .min(0, 'Index must be zero or greater')
-    .describe('Zero-based index of the item to select'),
+  items: withPortMeta(
+    z.array(z.string()).min(1, 'Provide at least one item').describe('Array of text values to pick from'),
+    {
+      label: 'Items',
+      description: 'Array of strings to select from.',
+    },
+  ),
+  index: withPortMeta(
+    coerceNumberFromText(
+      z.number().int().min(0, 'Index must be zero or greater'),
+    ).describe('Zero-based index of the item to select'),
+    {
+      label: 'Index',
+      description: 'Zero-based index of the item to select.',
+      valuePriority: 'manual-first',
+    },
+  ),
 });
 
 type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  value: z.string(),
-  index: z.number().int(),
-  total: z.number().int(),
+  value: withPortMeta(z.string(), {
+    label: 'Selected Value',
+    description: 'The string value at the requested index.',
+  }),
+  index: withPortMeta(z.number().int(), {
+    label: 'Index',
+    description: 'Index that was selected (echo).',
+  }),
+  total: withPortMeta(z.number().int(), {
+    label: 'Total Items',
+    description: 'Total number of entries in the incoming array.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -25,10 +51,10 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Array Item Picker',
   category: 'transform',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Selects a single item from an array by index. Use after splitting text to route specific elements into downstream components.',
-  metadata: {
+  ui: {
     slug: 'array-pick',
     version: '1.0.0',
     type: 'process',
@@ -40,43 +66,6 @@ const definition: ComponentDefinition<Input, Output> = {
       type: 'shipsecai',
     },
     isLatest: true,
-    inputs: [
-      {
-        id: 'items',
-        label: 'Items',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Array of strings to select from.',
-      },
-      {
-        id: 'index',
-        label: 'Index',
-        dataType: port.number({ coerceFrom: ['text'] }),
-        valuePriority: 'manual-first',
-        required: true,
-        description: 'Zero-based index of the item to select.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'value',
-        label: 'Selected Value',
-        dataType: port.text(),
-        description: 'The string value at the requested index.',
-      },
-      {
-        id: 'index',
-        label: 'Index',
-        dataType: port.number({ coerceFrom: [] }),
-        description: 'Index that was selected (echo).',
-      },
-      {
-        id: 'total',
-        label: 'Total Items',
-        dataType: port.number({ coerceFrom: [] }),
-        description: 'Total number of entries in the incoming array.',
-      },
-    ],
     parameters: [
       {
         id: 'index',

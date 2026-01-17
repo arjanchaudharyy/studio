@@ -14,10 +14,10 @@ const definition: ComponentDefinition<Input, void> = {
   label: 'Text',
   category: 'input',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Add markdown notes and documentation to your workflow. Supports GFM including checklists, tables, and code blocks.',
-  metadata: {
+  ui: {
     slug: 'text-block',
     version: '1.0.0',
     type: 'input',
@@ -28,8 +28,6 @@ const definition: ComponentDefinition<Input, void> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    inputs: [],
-    outputs: [],
     // UI-only component - should not be included in workflow execution
     uiOnly: true,
     parameters: [

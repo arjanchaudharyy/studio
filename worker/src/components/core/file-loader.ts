@@ -2,14 +2,21 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
-  registerContract,
   ConfigurationError,
   ComponentRetryPolicy,
+  withPortMeta,
 } from '@shipsec/component-sdk';
+import { fileContractSchema } from '@shipsec/contracts';
 
 const inputSchema = z.object({
-  fileId: z.string().uuid().describe('File ID from uploaded files'),
+  fileId: withPortMeta(
+    z.string().uuid().describe('File ID from uploaded files'),
+    {
+      label: 'File ID',
+      description: 'File ID from uploaded file (typically from Entry Point runtime input).',
+      connectionType: { kind: 'primitive', name: 'file' },
+    },
+  ),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -26,24 +33,20 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  file: z.object({
-    id: z.string(),
-    name: z.string(),
-    mimeType: z.string(),
-    size: z.number(),
-    content: z.string(),
-  }),
-  textContent: z.string(),
-});
-
-const FILE_CONTRACT = 'shipsec.file.v1';
-
-registerContract({
-  name: FILE_CONTRACT,
-  schema: outputSchema.shape.file,
-  summary: 'ShipSec file payload with base64 content',
-  description:
-    'Normalized file representation returned by File Loader with metadata and base64-encoded content.',
+  file: withPortMeta(
+    fileContractSchema(),
+    {
+      label: 'File Data',
+      description: 'Complete file metadata and base64 encoded content.',
+    },
+  ),
+  textContent: withPortMeta(
+    z.string(),
+    {
+      label: 'Text Content',
+      description: 'Decoded text content of the file (UTF-8).',
+    },
+  ),
 });
 
 // Retry policy for file operations - quick retries for transient I/O issues
@@ -65,10 +68,10 @@ const definition: ComponentDefinition<Input, Output> = {
   category: 'input',
   runner: { kind: 'inline' },
   retryPolicy: fileLoaderRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Loads file content from storage. Requires a fileId from previously uploaded file.',
-  metadata: {
+  ui: {
     slug: 'file-loader',
     version: '1.0.0',
     type: 'input',
@@ -81,29 +84,6 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'fileId',
-        label: 'File ID',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description: 'File ID from uploaded file (typically from Entry Point runtime input).',
-      },
-    ],
-    outputs: [
-      {
-        id: 'file',
-        label: 'File Data',
-        dataType: port.contract(FILE_CONTRACT),
-        description: 'Complete file metadata and base64 encoded content.',
-      },
-      {
-        id: 'textContent',
-        label: 'Text Content',
-        dataType: port.text(),
-        description: 'Decoded text content of the file (UTF-8).',
-      },
-    ],
     examples: [
       'Load a scope text file before passing content into Text Splitter or scanners.',
       'Fetch uploaded configuration archives to hand off to downstream components.',

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentRetryPolicy,
-  port,
   type ComponentDefinition,
   type ExecutionContext,
   ConfigurationError,
@@ -12,26 +11,49 @@ import {
   TimeoutError,
   NotFoundError,
   fromHttpResponse,
-  DEFAULT_SENSITIVE_HEADERS,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z
   .object({
-    organization: z.string().trim().min(1, 'Organization is required.'),
-    teamSlug: z
-      .string()
-      .trim()
-      .min(1, 'Team slug cannot be empty.')
-      .optional(),
-    userIdentifier: z
-      .string()
-      .trim()
-      .min(1, 'Provide a GitHub username or email address.'),
-    connectionId: z
-      .string()
-      .trim()
-      .min(1, 'Select a GitHub connection to reuse.')
-      .describe('GitHub integration connection ID'),
+    organization: withPortMeta(z.string().trim().min(1, 'Organization is required.'), {
+      label: 'Organization',
+      description: 'GitHub organization login (e.g. shipsecai).',
+    }),
+    teamSlug: withPortMeta(
+      z
+        .string()
+        .trim()
+        .min(1, 'Team slug cannot be empty.')
+        .optional(),
+      {
+        label: 'Team Slug',
+        description: 'Optional GitHub team slug to remove the user before organization removal.',
+      },
+    ),
+    userIdentifier: withPortMeta(
+      z
+        .string()
+        .trim()
+        .min(1, 'Provide a GitHub username or email address.'),
+      {
+        label: 'Username or Email',
+        description: 'GitHub username or email of the member to remove.',
+      },
+    ),
+    connectionId: withPortMeta(
+      z
+        .string()
+        .trim()
+        .min(1, 'Select a GitHub connection to reuse.')
+        .describe('GitHub integration connection ID'),
+      {
+        label: 'GitHub Connection',
+        description:
+          'GitHub integration connection ID supplied from the GitHub Connection Provider component.',
+        valuePriority: 'connection-first',
+      },
+    ),
   })
   .transform((value) => ({
     ...value,
@@ -41,16 +63,53 @@ const inputSchema = z
 export type GitHubRemoveOrgMembershipInput = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  organization: z.string(),
-  teamSlug: z.string().optional(),
-  userIdentifier: z.string(),
-  resolvedLogin: z.string(),
-  teamRemovalStatus: z.enum(['removed', 'not_found', 'skipped']).optional(),
-  organizationRemovalStatus: z.enum(['removed', 'not_found']),
-  removedFromTeam: z.boolean(),
-  removedFromOrganization: z.boolean(),
-  message: z.string(),
-  tokenScope: z.string().optional(),
+  result: withPortMeta(z.record(z.string(), z.unknown()), {
+    label: 'Removal Result',
+    description: 'Outcome of team and organization removal attempts.',
+    allowAny: true,
+    reason: 'GitHub removal responses include variable metadata.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  organization: withPortMeta(z.string(), {
+    label: 'Organization',
+    description: 'GitHub organization name.',
+  }),
+  teamSlug: withPortMeta(z.string().optional(), {
+    label: 'Team Slug',
+    description: 'Team slug targeted for removal, if provided.',
+  }),
+  userIdentifier: withPortMeta(z.string(), {
+    label: 'User Identifier',
+    description: 'Original user identifier supplied to the component.',
+  }),
+  resolvedLogin: withPortMeta(z.string(), {
+    label: 'Resolved Login',
+    description: 'Resolved GitHub username used for removal.',
+  }),
+  teamRemovalStatus: withPortMeta(z.enum(['removed', 'not_found', 'skipped']).optional(), {
+    label: 'Team Removal Status',
+    description: 'Outcome of team removal attempt.',
+  }),
+  organizationRemovalStatus: withPortMeta(z.enum(['removed', 'not_found']), {
+    label: 'Organization Removal Status',
+    description: 'Outcome of organization removal attempt.',
+  }),
+  removedFromTeam: withPortMeta(z.boolean(), {
+    label: 'Removed From Team',
+    description: 'Whether the user was removed from the team.',
+  }),
+  removedFromOrganization: withPortMeta(z.boolean(), {
+    label: 'Removed From Organization',
+    description: 'Whether the user was removed from the organization.',
+  }),
+  message: withPortMeta(z.string(), {
+    label: 'Message',
+    description: 'Summary message for the removal attempt.',
+  }),
+  tokenScope: withPortMeta(z.string().optional(), {
+    label: 'Token Scope',
+    description: 'GitHub token scope detected during the operation.',
+  }),
 });
 
 export type GitHubRemoveOrgMembershipOutput = z.infer<typeof outputSchema>;
@@ -70,10 +129,10 @@ const definition: ComponentDefinition<
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ConfigurationError', 'AuthenticationError', 'PermissionError', 'ValidationError'],
   } satisfies ComponentRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Launches a GitHub device authorization flow (using provided client credentials) and removes a user from a GitHub team (optional) and organization to free up a seat.',
-  metadata: {
+  ui: {
     slug: 'github-remove-org-membership',
     version: '1.0.0',
     type: 'output',
@@ -87,46 +146,6 @@ const definition: ComponentDefinition<
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'organization',
-        label: 'Organization',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description: 'GitHub organization login (e.g. shipsecai).',
-      },
-      {
-        id: 'teamSlug',
-        label: 'Team Slug',
-        dataType: port.text({ coerceFrom: [] }),
-        required: false,
-        description: 'Optional GitHub team slug to remove the user before organization removal.',
-      },
-      {
-        id: 'userIdentifier',
-        label: 'Username or Email',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description: 'GitHub username or email of the member to remove.',
-      },
-      {
-        id: 'connectionId',
-        label: 'GitHub Connection',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description:
-          'GitHub integration connection ID supplied from the GitHub Connection Provider component.',
-        valuePriority: 'connection-first',
-      },
-    ],
-    outputs: [
-      {
-        id: 'result',
-        label: 'Removal Result',
-        dataType: port.json(),
-        description: 'Outcome of team and organization removal attempts.',
-      },
-    ],
     examples: [
       'Offboarding an employee by removing their GitHub organization access automatically.',
       'Cleaning up inactive contractors from a specific team and the organization.',
@@ -247,34 +266,48 @@ const definition: ComponentDefinition<
     if (orgResponse.status === 204) {
       context.logger.info(`[GitHub] Removed ${login} from organization ${organization}.`);
       context.emitProgress(`Removed ${login} from organization ${organization}.`);
-      return {
+      const teamStatus = (teamRemovalStatus ?? 'skipped') as GitHubRemoveOrgMembershipOutput['teamRemovalStatus'];
+      const organizationStatus = 'removed' as GitHubRemoveOrgMembershipOutput['organizationRemovalStatus'];
+      const result = {
         organization,
         teamSlug,
         userIdentifier,
         resolvedLogin: login,
-        teamRemovalStatus: teamRemovalStatus ?? 'skipped',
-        organizationRemovalStatus: 'removed',
+        teamRemovalStatus: teamStatus,
+        organizationRemovalStatus: organizationStatus,
         removedFromTeam,
         removedFromOrganization: true,
         message: `Removed ${login} from ${organization}.`,
         tokenScope,
+      };
+
+      return {
+        ...result,
+        result,
       };
     }
 
     if (orgResponse.status === 404) {
       context.logger.info(`[GitHub] ${login} is not a member of organization ${organization}.`);
       context.emitProgress(`${login} is already absent from organization ${organization}.`);
-      return {
+      const teamStatus = (teamRemovalStatus ?? 'skipped') as GitHubRemoveOrgMembershipOutput['teamRemovalStatus'];
+      const organizationStatus = 'not_found' as GitHubRemoveOrgMembershipOutput['organizationRemovalStatus'];
+      const result = {
         organization,
         teamSlug,
         userIdentifier,
         resolvedLogin: login,
-        teamRemovalStatus: teamRemovalStatus ?? 'skipped',
-        organizationRemovalStatus: 'not_found',
+        teamRemovalStatus: teamStatus,
+        organizationRemovalStatus: organizationStatus,
         removedFromTeam,
         removedFromOrganization: false,
         message: `${login} is not an active member of ${organization}.`,
         tokenScope,
+      };
+
+      return {
+        ...result,
+        result,
       };
     }
 

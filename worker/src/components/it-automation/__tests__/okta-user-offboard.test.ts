@@ -215,7 +215,7 @@ describe('okta-user-offboard', () => {
 
   it('rejects inputs without an API token', () => {
     expect(() =>
-      definition.inputSchema.parse({
+      definition.inputs.parse({
         user_email: 'test@example.com',
         okta_domain: 'company.okta.com',
       }),
@@ -223,7 +223,7 @@ describe('okta-user-offboard', () => {
   });
 
   it('throws when provided API token trims to an empty string', async () => {
-    const params = definition.inputSchema.parse({
+    const params = definition.inputs.parse({
       ...baseParams,
       apiToken: '   ',
     });

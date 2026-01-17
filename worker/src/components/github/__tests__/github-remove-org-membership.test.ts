@@ -62,7 +62,7 @@ describe('github.org.membership.remove component', () => {
       componentRef: 'github-remove',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       organization: 'shipsecai',
       userIdentifier: 'octocat',
       connectionId: 'connection-123',
@@ -136,7 +136,7 @@ describe('github.org.membership.remove component', () => {
       componentRef: 'github-remove',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       organization: 'shipsecai',
       userIdentifier: 'octocat@example.com',
       connectionId: 'connection-999',
@@ -186,7 +186,7 @@ describe('github.org.membership.remove component', () => {
     });
     const progressSpy = vi.spyOn(context, 'emitProgress');
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       organization: 'shipsecai',
       userIdentifier: 'octocat',
       connectionId: 'connection-321',
@@ -244,7 +244,7 @@ describe('github.org.membership.remove component', () => {
       componentRef: 'github-remove',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       organization: 'shipsecai',
       teamSlug: 'infra',
       userIdentifier: 'octocat',
@@ -264,7 +264,7 @@ describe('github.org.membership.remove component', () => {
     >('github.org.membership.remove');
     if (!component) throw new Error('Component not registered');
 
-    const result = component.inputSchema.safeParse({
+    const result = component.inputs.safeParse({
       organization: 'shipsecai',
       userIdentifier: 'octocat',
       connectionId: '   ',

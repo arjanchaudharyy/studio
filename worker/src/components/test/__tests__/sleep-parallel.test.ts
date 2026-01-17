@@ -19,7 +19,7 @@ describe('test.sleep.parallel component', () => {
       throw new Error('test.sleep.parallel not registered');
     }
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       delay: 20,
       label: 'demo',
     });

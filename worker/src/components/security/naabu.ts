@@ -2,15 +2,22 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   runComponentWithRunner,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
-  targets: z
-    .array(z.string().min(1, 'Target cannot be empty'))
-    .min(1, 'Provide at least one target')
-    .describe('Hostnames or IP addresses to scan for open ports'),
+  targets: withPortMeta(
+    z
+      .array(z.string().min(1, 'Target cannot be empty'))
+      .min(1, 'Provide at least one target')
+      .describe('Hostnames or IP addresses to scan for open ports'),
+    {
+      label: 'Targets',
+      description: 'Hostnames or IP addresses to scan for open ports.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
   ports: z
     .string()
     .trim()
@@ -66,11 +73,24 @@ const findingSchema = z.object({
 });
 
 const outputSchema = z.object({
-  findings: z.array(findingSchema),
-  rawOutput: z.string(),
-  targetCount: z.number(),
-  openPortCount: z.number(),
-  options: z.object({
+  findings: withPortMeta(z.array(findingSchema), {
+    label: 'Findings',
+    description: 'List of open ports discovered by Naabu.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw Naabu console output.',
+  }),
+  targetCount: withPortMeta(z.number(), {
+    label: 'Target Count',
+    description: 'Number of targets scanned.',
+  }),
+  openPortCount: withPortMeta(z.number(), {
+    label: 'Open Port Count',
+    description: 'Total number of open ports discovered.',
+  }),
+  options: withPortMeta(z.object({
     ports: z.string().nullable(),
     topPorts: z.number().nullable(),
     excludePorts: z.string().nullable(),
@@ -78,6 +98,10 @@ const outputSchema = z.object({
     retries: z.number(),
     enablePing: z.boolean(),
     interface: z.string().nullable(),
+  }), {
+    label: 'Options',
+    description: 'Effective Naabu scan options applied for the run.',
+    connectionType: { kind: 'primitive', name: 'json' },
   }),
 });
 
@@ -196,10 +220,10 @@ eval "$CMD"
       HOME: '/root',
     },
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Run ProjectDiscovery Naabu to identify open TCP ports across a list of targets.',
-  metadata: {
+  ui: {
     slug: 'naabu',
     version: '1.0.0',
     type: 'scan',
@@ -215,29 +239,6 @@ eval "$CMD"
     isLatest: true,
     deprecated: false,
     example: '`naabu -host scanme.sh -top-ports 100` - Quickly identifies the most common open TCP ports on a target host.',
-    inputs: [
-      {
-        id: 'targets',
-        label: 'Targets',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Hostnames or IP addresses to scan for open ports.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'findings',
-        label: 'Open Ports',
-        dataType: port.list(port.json()),
-        description: 'List of open ports discovered per target.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Raw Naabu output lines (JSON per host:port).',
-      },
-    ],
     examples: [
       'Scan Amass or Subfinder discoveries to identify exposed services.',
       'Target a custom list of IPs with tuned rate and retries for stealth scans.',

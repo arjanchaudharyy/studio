@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, port, ValidationError } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  ValidationError,
+  withPortMeta,
+} from '@shipsec/component-sdk';
+import type { PortMeta } from '@shipsec/component-sdk/port-meta';
 
 // Runtime input definition schema
 const runtimeInputDefinitionSchema = z.preprocess((value) => {
@@ -39,10 +45,10 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Entry Point',
   category: 'input',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Defines the workflow entry point. Configure runtime inputs to collect data (files, text, etc.) when the workflow is triggered.',
-  metadata: {
+  ui: {
     slug: 'entry-point',
     version: '2.0.0',
     type: 'trigger',
@@ -55,9 +61,7 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [],
     // Outputs are dynamic and determined by runtimeInputs parameter
-    outputs: [],
     examples: [
       'Collect uploaded scope files or credentials before running security scans.',
       'Prompt operators for runtime parameters such as target domains or API keys.',
@@ -80,27 +84,28 @@ const definition: ComponentDefinition<Input, Output> = {
       ? params.runtimeInputs
       : [];
 
-    const outputs = runtimeInputs
-      .map((input: any) => {
-        const id = typeof input?.id === 'string' ? input.id.trim() : '';
-        if (!id) {
-          return null;
-        }
+    const outputShape: Record<string, z.ZodTypeAny> = {};
+    for (const input of runtimeInputs) {
+      const id = typeof input?.id === 'string' ? input.id.trim() : '';
+      if (!id) {
+        continue;
+      }
 
-        const type = typeof input?.type === 'string' ? input.type.toLowerCase() : 'text';
-        return {
-          id,
-          label: typeof input?.label === 'string' ? input.label : id,
-          required: input?.required !== undefined ? Boolean(input.required) : true,
-          description: typeof input?.description === 'string' ? input.description : undefined,
-          dataType: runtimeInputTypeToPort(type),
-        };
-      })
-      .filter((portMeta): portMeta is NonNullable<typeof portMeta> => portMeta !== null);
+      const type = typeof input?.type === 'string' ? input.type.toLowerCase() : 'text';
+      const required = input?.required !== undefined ? Boolean(input.required) : true;
+      const label = typeof input?.label === 'string' ? input.label : id;
+      const description = typeof input?.description === 'string' ? input.description : undefined;
+      const { schema, meta } = runtimeInputTypeToSchema(type);
+      const schemaWithRequirement = required ? schema : schema.optional();
+      outputShape[id] = withPortMeta(schemaWithRequirement, {
+        ...(meta ?? {}),
+        label,
+        description,
+      });
+    }
 
     return {
-      inputs: [],
-      outputs,
+      outputs: z.object(outputShape),
     };
   },
   async execute(params, context) {
@@ -139,22 +144,30 @@ componentRegistry.register(definition);
 
 export type { Input as EntryPointInput, Output as EntryPointOutput };
 
-function runtimeInputTypeToPort(type: string) {
+function runtimeInputTypeToSchema(type: string): { schema: z.ZodTypeAny; meta?: PortMeta } {
   switch (type) {
     case 'number':
-      return port.number({ coerceFrom: ['text'] });
+      return { schema: z.number() };
     case 'boolean':
-      return port.boolean({ coerceFrom: ['text'] });
+      return { schema: z.boolean() };
     case 'file':
-      return port.file();
+      return {
+        schema: z.string(),
+        meta: { connectionType: { kind: 'primitive', name: 'file' } },
+      };
     case 'json':
-      return port.json();
+      return {
+        schema: z.unknown(),
+        meta: {
+          allowAny: true,
+          reason: 'Runtime JSON inputs can be arbitrary structures.',
+          connectionType: { kind: 'primitive', name: 'json' },
+        },
+      };
     case 'array':
-      return port.list(port.text());
-    case 'secret':
-      return port.secret();
+      return { schema: z.array(z.string()) };
     case 'text':
     default:
-      return port.text();
+      return { schema: z.string() };
   }
 }

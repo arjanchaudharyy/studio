@@ -3,17 +3,29 @@ import {
   componentRegistry,
   ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   ConfigurationError,
   NotFoundError,
   ServiceError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 import { admin, auth as googleAdminAuth } from '@googleapis/admin';
 
 const inputSchema = z.object({
-  primary_email: z.string().email(),
+  primary_email: withPortMeta(z.string().email(), {
+    label: 'User Email',
+    description: 'Email address of the user to delete.',
+  }),
   dry_run: z.boolean().default(false),
-  service_account_secret: z.string().describe('Google Workspace service account JSON key from Secret Fetch component'),
+  service_account_secret: withPortMeta(
+    z.string().describe('Google Workspace service account JSON key from Secret Fetch component'),
+    {
+      label: 'Service Account Secret',
+      description:
+        'Google Workspace service account JSON key (can be provided directly or via Secret Fetch component).',
+      editor: 'secret',
+      connectionType: { kind: 'primitive', name: 'secret' },
+    },
+  ),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -39,7 +51,7 @@ interface AuditLog {
   };
 }
 
-export type GoogleWorkspaceUserDeleteOutput = {
+type GoogleWorkspaceUserDeleteResult = {
   success: boolean;
   audit: AuditLog;
   error?: string;
@@ -47,9 +59,16 @@ export type GoogleWorkspaceUserDeleteOutput = {
   message: string;
 };
 
-const outputSchema = z.object({
-  success: z.boolean(),
-  audit: z.object({
+export type GoogleWorkspaceUserDeleteOutput = GoogleWorkspaceUserDeleteResult & {
+  result: GoogleWorkspaceUserDeleteResult;
+};
+
+const resultSchema = z.object({
+  success: withPortMeta(z.boolean(), {
+    label: 'Success',
+    description: 'Whether the deletion completed successfully.',
+  }),
+  audit: withPortMeta(z.object({
     timestamp: z.string(),
     action: z.string(),
     userEmail: z.string(),
@@ -66,10 +85,31 @@ const outputSchema = z.object({
     changes: z.object({
       userDeleted: z.boolean(),
     }),
+  }), {
+    label: 'Audit',
+    description: 'Audit log describing the deletion attempt.',
+    connectionType: { kind: 'primitive', name: 'json' },
   }),
-  error: z.string().optional(),
-  userDeleted: z.boolean(),
-  message: z.string(),
+  error: withPortMeta(z.string().optional(), {
+    label: 'Error',
+    description: 'Error message when the deletion fails.',
+  }),
+  userDeleted: withPortMeta(z.boolean(), {
+    label: 'User Deleted',
+    description: 'Whether the user account was deleted.',
+  }),
+  message: withPortMeta(z.string(), {
+    label: 'Message',
+    description: 'Summary message for the deletion attempt.',
+  }),
+});
+
+const outputSchema = resultSchema.extend({
+  result: withPortMeta(resultSchema, {
+    label: 'User Deletion Result',
+    description: 'Results of the user deletion operation including audit logs.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
 });
 
 /**
@@ -197,10 +237,10 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ConfigurationError', 'NotFoundError', 'ValidationError'],
   } satisfies ComponentRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: componentDocumentation,
-  metadata: {
+  ui: {
     slug: 'google-workspace-user-delete',
     version: '2.0.0',
     type: 'output',
@@ -214,30 +254,6 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'primary_email',
-        label: 'User Email',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description: 'Email address of the user to delete.',
-      },
-      {
-        id: 'service_account_secret',
-        label: 'Service Account Secret',
-        dataType: port.secret(),  // Changed from text to secret for proper masking
-        required: true,
-        description: 'Google Workspace service account JSON key (can be provided directly or via Secret Fetch component).',
-      },
-    ],
-    outputs: [
-      {
-        id: 'result',
-        label: 'User Deletion Result',
-        dataType: port.json(),
-        description: 'Results of the user deletion operation including audit logs.',
-      },
-    ],
     examples: [
       'Offboard employees by deleting their Google Workspace accounts.',
       'Automatically release all licenses when users leave the company.',
@@ -337,18 +353,23 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
       context.logger.info(`[GoogleWorkspace] ${message}`);
       context.emitProgress(`User deletion completed successfully`);
 
-      return {
+      const result = {
         success: true,
         audit: auditLog,
         userDeleted: true,
         message,
       };
 
+      return {
+        ...result,
+        result,
+      };
+
     } catch (error: any) {
       context.logger.error(`[GoogleWorkspace] User deletion failed: ${error.message}`);
       context.emitProgress('User deletion failed');
 
-      return {
+      const result = {
         success: false,
         audit: {
           timestamp: new Date().toISOString(),
@@ -363,6 +384,11 @@ const definition: ComponentDefinition<Input, GoogleWorkspaceUserDeleteOutput> = 
         error: error.message,
         userDeleted: false,
         message: `Failed to delete user: ${error.message}`,
+      };
+
+      return {
+        ...result,
+        result,
       };
     }
   },

@@ -3,11 +3,11 @@ import {
   componentRegistry,
   type ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   ValidationError,
   ConfigurationError,
   NetworkError,
   fromHttpResponse,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const emailUsernameArraySchema = z
@@ -15,25 +15,48 @@ const emailUsernameArraySchema = z
   .min(1, 'Provide at least one email username to offboard');
 
 const inputSchema = z.object({
-  orgId: z.string().min(1, 'Organization ID is required'),
-  emailUsernames: z
-    .preprocess(value => {
-      if (Array.isArray(value)) {
+  orgId: withPortMeta(z.string().min(1, 'Organization ID is required'), {
+    label: 'Organization ID',
+    description: 'Atlassian organization identifier (UUID).',
+    connectionType: { kind: 'primitive', name: 'text' },
+    valuePriority: 'manual-first',
+  }),
+  emailUsernames: withPortMeta(
+    z
+      .preprocess(value => {
+        if (Array.isArray(value)) {
+          return value;
+        }
+        if (typeof value === 'string') {
+          return value
+            .split(/[\r\n,]+/)
+            .map(item => item.trim())
+            .filter(item => item.length > 0);
+        }
         return value;
-      }
-      if (typeof value === 'string') {
-        return value
-          .split(/[\r\n,]+/)
-          .map(item => item.trim())
-          .filter(item => item.length > 0);
-      }
-      return value;
-    }, emailUsernameArraySchema)
-    .describe('Email usernames (portion before @) to remove from the organization'),
-  accessToken: z
-    .string()
-    .min(1, 'Access token is required')
-    .describe('Resolved Atlassian admin API bearer token (connect via Secret Loader).'),
+      }, emailUsernameArraySchema)
+      .describe('Email usernames (portion before @) to remove from the organization'),
+    {
+      label: 'Email Usernames',
+      description:
+        'Email usernames (portion before the @) separated by commas or new lines to remove from the organization.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      valuePriority: 'manual-first',
+    },
+  ),
+  accessToken: withPortMeta(
+    z
+      .string()
+      .min(1, 'Access token is required')
+      .describe('Resolved Atlassian admin API bearer token (connect via Secret Loader).'),
+    {
+      label: 'Access Token',
+      description: 'Bearer token with admin scope (connect from Secret Fetch to keep credentials masked).',
+      connectionType: { kind: 'primitive', name: 'secret' },
+      editor: 'secret',
+      valuePriority: 'connection-first',
+    },
+  ),
   limit: z
     .number()
     .int({ message: 'Limit must be an integer' })
@@ -69,16 +92,36 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  orgId: z.string(),
-  requestedEmails: z.array(z.string()),
-  results: z.array(resultSchema),
-  summary: z.object({
+  orgId: withPortMeta(z.string(), {
+    label: 'Org ID',
+    description: 'Atlassian organization identifier.',
+  }),
+  requestedEmails: withPortMeta(z.array(z.string()), {
+    label: 'Requested Emails',
+    description: 'Email usernames requested for offboarding.',
+  }),
+  results: withPortMeta(z.array(resultSchema), {
+    label: 'Offboarding Results',
+    description: 'Status of each requested user offboarding attempt.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  summary: withPortMeta(z.object({
     requested: z.number(),
     found: z.number(),
     deleted: z.number(),
     failed: z.number(),
+  }), {
+    label: 'Summary',
+    description: 'Aggregate statistics for the run.',
+    connectionType: { kind: 'primitive', name: 'json' },
   }),
-  searchRaw: z.unknown().optional(),
+  searchRaw: withPortMeta(z.unknown().optional(), {
+    label: 'Raw Search Response',
+    description: 'Unmodified search API payload for debugging.',
+    allowAny: true,
+    reason: 'Atlassian API payloads vary by tenant and request parameters.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
 });
 
 function normaliseAccountId(candidate: unknown): string | undefined {
@@ -174,8 +217,8 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Atlassian Offboarding',
   category: 'it_ops',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs:
     'Search for Atlassian accounts by email username and remove them from an organization using the Atlassian Admin API. Typical workflow: Secret Fetch → Atlassian Offboarding → Console Log / Notify.\n\nPrerequisites:\n- Atlassian organization ID (UUID) with admin API access.\n- Admin API bearer token delivered via Secret Fetch (connect the secret output to the accessToken input).\n\nInputs:\n- emailUsernames: comma/newline separated list or array of email usernames (portion before @).\n- orgId: Atlassian organization identifier.\n- accessToken: bearer token supplied via a secret/credential port.\n\nOutputs:\n- results: entry for each requested username including accountId, status, and message.\n- summary: aggregate counts (requested/found/deleted/failed).\n- searchRaw: raw API response for audit/debug.\n\nSee docs/atlassian-offboarding.md for end-to-end workflow guidance.',
   retryPolicy: {
@@ -185,7 +228,7 @@ const definition: ComponentDefinition<Input, Output> = {
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ValidationError', 'ConfigurationError', 'NotFoundError'],
   } satisfies ComponentRetryPolicy,
-  metadata: {
+  ui: {
     slug: 'atlassian-offboarding',
     version: '1.0.0',
     type: 'process',
@@ -198,53 +241,6 @@ const definition: ComponentDefinition<Input, Output> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    inputs: [
-      {
-        id: 'emailUsernames',
-        label: 'Email Usernames',
-        dataType: port.list(port.text()),
-        required: true,
-        description:
-          'Email usernames (portion before the @) separated by commas or new lines to remove from the organization.',
-        valuePriority: 'manual-first',
-      },
-      {
-        id: 'orgId',
-        label: 'Organization ID',
-        dataType: port.text(),
-        required: true,
-        description: 'Atlassian organization identifier (UUID).',
-        valuePriority: 'manual-first',
-      },
-      {
-        id: 'accessToken',
-        label: 'Access Token',
-        dataType: port.secret(),
-        required: true,
-        description: 'Bearer token with admin scope (connect from Secret Fetch to keep credentials masked).',
-        valuePriority: 'connection-first',
-      },
-    ],
-    outputs: [
-      {
-        id: 'results',
-        label: 'Offboarding Results',
-        dataType: port.list(port.json()),
-        description: 'Status of each requested user offboarding attempt.',
-      },
-      {
-        id: 'summary',
-        label: 'Summary',
-        dataType: port.json(),
-        description: 'Aggregate statistics for the run.',
-      },
-      {
-        id: 'searchRaw',
-        label: 'Raw Search Response',
-        dataType: port.json(),
-        description: 'Unmodified search API payload for debugging.',
-      },
-    ],
     parameters: [
       {
         id: 'orgId',

@@ -2,12 +2,17 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
-  registerContract,
+  withPortMeta,
 } from '@shipsec/component-sdk';
+import { consoleLogResultSchema } from '@shipsec/contracts';
 
 const inputSchema = z.object({
-  data: z.any().describe('Data to log to console'),
+  data: withPortMeta(z.any().describe('Data to log to console'), {
+    label: 'Data',
+    description: 'Any data to log (objects will be JSON stringified).',
+    allowAny: true,
+    reason: 'Console log accepts arbitrary payloads for debugging.',
+  }),
   label: z.string().optional().describe('Optional label for the log entry'),
 });
 
@@ -19,18 +24,21 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  logged: z.boolean(),
-  preview: z.string(),
-});
-
-const CONSOLE_RESULT_CONTRACT = 'core.console-log.result.v1';
-
-registerContract({
-  name: CONSOLE_RESULT_CONTRACT,
-  schema: outputSchema,
-  summary: 'Console log execution result payload',
-  description:
-    'Confirms that the Console Log component emitted data, including a preview string for UI display.',
+  result: withPortMeta(
+    consoleLogResultSchema(),
+    {
+      label: 'Result',
+      description: 'Confirmation that data was logged.',
+    },
+  ),
+  logged: withPortMeta(z.boolean(), {
+    label: 'Logged',
+    description: 'Indicates whether the log entry was emitted.',
+  }),
+  preview: withPortMeta(z.string(), {
+    label: 'Preview',
+    description: 'Short preview of the logged content.',
+  }),
 });
 
 const definition: ComponentDefinition<Input, Output> = {
@@ -38,10 +46,10 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Console Log',
   category: 'output',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Logs data to workflow execution logs. Useful for debugging and displaying results.',
-  metadata: {
+  ui: {
     slug: 'console-log',
     version: '1.0.0',
     type: 'output',
@@ -54,23 +62,6 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'data',
-        label: 'Data',
-        dataType: port.any(),
-        required: true,
-        description: 'Any data to log (objects will be JSON stringified).',
-      },
-    ],
-    outputs: [
-      {
-        id: 'result',
-        label: 'Result',
-        dataType: port.contract(CONSOLE_RESULT_CONTRACT),
-        description: 'Confirmation that data was logged.',
-      },
-    ],
     examples: [
       'Preview component output before wiring into external systems.',
       'Dump intermediate data structures while developing new workflows.',
@@ -119,6 +110,10 @@ const definition: ComponentDefinition<Input, Output> = {
     context.emitProgress(`Logged: ${preview}`);
 
     return {
+      result: {
+        logged: true,
+        preview,
+      },
       logged: true,
       preview,
     };

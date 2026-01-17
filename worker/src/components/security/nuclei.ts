@@ -2,12 +2,12 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   runComponentWithRunner,
   type DockerRunnerConfig,
   ValidationError,
   ServiceError,
   ComponentRetryPolicy,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 import * as yaml from 'js-yaml';
@@ -15,30 +15,66 @@ import * as yaml from 'js-yaml';
 // Input validation with custom refinement
 const inputSchema = z
   .object({
-    targets: z
-      .array(z.string().min(1, 'Target cannot be empty'))
-      .min(1, 'At least one target is required')
-      .describe('URLs or IPs to scan for vulnerabilities'),
+    targets: withPortMeta(
+      z
+        .array(z.string().min(1, 'Target cannot be empty'))
+        .min(1, 'At least one target is required')
+        .describe('URLs or IPs to scan for vulnerabilities'),
+      {
+        label: 'Targets',
+        description: 'URLs or IP addresses to scan (from subfinder, httpx, or manual input).',
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      },
+    ),
 
     // Custom templates - at least one required
-    customTemplateArchive: z
-      .string()
-      .optional()
-      .describe('Base64-encoded zip archive containing multiple YAML templates (from File Loader)'),
-    customTemplateYaml: z
-      .string()
-      .optional()
-      .describe('Raw YAML content for a single template (for quick testing)'),
+    customTemplateArchive: withPortMeta(
+      z
+        .string()
+        .optional()
+        .describe('Base64-encoded zip archive containing multiple YAML templates (from File Loader)'),
+      {
+        label: 'Template Archive (Zip)',
+        description: 'Base64-encoded zip file with multiple templates (connect File Loader output).',
+        connectionType: { kind: 'primitive', name: 'text' },
+      },
+    ),
+    customTemplateYaml: withPortMeta(
+      z
+        .string()
+        .optional()
+        .describe('Raw YAML content for a single template (for quick testing)'),
+      {
+        label: 'Template YAML (Single)',
+        description: 'Raw YAML content for quick template testing (paste directly or connect).',
+        connectionType: { kind: 'primitive', name: 'text' },
+      },
+    ),
 
     // Built-in template filters (optional)
-    templateIds: z
-      .array(z.string())
-      .optional()
-      .describe('Specific template IDs to run (e.g., ["CVE-2024-1234", "http-missing-security-headers"])'),
-    templatePaths: z
-      .array(z.string())
-      .optional()
-      .describe('Specific built-in template paths to include (e.g., ["cves/2024/", "http/exposures/"])'),
+    templateIds: withPortMeta(
+      z
+        .array(z.string())
+        .optional()
+        .describe('Specific template IDs to run (e.g., ["CVE-2024-1234", "http-missing-security-headers"])'),
+      {
+        label: 'Template IDs',
+        description:
+          'Specific template IDs from nuclei-templates repo (e.g., CVE-2024-1234, http-missing-security-headers).',
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      },
+    ),
+    templatePaths: withPortMeta(
+      z
+        .array(z.string())
+        .optional()
+        .describe('Specific built-in template paths to include (e.g., ["cves/2024/", "http/exposures/"])'),
+      {
+        label: 'Template Paths',
+        description: 'Specific built-in template paths to include in the scan.',
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      },
+    ),
 
     // Scan configuration
     rateLimit: z
@@ -133,14 +169,31 @@ const findingSchema = z.object({
 type Finding = z.infer<typeof findingSchema>;
 
 const outputSchema = z.object({
-  findings: z.array(findingSchema),
-  rawOutput: z.string(),
-  targetCount: z.number(),
-  findingCount: z.number(),
-  stats: z.object({
+  findings: withPortMeta(z.array(findingSchema), {
+    label: 'Vulnerability Findings',
+    description: 'Array of detected vulnerabilities with severity, tags, and matched URLs.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Complete JSONL output from nuclei for downstream processing.',
+  }),
+  targetCount: withPortMeta(z.number(), {
+    label: 'Target Count',
+    description: 'Number of targets scanned.',
+  }),
+  findingCount: withPortMeta(z.number(), {
+    label: 'Finding Count',
+    description: 'Total number of vulnerabilities detected.',
+  }),
+  stats: withPortMeta(z.object({
     templatesLoaded: z.number(),
     requestsSent: z.number(),
     duration: z.number(),
+  }), {
+    label: 'Stats',
+    description: 'Aggregate scan statistics for the run.',
+    connectionType: { kind: 'primitive', name: 'json' },
   }),
 });
 
@@ -200,10 +253,10 @@ const definition: ComponentDefinition<Input, Output> = {
       HOME: '/home/nonroot', // Custom image runs as nonroot user
     },
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Run ProjectDiscovery Nuclei vulnerability scanner with custom or built-in templates. Supports quick YAML testing or bulk scans with template archives.',
-  metadata: {
+  ui: {
     slug: 'nuclei',
     version: '1.0.0',
     type: 'scan',
@@ -222,56 +275,6 @@ const definition: ComponentDefinition<Input, Output> = {
     deprecated: false,
     example:
       '`nuclei -l targets.txt -t CVE-2024-1234 -t http-missing-headers -stream` - Scan targets for specific vulnerabilities using template IDs with real-time streaming.',
-    inputs: [
-      {
-        id: 'targets',
-        label: 'Targets',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'URLs or IP addresses to scan (from subfinder, httpx, or manual input).',
-      },
-      {
-        id: 'customTemplateArchive',
-        label: 'Template Archive (Zip)',
-        dataType: port.text(),
-        required: false,
-        description: 'Base64-encoded zip file with multiple templates (connect File Loader output).',
-      },
-      {
-        id: 'customTemplateYaml',
-        label: 'Template YAML (Single)',
-        dataType: port.text(),
-        required: false,
-        description: 'Raw YAML content for quick template testing (paste directly or connect).',
-      },
-      {
-        id: 'templateIds',
-        label: 'Template IDs',
-        dataType: port.list(port.text()),
-        required: false,
-        description: 'Specific template IDs from nuclei-templates repo (e.g., CVE-2024-1234, http-missing-security-headers).',
-      },
-    ],
-    outputs: [
-      {
-        id: 'findings',
-        label: 'Vulnerability Findings',
-        dataType: port.list(port.json()),
-        description: 'Array of detected vulnerabilities with severity, tags, and matched URLs.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Complete JSONL output from nuclei for downstream processing.',
-      },
-      {
-        id: 'findingCount',
-        label: 'Finding Count',
-        dataType: port.number(),
-        description: 'Total number of vulnerabilities detected.',
-      },
-    ],
     examples: [
       'Specific CVE scan: Use templateIds=["CVE-2024-1234", "CVE-2024-5678"] to scan for known vulnerabilities',
       'Custom template testing: Paste YAML directly into customTemplateYaml for rapid iteration',

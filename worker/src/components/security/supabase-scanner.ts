@@ -3,9 +3,9 @@ import {
   componentRegistry,
   ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   runComponentWithRunner,
   ValidationError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 import type { DockerRunnerConfig } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
@@ -23,38 +23,77 @@ function inferProjectRef(supabaseUrl: string): string | null {
 
 const inputSchema = z
   .object({
-    supabaseUrl: z
-      .string()
-      .trim()
-      .transform((value) => {
-        const refOnly = /^[a-z0-9]{20}$/i.test(value);
-        return refOnly ? `https://${value}.supabase.co` : value;
-      })
-      .refine((v) => {
-        try {
-          const url = new URL(v);
-          return url.protocol === 'https:' && /\.supabase\.co$/i.test(url.hostname);
-        } catch {
-          return false;
-        }
-      }, 'Provide https://<project-ref>.supabase.co or a 20-character project ref'),
-    databaseConnectionString: z
-      .string()
-      .min(10, 'Postgres connection string is required (Project Settings → Database).')
-      .optional(),
+    supabaseUrl: withPortMeta(
+      z
+        .string()
+        .trim()
+        .transform((value) => {
+          const refOnly = /^[a-z0-9]{20}$/i.test(value);
+          return refOnly ? `https://${value}.supabase.co` : value;
+        })
+        .refine((v) => {
+          try {
+            const url = new URL(v);
+            return url.protocol === 'https:' && /\.supabase\.co$/i.test(url.hostname);
+          } catch {
+            return false;
+          }
+        }, 'Provide https://<project-ref>.supabase.co or a 20-character project ref'),
+      {
+        label: 'Supabase URL',
+        description:
+          'Project URL. Example: https://abcdefghijklmno12345.supabase.co. You may also paste just the project ref (abcdefghijklmno12345) in other fields if supported.',
+        connectionType: { kind: 'primitive', name: 'text' },
+        valuePriority: 'manual-first',
+      },
+    ),
+    databaseConnectionString: withPortMeta(
+      z
+        .string()
+        .min(10, 'Postgres connection string is required (Project Settings → Database).')
+        .optional(),
+      {
+        label: 'Database Connection String',
+        description:
+          'Postgres connection string from Project Settings → Database. You can also set this in Parameters as Database URL.',
+        connectionType: { kind: 'primitive', name: 'secret' },
+        editor: 'secret',
+      },
+    ),
     // Alias accepted by UI as a parameter
     databaseUrl: z.string().min(10).optional(),
-    serviceRoleKey: z
-      .preprocess((v) => (typeof v === 'string' && v.trim().length > 0 ? v : undefined),
+    serviceRoleKey: withPortMeta(
+      z.preprocess(
+        (v) => (typeof v === 'string' && v.trim().length > 0 ? v : undefined),
         z.string().min(12, 'Service Role key must be at least 12 characters.').optional(),
       ),
-    projectRef: z
-      .string()
-      .regex(/^[a-z0-9]{20}$/i, 'Project ref must be a 20 character base36 string')
-      .optional(),
+      {
+        label: 'Service Role Key',
+        description: 'Optional Service Role key from Project Settings → API (enables API checks).',
+        connectionType: { kind: 'primitive', name: 'secret' },
+        editor: 'secret',
+      },
+    ),
+    projectRef: withPortMeta(
+      z
+        .string()
+        .regex(/^[a-z0-9]{20}$/i, 'Project ref must be a 20 character base36 string')
+        .optional(),
+      {
+        label: 'Project Reference',
+        description: 'Optional explicit project ref. Inferred from URL when omitted.',
+        connectionType: { kind: 'primitive', name: 'text' },
+      },
+    ),
     // Optional tuning
-    minimumScore: z.number().int().min(0).max(100).optional(),
-    failOnCritical: z.boolean().optional(),
+    minimumScore: withPortMeta(z.number().int().min(0).max(100).optional(), {
+      label: 'Minimum Score',
+      description: 'Optional minimum score threshold (0–100).',
+    }),
+    failOnCritical: withPortMeta(z.boolean().optional(), {
+      label: 'Fail On Critical',
+      description: 'If true, scanner may exit non-zero when critical issues are found.',
+    }),
   })
   .transform((params) => {
     const ref = params.projectRef ?? inferProjectRef(params.supabaseUrl);
@@ -101,13 +140,43 @@ type Output = {
 };
 
 const outputSchema: z.ZodType<Output> = z.object({
-  projectRef: z.string().nullable(),
-  score: z.number().nullable(),
-  summary: z.unknown().optional(),
-  issues: z.array(z.unknown()).optional(),
-  report: z.unknown(),
-  rawOutput: z.string(),
-  errors: z.array(z.string()).optional(),
+  projectRef: withPortMeta(z.string().nullable(), {
+    label: 'Project Ref',
+    description: 'Supabase project reference for the scan.',
+  }),
+  score: withPortMeta(z.number().nullable(), {
+    label: 'Security Score',
+    description: '0–100 score computed by the scanner.',
+  }),
+  summary: withPortMeta(z.unknown().optional(), {
+    label: 'Summary',
+    description: 'Summary metadata from the scanner output.',
+    allowAny: true,
+    reason: 'Scanner summary payloads can vary by Supabase project configuration.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  issues: withPortMeta(z.array(z.unknown()).optional(), {
+    label: 'Issues',
+    description: 'Array of issues flagged by the scanner.',
+    allowAny: true,
+    reason: 'Scanner issue payloads can vary by Supabase project configuration.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  report: withPortMeta(z.unknown(), {
+    label: 'Scanner Report',
+    description: 'Full JSON report produced by the scanner.',
+    allowAny: true,
+    reason: 'Scanner report payloads can vary by Supabase project configuration.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw console output for debugging.',
+  }),
+  errors: withPortMeta(z.array(z.string()).optional(), {
+    label: 'Errors',
+    description: 'Errors captured during the scan.',
+  }),
 });
 
 // Retry policy for Supabase Scanner
@@ -135,11 +204,11 @@ const definition: ComponentDefinition<Input, Output> = {
     command: [],
     timeoutSeconds: 180,
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs:
     'Runs the official Supabase Security Scanner inside Docker with a generated config. Produces a JSON report.',
-  metadata: {
+  ui: {
     slug: 'supabase-scanner',
     version: '1.0.0',
     type: 'scan',
@@ -155,52 +224,6 @@ const definition: ComponentDefinition<Input, Output> = {
     deprecated: false,
     example:
       'Use in CI or ad-hoc to generate a 0–100 security score and list of issues with remediation tips.',
-    inputs: [
-      {
-        id: 'supabaseUrl',
-        label: 'Supabase URL',
-        dataType: port.text(),
-        required: true,
-        description:
-          'Project URL. Example: https://abcdefghijklmno12345.supabase.co. You may also paste just the project ref (abcdefghijklmno12345) in other fields if supported.',
-        valuePriority: 'manual-first',
-      },
-      {
-        id: 'databaseConnectionString',
-        label: 'Database Connection String',
-        dataType: port.secret(),
-        required: false,
-        description: 'Postgres connection string from Project Settings → Database. You can also set this in Parameters as Database URL.',
-      },
-      {
-        id: 'serviceRoleKey',
-        label: 'Service Role Key',
-        dataType: port.secret(),
-        required: false,
-        description: 'Optional Service Role key from Project Settings → API (enables API checks).',
-      },
-      {
-        id: 'projectRef',
-        label: 'Project Reference',
-        dataType: port.text(),
-        required: false,
-        description: 'Optional explicit project ref. Inferred from URL when omitted.',
-      },
-      {
-        id: 'minimumScore',
-        label: 'Minimum Score',
-        dataType: port.number(),
-        required: false,
-        description: 'Optional minimum score threshold (0–100).',
-      },
-      {
-        id: 'failOnCritical',
-        label: 'Fail On Critical',
-        dataType: port.boolean(),
-        required: false,
-        description: 'If true, scanner may exit non‑zero when critical issues are found.',
-      },
-    ],
     parameters: [
       {
         id: 'databaseUrl',
@@ -210,26 +233,6 @@ const definition: ComponentDefinition<Input, Output> = {
         placeholder: 'postgres://postgres:password@db.<ref>.supabase.co:5432/postgres?sslmode=require',
         description: 'Postgres connection string. Takes precedence over the Connection String input.',
         helpText: 'Copy from Supabase → Project Settings → Database → Connection string (URI).',
-      },
-    ],
-    outputs: [
-      {
-        id: 'report',
-        label: 'Scanner Report',
-        dataType: port.json(),
-        description: 'Full JSON report produced by the scanner.',
-      },
-      {
-        id: 'score',
-        label: 'Security Score',
-        dataType: port.number(),
-        description: '0–100 score computed by the scanner.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Raw console output for debugging.',
       },
     ],
     examples: [

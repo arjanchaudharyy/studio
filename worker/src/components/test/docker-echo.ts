@@ -25,8 +25,8 @@ const definition: ComponentDefinition<Input, Output> = {
     command: ['sh', '-c', 'cat'],
     timeoutSeconds: 10,
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Test component that echoes input using Docker (alpine)',
   async execute(params, context) {
     // This should never be called when using Docker runner

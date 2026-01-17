@@ -3,35 +3,61 @@ import {
   componentRegistry,
   ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   runComponentWithRunner,
   ConfigurationError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
-  messages: z
-    .array(z.string().min(1, 'Message cannot be empty'))
-    .min(1, 'Provide at least one message to send')
-    .describe('Messages to deliver through ProjectDiscovery notify. Each message is treated as a separate line.'),
-  providerConfig: z
-    .string()
-    .min(1, 'Provider configuration is required')
-    .optional()
-    .describe('YAML provider configuration content used by notify to reach third-party services.'),
-  notifyConfig: z
-    .string()
-    .trim()
-    .min(1, 'Notify configuration cannot be empty')
-    .optional()
-    .describe('Optional notify CLI configuration file (YAML) providing defaults such as delay or rate limit.'),
+  messages: withPortMeta(
+    z
+      .array(z.string().min(1, 'Message cannot be empty'))
+      .min(1, 'Provide at least one message to send')
+      .describe('Messages to deliver through ProjectDiscovery notify. Each message is treated as a separate line.'),
+    {
+      label: 'Messages',
+      description: 'Messages to send through notify.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
+  providerConfig: withPortMeta(
+    z
+      .string()
+      .min(1, 'Provider configuration is required')
+      .optional()
+      .describe('YAML provider configuration content used by notify to reach third-party services.'),
+    {
+      label: 'Provider Config',
+      description: 'Provider configuration YAML content (base64-encoded when supplied as a file).',
+    },
+  ),
+  notifyConfig: withPortMeta(
+    z
+      .string()
+      .trim()
+      .min(1, 'Notify configuration cannot be empty')
+      .optional()
+      .describe('Optional notify CLI configuration file (YAML) providing defaults such as delay or rate limit.'),
+    {
+      label: 'Notify Config',
+      description: 'Optional notify configuration YAML (base64-encoded when supplied as a file).',
+    },
+  ),
   providerIds: z
     .array(z.string().min(1, 'Provider id cannot be empty'))
     .optional()
     .describe('Restrict delivery to specific providers defined in the provider configuration.'),
-  recipientIds: z
-    .array(z.string().min(1, 'Recipient id cannot be empty'))
-    .optional()
-    .describe('Restrict delivery to specific recipient identifiers defined under the providers configuration.'),
+  recipientIds: withPortMeta(
+    z
+      .array(z.string().min(1, 'Recipient id cannot be empty'))
+      .optional()
+      .describe('Restrict delivery to specific recipient identifiers defined under the providers configuration.'),
+    {
+      label: 'Recipient IDs',
+      description: 'Optional recipient identifiers to target within configured providers.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
   messageFormat: z
     .string()
     .trim()
@@ -83,7 +109,10 @@ const inputSchema = z.object({
 });
 
 const outputSchema = z.object({
-  rawOutput: z.string(),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw notify output for debugging.',
+  }),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -184,8 +213,8 @@ cat "$MESSAGE_FILE" | "$@"
 `,
     ],
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Sends notifications using ProjectDiscovery notify with a provided provider configuration.',
   retryPolicy: {
     maxAttempts: 3,
@@ -194,7 +223,7 @@ cat "$MESSAGE_FILE" | "$@"
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ValidationError', 'ConfigurationError'],
   } satisfies ComponentRetryPolicy,
-  metadata: {
+  ui: {
     slug: 'notify',
     version: '1.0.0',
     type: 'output',
@@ -210,30 +239,6 @@ cat "$MESSAGE_FILE" | "$@"
     isLatest: true,
     deprecated: false,
     example: '`echo "Critical finding" | notify -bulk` — Broadcast a message to configured providers.',
-    inputs: [
-      {
-        id: 'messages',
-        label: 'Messages',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Array of messages that notify should deliver.',
-      },
-      {
-        id: 'providerConfig',
-        label: 'Provider Configuration',
-        dataType: port.text({ coerceFrom: [] }),
-        required: true,
-        description: 'YAML defining provider credentials and channels (plain text YAML content).',
-      },
-    ],
-    outputs: [
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Raw CLI output returned by notify.',
-      },
-    ],
     examples: [
       'Forward a consolidated reconnaissance summary to Slack and Telegram.',
       'Send high-priority vulnerability findings to multiple notification channels in bulk.',
@@ -277,6 +282,50 @@ cat "$MESSAGE_FILE" | "$@"
         placeholder: '{{data}}',
         description: 'Custom template for formatting messages. Use {{data}} as a placeholder.',
         helpText: 'Example: "Finding: {{data}}" or "Alert: {{data}}"',
+      },
+      {
+        id: 'bulk',
+        label: 'Bulk Mode',
+        type: 'boolean',
+        required: false,
+        default: true,
+        description: 'Send all messages as a single bulk payload.',
+      },
+      {
+        id: 'silent',
+        label: 'Silent Mode',
+        type: 'boolean',
+        required: false,
+        default: true,
+        description: 'Suppress notify CLI output.',
+      },
+      {
+        id: 'charLimit',
+        label: 'Character Limit',
+        type: 'number',
+        required: false,
+        description: 'Maximum character count per message.',
+      },
+      {
+        id: 'delaySeconds',
+        label: 'Delay (seconds)',
+        type: 'number',
+        required: false,
+        description: 'Delay between each notification batch.',
+      },
+      {
+        id: 'rateLimit',
+        label: 'Rate Limit',
+        type: 'number',
+        required: false,
+        description: 'Maximum number of HTTP requests per second.',
+      },
+      {
+        id: 'proxy',
+        label: 'Proxy',
+        type: 'text',
+        required: false,
+        description: 'HTTP or SOCKSv5 proxy URL for outbound notify requests.',
       },
       {
         id: 'verbose',

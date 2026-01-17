@@ -36,7 +36,6 @@ import './ai/gemini-provider';
 import './ai/openrouter-provider';
 import './ai/ai-agent';
 import './ai/llm-generate-text';
-import './ai/mcp-tool-contract';
 import './ai/mcp-http-provider';
 import './ai/mcp-tool-merge';
 

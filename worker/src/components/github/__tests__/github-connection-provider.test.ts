@@ -26,7 +26,7 @@ describe('github.connection.provider component', () => {
 
     const progressSpy = vi.spyOn(context, 'emitProgress');
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       connectionId: '  connection-abc  ',
     });
 
@@ -43,7 +43,7 @@ describe('github.connection.provider component', () => {
     >('github.connection.provider');
     if (!component) throw new Error('Component not registered');
 
-    const parsed = component.inputSchema.safeParse({
+    const parsed = component.inputs.safeParse({
       connectionId: '   ',
     });
 

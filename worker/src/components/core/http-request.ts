@@ -2,33 +2,42 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   fromHttpResponse,
   TimeoutError,
   NetworkError,
   ComponentRetryPolicy,
   DEFAULT_SENSITIVE_HEADERS,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
-  url: z.string().url().describe('Target URL'),
+  url: withPortMeta(z.string().url().describe('Target URL'), {
+    label: 'URL',
+    description: 'Target URL for the request.',
+  }),
   method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']).default('GET'),
-  headers: z.record(z.string(), z.string()).optional().describe('HTTP headers'),
-  body: z.string().optional().describe('Raw body content (JSON, text, etc.)'),
+  headers: withPortMeta(
+    z.record(z.string(), z.string()).optional().describe('HTTP headers'),
+    {
+      label: 'Headers',
+      description: 'HTTP headers to include with the request.',
+      connectionType: { kind: 'primitive', name: 'json' },
+    },
+  ),
+  body: withPortMeta(
+    z.string().optional().describe('Raw body content (JSON, text, etc.)'),
+    {
+      label: 'Body',
+      description: 'Raw request body content.',
+    },
+  ),
   contentType: z.string().default('application/json').describe('Content-Type header shorthand'),
   timeout: z.number().int().positive().default(30000).describe('Timeout in milliseconds'),
   failOnError: z.boolean().default(true).describe('Throw error on 4xx/5xx responses'),
 
   // Auth configuration
   authType: z.enum(['none', 'bearer', 'basic', 'custom']).default('none').describe('Authentication method'),
-
-  // Dynamic Auth Inputs
-  bearerToken: z.string().optional(),
-  username: z.string().optional(),
-  password: z.string().optional(),
-  authHeaderName: z.string().optional(),
-  authHeaderValue: z.string().optional(),
-});
+}).passthrough();
 
 type Input = z.infer<typeof inputSchema>;
 
@@ -37,11 +46,30 @@ type Params = {
 };
 
 const outputSchema = z.object({
-  status: z.number(),
-  statusText: z.string(),
-  data: z.unknown().describe('Parsed JSON body if applicable, otherwise string'),
-  headers: z.record(z.string(), z.string()),
-  rawBody: z.string(),
+  status: withPortMeta(z.number(), {
+    label: 'Status Code',
+    description: 'HTTP status code (e.g. 200, 404).',
+  }),
+  statusText: withPortMeta(z.string(), {
+    label: 'Status Text',
+    description: 'HTTP status text returned by the server.',
+  }),
+  data: withPortMeta(z.unknown().describe('Parsed JSON body if applicable, otherwise string'), {
+    label: 'Response Data',
+    description: 'Automatically parsed JSON response body.',
+    allowAny: true,
+    reason: 'HTTP response bodies can be any JSON-compatible shape.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  headers: withPortMeta(z.record(z.string(), z.string()), {
+    label: 'Headers',
+    description: 'Response headers returned by the server.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  rawBody: withPortMeta(z.string(), {
+    label: 'Raw Body',
+    description: 'Raw string content of the response.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -67,10 +95,10 @@ const definition: ComponentDefinition<Input, Output, Params> = {
   category: 'transform',
   runner: { kind: 'inline' },
   retryPolicy: httpRequestRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Performs a generic HTTP request to any API endpoint. Supports all standard methods, headers, and body types.',
-  metadata: {
+  ui: {
     slug: 'http-request',
     version: '1.0.0',
     type: 'process',
@@ -83,49 +111,6 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'url',
-        label: 'URL',
-        dataType: port.text(),
-        required: true,
-        description: 'The target API endpoint URL.',
-      },
-      {
-        id: 'body',
-        label: 'Body',
-        dataType: port.text(),
-        required: false,
-        description: 'Request body. For JSON, ensure it is a valid JSON string.',
-      },
-      {
-        id: 'headers',
-        label: 'Headers',
-        dataType: port.json(),
-        required: false,
-        description: 'Key-value map of HTTP headers.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'status',
-        label: 'Status Code',
-        dataType: port.number(),
-        description: 'HTTP status code (e.g. 200, 404).',
-      },
-      {
-        id: 'data',
-        label: 'Response Data',
-        dataType: port.json(),
-        description: 'Automatically parsed JSON response body.',
-      },
-      {
-        id: 'rawBody',
-        label: 'Raw Body',
-        dataType: port.text(),
-        description: 'Raw string content of the response.',
-      },
-    ],
     examples: [
       'Call the Jira API to search for issues.',
       'Trigger a PagerDuty alert via their REST API.',
@@ -189,32 +174,62 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     ],
   },
   resolvePorts(params) {
-    const inputs: any[] = [
-      { id: 'url', label: 'URL', dataType: port.text(), required: true },
-      { id: 'body', label: 'Body', dataType: port.text(), required: false },
-      { id: 'headers', label: 'Headers', dataType: port.json(), required: false },
-    ];
+    const inputShape: Record<string, z.ZodTypeAny> = {
+      url: withPortMeta(z.string().url(), {
+        label: 'URL',
+        description: 'The target API endpoint URL.',
+      }),
+      body: withPortMeta(z.string().optional(), {
+        label: 'Body',
+        description: 'Request body. For JSON, ensure it is a valid JSON string.',
+      }),
+      headers: withPortMeta(z.record(z.string(), z.string()).optional(), {
+        label: 'Headers',
+        description: 'Key-value map of HTTP headers.',
+        connectionType: { kind: 'primitive', name: 'json' },
+      }),
+    };
 
     const authType = params.authType;
 
     if (authType === 'bearer') {
-      inputs.push({ id: 'bearerToken', label: 'Bearer Token', dataType: port.secret(), required: true });
+      inputShape.bearerToken = withPortMeta(z.unknown(), {
+        label: 'Bearer Token',
+        editor: 'secret',
+        allowAny: true,
+        reason: 'Bearer tokens can be provided as raw strings or resolved secrets.',
+        connectionType: { kind: 'primitive', name: 'secret' },
+      });
     } else if (authType === 'basic') {
-      inputs.push(
-        { id: 'username', label: 'Username', dataType: port.text(), required: true },
-        { id: 'password', label: 'Password', dataType: port.secret(), required: true }
-      );
+      inputShape.username = withPortMeta(z.string(), {
+        label: 'Username',
+      });
+      inputShape.password = withPortMeta(z.unknown(), {
+        label: 'Password',
+        editor: 'secret',
+        allowAny: true,
+        reason: 'Passwords can be provided as raw strings or resolved secrets.',
+        connectionType: { kind: 'primitive', name: 'secret' },
+      });
     } else if (authType === 'custom') {
-      inputs.push(
-        { id: 'authHeaderName', label: 'Header Name', dataType: port.text(), required: true },
-        { id: 'authHeaderValue', label: 'Header Value', dataType: port.secret(), required: true }
-      );
+      inputShape.authHeaderName = withPortMeta(z.string(), {
+        label: 'Header Name',
+      });
+      inputShape.authHeaderValue = withPortMeta(z.unknown(), {
+        label: 'Header Value',
+        editor: 'secret',
+        allowAny: true,
+        reason: 'Custom auth headers can be provided as raw strings or resolved secrets.',
+        connectionType: { kind: 'primitive', name: 'secret' },
+      });
     }
 
-    return { inputs };
+    return { inputs: z.object(inputShape) };
   },
   async execute(params, context) {
     const { url, method, body, headers = {}, contentType, timeout, failOnError, authType, bearerToken, username, password, authHeaderName, authHeaderValue } = params;
+    const authHeaderNameValue = typeof authHeaderName === 'string' ? authHeaderName : undefined;
+    const authHeaderValueValue = typeof authHeaderValue === 'string' ? authHeaderValue : undefined;
 
     context.logger.info(`[HTTP] ${method} ${url}`);
 
@@ -230,8 +245,8 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     } else if (authType === 'basic' && username && password) {
       const b64 = btoa(`${username}:${password}`);
       finalHeaders.set('Authorization', `Basic ${b64}`);
-    } else if (authType === 'custom' && authHeaderName && authHeaderValue) {
-      finalHeaders.set(authHeaderName, authHeaderValue);
+    } else if (authType === 'custom' && authHeaderNameValue && authHeaderValueValue) {
+      finalHeaders.set(authHeaderNameValue, authHeaderValueValue);
     }
 
     const controller = new AbortController();

@@ -2,11 +2,11 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   runComponentWithRunner,
   type DockerRunnerConfig,
   ContainerError,
   ComponentRetryPolicy,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
@@ -14,12 +14,24 @@ const domainValueSchema = z.union([z.string(), z.array(z.string())]);
 
 const inputSchema = z
   .object({
-    domains: domainValueSchema.optional().describe('Array of target domains'),
+    domains: withPortMeta(domainValueSchema.optional().describe('Array of target domains'), {
+      label: 'Target Domains',
+      description: 'Array of domain names to enumerate for subdomains.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    }),
     domain: domainValueSchema.optional().describe('Legacy single domain input'),
-    providerConfig: z
-      .string()
-      .optional()
-      .describe('Resolved provider-config.yaml content (connect via Secret Loader)'),
+    providerConfig: withPortMeta(
+      z.string()
+        .optional()
+        .describe('Resolved provider-config.yaml content (connect via Secret Loader)'),
+      {
+        label: 'Provider Config',
+        description:
+          'Connect the provider-config.yaml contents via a Secret Loader if authenticated sources are needed.',
+        editor: 'secret',
+        connectionType: { kind: 'primitive', name: 'secret' },
+      },
+    ),
   })
   .transform(({ domains, domain, providerConfig }) => {
     const values = new Set<string>();
@@ -64,10 +76,22 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  subdomains: z.array(z.string()),
-  rawOutput: z.string(),
-  domainCount: z.number(),
-  subdomainCount: z.number(),
+  subdomains: withPortMeta(z.array(z.string()), {
+    label: 'Discovered Subdomains',
+    description: 'Array of all subdomain hostnames discovered.',
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw tool output for debugging.',
+  }),
+  domainCount: withPortMeta(z.number(), {
+    label: 'Domain Count',
+    description: 'Number of domains scanned.',
+  }),
+  subdomainCount: withPortMeta(z.number(), {
+    label: 'Subdomain Count',
+    description: 'Number of subdomains discovered.',
+  }),
 });
 
 const SUBFINDER_TIMEOUT_SECONDS = 1800; // 30 minutes
@@ -118,10 +142,10 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
       HOME: '/root',
     },
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Runs projectdiscovery/subfinder to discover subdomains for a given domain. Optionally accepts a provider config secret to enable authenticated sources.',
-  metadata: {
+  ui: {
     slug: 'subfinder',
     version: '1.0.0',
     type: 'scan',
@@ -137,41 +161,20 @@ subfinder -silent -dL /inputs/domains.txt 2>/dev/null || true
     isLatest: true,
     deprecated: false,
     example: '`subfinder -d example.com -silent` - Passively gathers subdomains before chaining into deeper discovery tools.',
-    inputs: [
-      {
-        id: 'domains',
-        label: 'Target Domains',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Array of domain names to enumerate for subdomains.',
-      },
-      {
-        id: 'providerConfig',
-        label: 'Provider Config',
-        dataType: port.secret(),
-        required: false,
-        description: 'Connect the provider-config.yaml contents via a Secret Loader if authenticated sources are needed.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'subdomains',
-        label: 'Discovered Subdomains',
-        dataType: port.list(port.text()),
-        description: 'Array of all subdomain hostnames discovered.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Raw tool output for debugging.',
-      },
-    ],
     examples: [
       'Enumerate subdomains for a single target domain prior to Amass or Naabu.',
       'Quick passive discovery during scope triage workflows.',
     ],
-    parameters: [],
+    parameters: [
+      {
+        id: 'domain',
+        label: 'Legacy Domain',
+        type: 'text',
+        required: false,
+        description: 'Legacy single-domain input (prefer Target Domains).',
+        visibleWhen: { __legacy: true },
+      },
+    ],
   },
   async execute(input, context) {
     const baseRunner = definition.runner;

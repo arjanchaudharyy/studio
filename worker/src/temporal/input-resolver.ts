@@ -1,7 +1,5 @@
-import { coerceValueForPort } from '@shipsec/component-sdk/ports';
 import { isSpilledDataMarker } from '@shipsec/component-sdk';
-import type { PortDataType } from '@shipsec/component-sdk/types';
-
+import type { ConnectionType } from '@shipsec/component-sdk/types';
 import type { WorkflowAction } from './types';
 
 export interface InputWarning {
@@ -13,6 +11,125 @@ export interface InputWarning {
 
 export interface ManualOverride {
   target: string;
+}
+
+type CoercionResult = { ok: boolean; value?: unknown; error?: string };
+
+function coercePrimitiveValue(type: string | undefined, value: unknown): CoercionResult {
+  if (value === undefined || value === null) {
+    return { ok: true, value };
+  }
+
+  switch (type) {
+    case 'text': {
+      if (typeof value === 'string') {
+        return { ok: true, value };
+      }
+      if (typeof value === 'number' || typeof value === 'boolean') {
+        return { ok: true, value: value.toString() };
+      }
+      return { ok: false, error: `Cannot coerce ${typeof value} to text` };
+    }
+    case 'number': {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return { ok: true, value };
+      }
+      if (typeof value === 'string') {
+        const parsed = Number(value);
+        if (!Number.isNaN(parsed)) {
+          return { ok: true, value: parsed };
+        }
+        return { ok: false, error: `Cannot parse "${value}" as number` };
+      }
+      return { ok: false, error: `Cannot coerce ${typeof value} to number` };
+    }
+    case 'boolean': {
+      if (typeof value === 'boolean') {
+        return { ok: true, value };
+      }
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (normalized === 'true') {
+          return { ok: true, value: true };
+        }
+        if (normalized === 'false') {
+          return { ok: true, value: false };
+        }
+        return { ok: false, error: `Cannot parse "${value}" as boolean` };
+      }
+      return { ok: false, error: `Cannot coerce ${typeof value} to boolean` };
+    }
+    case 'secret': {
+      if (typeof value === 'string') {
+        return { ok: true, value };
+      }
+      if (typeof value === 'object') {
+        try {
+          return { ok: true, value: JSON.stringify(value) };
+        } catch (error) {
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? `Secret value is not JSON-serializable: ${error.message}`
+                : 'Secret value is not JSON-serializable',
+          };
+        }
+      }
+      return { ok: false, error: 'Secret values must be strings or JSON objects' };
+    }
+    case 'file':
+    case 'json':
+    case 'any':
+    default:
+      return { ok: true, value };
+  }
+}
+
+function coerceValueForConnectionType(
+  connectionType: ConnectionType,
+  value: unknown,
+): CoercionResult {
+  if (connectionType.kind === 'primitive') {
+    return coercePrimitiveValue(connectionType.name, value);
+  }
+
+  if (connectionType.kind === 'contract') {
+    return { ok: true, value };
+  }
+
+  if (connectionType.kind === 'list') {
+    if (!Array.isArray(value)) {
+      return { ok: false, error: 'Expected array for list port' };
+    }
+    const coerced: unknown[] = [];
+    for (const item of value) {
+      const result = coerceValueForConnectionType(connectionType.element!, item);
+      if (!result.ok) {
+        return { ok: false, error: result.error ?? 'Failed to coerce list item' };
+      }
+      coerced.push(result.value);
+    }
+    return { ok: true, value: coerced };
+  }
+
+  if (connectionType.kind === 'map') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { ok: false, error: 'Expected object for map port' };
+    }
+    const inputRecord = value as Record<string, unknown>;
+    const coerced: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(inputRecord)) {
+      const result = coerceValueForConnectionType(connectionType.element!, entry);
+      if (!result.ok) {
+        return { ok: false, error: result.error ?? `Failed to coerce value for key ${key}` };
+      }
+      coerced[key] = result.value;
+    }
+    return { ok: true, value: coerced };
+  }
+
+  return { ok: true, value };
 }
 
 export function resolveInputValue(sourceOutput: unknown, sourceHandle: string): unknown {
@@ -51,7 +168,7 @@ export function resolveInputValue(sourceOutput: unknown, sourceHandle: string): 
 type ComponentInputMetadata = {
   id: string;
   valuePriority?: 'manual-first' | 'auto-first' | string;
-  dataType?: PortDataType;
+  connectionType: ConnectionType;
 };
 
 type ComponentMetadataSnapshot = {
@@ -94,15 +211,8 @@ export function buildActionParams(
     const resolved = resolveInputValue(sourceOutput, mapping.sourceHandle);
 
     if (resolved !== undefined) {
-      if (portMetadata?.dataType) {
-        // Skip coercion for spilled data markers - we keep the marker
-        // so the activity can unspill and resolve the specific handle correctly.
-        if (isSpilledDataMarker(resolved)) {
-          params[targetKey] = resolved;
-          continue;
-        }
-
-        const coercion = coerceValueForPort(portMetadata.dataType, resolved);
+      if (portMetadata?.connectionType) {
+        const coercion = coerceValueForConnectionType(portMetadata.connectionType, resolved);
         if (coercion.ok) {
           params[targetKey] = coercion.value;
         } else {

@@ -13,7 +13,7 @@ async function main() {
     componentRef: 'subfinder-smoke',
   });
 
-  const input = component.inputSchema.parse({
+  const input = component.inputs.parse({
     domains: ['hackerone.com', 'bugcrowd.com', 'projectdiscovery.io'],
   });
 

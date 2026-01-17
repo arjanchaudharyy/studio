@@ -2,11 +2,11 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   ConfigurationError,
   ComponentRetryPolicy,
+  withPortMeta,
 } from '@shipsec/component-sdk';
-import { llmProviderContractName, LLMProviderSchema } from './chat-model-contract';
+import { LLMProviderSchema, type LlmProviderConfig } from '@shipsec/contracts';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_BASE_URL = process.env.GEMINI_BASE_URL ?? '';
@@ -20,10 +20,17 @@ const inputSchema = z.object({
     .string()
     .default(DEFAULT_BASE_URL)
     .describe('Optional override for the Gemini API base URL.'),
-  apiKey: z
-    .string()
-    .min(1, 'API key is required')
-    .describe('Resolved Gemini API key supplied via a Secret Loader node.'),
+  apiKey: withPortMeta(
+    z.string()
+      .min(1, 'API key is required')
+      .describe('Resolved Gemini API key supplied via a Secret Loader node.'),
+    {
+      label: 'API Key',
+      description: 'Connect the Secret Loader output containing the Gemini API key.',
+      editor: 'secret',
+      connectionType: { kind: 'primitive', name: 'secret' },
+    },
+  ),
   projectId: z
     .string()
     .optional()
@@ -33,7 +40,11 @@ const inputSchema = z.object({
 type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  chatModel: LLMProviderSchema,
+  chatModel: withPortMeta(LLMProviderSchema(), {
+    label: 'LLM Provider Config',
+    description:
+      'Portable provider payload (provider, model, overrides) for wiring into AI Agent or one-shot nodes.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -50,10 +61,10 @@ const definition: ComponentDefinition<Input, Output> = {
   category: 'ai',
   runner: { kind: 'inline' },
   retryPolicy: geminiProviderRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Emits a Gemini provider configuration for downstream AI components.',
-  metadata: {
+  ui: {
     slug: 'gemini-provider',
     version: '1.0.0',
     type: 'process',
@@ -64,24 +75,6 @@ const definition: ComponentDefinition<Input, Output> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    inputs: [
-      {
-        id: 'apiKey',
-        label: 'API Key',
-        dataType: port.secret(),
-        required: true,
-        description: 'Connect the Secret Loader output containing the Gemini API key.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'chatModel',
-        label: 'LLM Provider Config',
-        dataType: port.credential(llmProviderContractName),
-        description:
-          'Portable provider payload (provider, model, overrides) for wiring into AI Agent or one-shot nodes.',
-      },
-    ],
     parameters: [
       {
         id: 'model',
@@ -136,7 +129,7 @@ const definition: ComponentDefinition<Input, Output> = {
         apiKey: effectiveApiKey,
         ...(trimmedBaseUrl ? { baseUrl: trimmedBaseUrl } : {}),
         ...(trimmedProjectId ? { projectId: trimmedProjectId } : {}),
-      } satisfies z.infer<typeof LLMProviderSchema>,
+      } satisfies LlmProviderConfig,
     };
   },
 };

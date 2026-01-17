@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, port } from '@shipsec/component-sdk';
-import { DestinationConfigSchema, type DestinationConfig } from '@shipsec/shared';
-import { awsCredentialSchema, awsCredentialContractName } from './credentials/aws-contract';
+import { componentRegistry, ComponentDefinition, withPortMeta } from '@shipsec/component-sdk';
+import { awsCredentialSchema, destinationWriterSchema } from '@shipsec/contracts';
+import { type DestinationConfig } from '@shipsec/shared';
 
 const inputSchema = z.object({
   bucket: z.string().min(1, 'Bucket is required'),
@@ -11,7 +11,13 @@ const inputSchema = z.object({
   endpoint: z.string().optional(),
   forcePathStyle: z.boolean().default(false),
   publicUrl: z.string().optional(),
-  credentials: awsCredentialSchema.describe('Resolved AWS credentials bundle'),
+  credentials: withPortMeta(
+    awsCredentialSchema(),
+    {
+      label: 'AWS Credentials',
+      description: 'Connect the AWS Credentials bundle component.',
+    },
+  ),
   label: z.string().optional(),
   description: z.string().optional(),
 });
@@ -19,7 +25,10 @@ const inputSchema = z.object({
 type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  destination: DestinationConfigSchema,
+  destination: withPortMeta(destinationWriterSchema(), {
+    label: 'Destination',
+    description: 'Connect to writer components to upload artifacts to S3.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -29,33 +38,16 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'S3 Destination',
   category: 'output',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Produces a destination configuration that uploads files to an S3 bucket (or compatible storage).',
-  metadata: {
+  ui: {
     slug: 'destination-s3',
     version: '1.0.0',
     type: 'process',
     category: 'output',
     description: 'Configure uploads to S3 buckets for downstream writer components.',
     icon: 'CloudUpload',
-    inputs: [
-      {
-        id: 'credentials',
-        label: 'AWS Credentials',
-        dataType: port.credential(awsCredentialContractName),
-        required: true,
-        description: 'Connect the AWS Credentials bundle component.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'destination',
-        label: 'Destination',
-        dataType: port.contract('destination.writer'),
-        description: 'Connect to writer components to upload artifacts to S3.',
-      },
-    ],
     parameters: [
       { id: 'bucket', label: 'Bucket', type: 'text', required: true },
       { id: 'region', label: 'Region', type: 'text' },

@@ -3,17 +3,23 @@ import {
   componentRegistry,
   ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   runComponentWithRunner,
   ServiceError,
   ValidationError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
-  domains: z
-    .array(z.string().min(1, 'Domain cannot be empty'))
-    .min(1, 'Provide at least one domain')
-    .describe('Array of root domains to enumerate'),
+  domains: withPortMeta(
+    z.array(z.string().min(1, 'Domain cannot be empty'))
+      .min(1, 'Provide at least one domain')
+      .describe('Array of root domains to enumerate'),
+    {
+      label: 'Target Domains',
+      description: 'Root domains to enumerate using Amass.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
   active: z
     .boolean()
     .optional()
@@ -108,11 +114,23 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  subdomains: z.array(z.string()),
-  rawOutput: z.string(),
-  domainCount: z.number(),
-  subdomainCount: z.number(),
-  options: z.object({
+  subdomains: withPortMeta(z.array(z.string()), {
+    label: 'Discovered Subdomains',
+    description: 'Unique list of subdomains discovered by Amass.',
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw Amass console output for deeper inspection.',
+  }),
+  domainCount: withPortMeta(z.number(), {
+    label: 'Domain Count',
+    description: 'Number of root domains scanned.',
+  }),
+  subdomainCount: withPortMeta(z.number(), {
+    label: 'Subdomain Count',
+    description: 'Number of unique subdomains discovered.',
+  }),
+  options: withPortMeta(z.object({
     active: z.boolean(),
     bruteForce: z.boolean(),
     includeIps: z.boolean(),
@@ -125,6 +143,10 @@ const outputSchema = z.object({
     maxDepth: z.number().nullable(),
     dnsQueryRate: z.number().nullable(),
     customFlags: z.string().nullable(),
+  }), {
+    label: 'Options',
+    description: 'Effective Amass options applied during the run.',
+    connectionType: { kind: 'primitive', name: 'json' },
   }),
 });
 
@@ -367,10 +389,10 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
       HOME: '/root',
     },
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Enumerate subdomains with OWASP Amass. Supports active techniques, brute forcing, alterations, recursion tuning, and DNS throttling.',
-  metadata: {
+  ui: {
     slug: 'amass',
     version: '1.0.0',
     type: 'scan',
@@ -386,29 +408,6 @@ printf '{"subdomains":%s,"rawOutput":"%s","domainCount":%d,"subdomainCount":%d,"
     isLatest: true,
     deprecated: false,
     example: '`amass enum -d example.com -brute -alts` - Aggressively enumerates subdomains with brute force and alteration engines enabled.',
-    inputs: [
-      {
-        id: 'domains',
-        label: 'Target Domains',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Root domains to enumerate using Amass.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'subdomains',
-        label: 'Discovered Subdomains',
-        dataType: port.list(port.text()),
-        description: 'Unique list of subdomains discovered by Amass.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Raw Amass console output for deeper inspection.',
-      },
-    ],
     examples: [
       'Run full-depth enumeration with brute force and alterations on a scope domain.',
       'Perform quick passive reconnaissance using custom CLI flags like --passive.',

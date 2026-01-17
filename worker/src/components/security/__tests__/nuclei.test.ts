@@ -37,7 +37,7 @@ describe('Nuclei Component', () => {
         templateIds: ['CVE-2024-1234'],
       };
 
-      expect(() => nucleiComponent.inputSchema.parse(input)).toThrow();
+      expect(() => nucleiComponent.inputs.parse(input)).toThrow();
     });
 
     test('should require at least one template source', () => {
@@ -46,7 +46,7 @@ describe('Nuclei Component', () => {
         // No template source provided
       };
 
-      expect(() => nucleiComponent.inputSchema.parse(input)).toThrow(
+      expect(() => nucleiComponent.inputs.parse(input)).toThrow(
         /at least one template source/i,
       );
     });
@@ -57,7 +57,7 @@ describe('Nuclei Component', () => {
         templateIds: ['CVE-2024-1234'],
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.templateIds).toEqual(['CVE-2024-1234']);
     });
 
@@ -69,7 +69,7 @@ describe('Nuclei Component', () => {
         customTemplateYaml: 'id: test\ninfo:\n  name: Test',
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.customTemplateYaml).toBeDefined();
     });
 
@@ -79,7 +79,7 @@ describe('Nuclei Component', () => {
         customTemplateArchive: 'base64encodedzip',
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.customTemplateArchive).toBeDefined();
     });
 
@@ -90,7 +90,7 @@ describe('Nuclei Component', () => {
         customTemplateYaml: 'id: test\ninfo:\n  name: Test',
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.templateIds).toEqual(['CVE-2024-1234', 'CVE-2024-5678']);
       expect(parsed.customTemplateYaml).toBeDefined();
     });
@@ -101,7 +101,7 @@ describe('Nuclei Component', () => {
         templateIds: ['CVE-2024-1234'],
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.rateLimit).toBe(150);
       expect(parsed.concurrency).toBe(25);
       expect(parsed.timeout).toBe(10);
@@ -121,7 +121,7 @@ describe('Nuclei Component', () => {
         rateLimit: 2000, // exceeds max of 1000
       };
 
-      expect(() => nucleiComponent.inputSchema.parse(input)).toThrow();
+      expect(() => nucleiComponent.inputs.parse(input)).toThrow();
     });
 
     test('should enforce concurrency max value', () => {
@@ -131,7 +131,7 @@ describe('Nuclei Component', () => {
         concurrency: 150, // exceeds max of 100
       };
 
-      expect(() => nucleiComponent.inputSchema.parse(input)).toThrow();
+      expect(() => nucleiComponent.inputs.parse(input)).toThrow();
     });
   });
 
@@ -158,7 +158,7 @@ describe('Nuclei Component', () => {
         },
       };
 
-      const parsed = nucleiComponent.outputSchema.parse(output);
+      const parsed = nucleiComponent.outputs.parse(output);
       expect(parsed.findings).toHaveLength(1);
       expect(parsed.findingCount).toBe(1);
     });
@@ -181,7 +181,7 @@ describe('Nuclei Component', () => {
         stats: { templatesLoaded: 0, requestsSent: 0, duration: 0 },
       };
 
-      expect(() => nucleiComponent.outputSchema.parse(output)).toThrow();
+      expect(() => nucleiComponent.outputs.parse(output)).toThrow();
     });
 
     test('should allow optional finding fields', () => {
@@ -207,7 +207,7 @@ describe('Nuclei Component', () => {
         stats: { templatesLoaded: 0, requestsSent: 0, duration: 0 },
       };
 
-      const parsed = nucleiComponent.outputSchema.parse(output);
+      const parsed = nucleiComponent.outputs.parse(output);
       expect(parsed.findings[0].extractedResults).toEqual(['result1']);
       expect(parsed.findings[0].host).toBe('example.com');
     });
@@ -411,10 +411,10 @@ describe('Nuclei Integration', () => {
 
   test('should have correct metadata', () => {
     const component = componentRegistry.get('shipsec.nuclei.scan');
-    expect(component.metadata?.slug).toBe('nuclei');
-    expect(component.metadata?.version).toBe('1.0.0');
-    expect(component.metadata?.type).toBe('scan');
-    expect(component.metadata?.author?.name).toBe('ShipSecAI');
+    expect(component.ui?.slug).toBe('nuclei');
+    expect(component.ui?.version).toBe('1.0.0');
+    expect(component.ui?.type).toBe('scan');
+    expect(component.ui?.author?.name).toBe('ShipSecAI');
   });
 
   test('should have Docker runner configuration', () => {
@@ -428,8 +428,8 @@ describe('Nuclei Integration', () => {
   });
 
   test('should have documented inputs', () => {
-    const component = componentRegistry.get('shipsec.nuclei.scan');
-    const inputs = component.metadata?.inputs || [];
+    const entry = componentRegistry.getMetadata('shipsec.nuclei.scan');
+    const inputs = entry?.inputs || [];
 
     const targetInput = inputs.find((i) => i.id === 'targets');
     expect(targetInput).toBeDefined();
@@ -443,8 +443,8 @@ describe('Nuclei Integration', () => {
   });
 
   test('should have documented outputs', () => {
-    const component = componentRegistry.get('shipsec.nuclei.scan');
-    const outputs = component.metadata?.outputs || [];
+    const entry = componentRegistry.getMetadata('shipsec.nuclei.scan');
+    const outputs = entry?.outputs || [];
 
     const findingsOutput = outputs.find((o) => o.id === 'findings');
     expect(findingsOutput).toBeDefined();
@@ -458,7 +458,7 @@ describe('Nuclei Integration', () => {
 
   test('should have configuration parameters', () => {
     const component = componentRegistry.get('shipsec.nuclei.scan');
-    const params = component.metadata?.parameters || [];
+    const params = component.ui?.parameters || [];
 
     const rateLimitParam = params.find((p) => p.id === 'rateLimit');
     expect(rateLimitParam).toBeDefined();
@@ -476,7 +476,7 @@ describe('Nuclei Integration', () => {
 
   test('should have usage examples', () => {
     const component = componentRegistry.get('shipsec.nuclei.scan');
-    const examples = component.metadata?.examples || [];
+    const examples = component.ui?.examples || [];
 
     expect(examples.length).toBeGreaterThan(0);
     expect(examples.some((e) => e.toLowerCase().includes('cve'))).toBe(true);

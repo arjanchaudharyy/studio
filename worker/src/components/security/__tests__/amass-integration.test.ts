@@ -32,7 +32,7 @@ const shouldRunIntegration =
       const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
       expect(component).toBeDefined();
 
-      const params = component!.inputSchema.parse({
+      const params = component!.inputs.parse({
         domains: ['owasp.org'],
         active: false,
         bruteForce: false,

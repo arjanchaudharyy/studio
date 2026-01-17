@@ -3,10 +3,10 @@ import {
   componentRegistry,
   ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   runComponentWithRunner,
   type DockerRunnerConfig,
   ContainerError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
@@ -15,42 +15,77 @@ const DEFAULT_RESOLVERS = ['1.1.1.1', '8.8.8.8'] as const;
 // Input schema for Shuffledns + MassDNS component
 const inputSchema = z
   .object({
-    domains: z
-      .array(
-        z
-          .string()
-          .min(1)
-          .regex(/^[\w.-]+$/, 'Domains may only include letters, numbers, dots, underscores, and hyphens.'),
-      )
-      .min(1, 'Provide at least one domain.'),
+    domains: withPortMeta(
+      z
+        .array(
+          z
+            .string()
+            .min(1)
+            .regex(/^[\w.-]+$/, 'Domains may only include letters, numbers, dots, underscores, and hyphens.'),
+        )
+        .min(1, 'Provide at least one domain.'),
+      {
+        label: 'Domains',
+        description: 'Root domains to enumerate.',
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      },
+    ),
     mode: z
       .enum(['bruteforce', 'resolve'])
       .default('resolve')
       .describe('Execution mode: bruteforce with a wordlist or resolve a list of seeds'),
-    words: z
-      .array(z.string().min(1))
-      .optional()
-      .describe('Wordlist entries for bruteforce mode'),
-    seeds: z
-      .array(z.string().min(1))
-      .optional()
-      .describe('Seed subdomains for resolve mode'),
-    resolvers: z
-      .array(
-        z
-          .string()
-          .min(1)
-          .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
-      )
-      .default([...DEFAULT_RESOLVERS]),
-    trustedResolvers: z
-      .array(
-        z
-          .string()
-          .min(1)
-          .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
-      )
-      .default([]),
+    words: withPortMeta(
+      z
+        .array(z.string().min(1))
+        .optional()
+        .describe('Wordlist entries for bruteforce mode'),
+      {
+        label: 'Wordlist',
+        description: 'Wordlist entries for bruteforce mode.',
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      },
+    ),
+    seeds: withPortMeta(
+      z
+        .array(z.string().min(1))
+        .optional()
+        .describe('Seed subdomains for resolve mode'),
+      {
+        label: 'Seeds',
+        description: 'Seed subdomains for resolve mode.',
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      },
+    ),
+    resolvers: withPortMeta(
+      z
+        .array(
+          z
+            .string()
+            .min(1)
+            .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
+        )
+        .default([...DEFAULT_RESOLVERS]),
+      {
+        label: 'Resolvers',
+        description: 'DNS resolvers to use for enumeration.',
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      },
+    ),
+    trustedResolvers: withPortMeta(
+      z
+        .array(
+          z
+            .string()
+            .min(1)
+            .regex(/^[\w.:+-]+$/, 'Resolver should be a hostname/IP, optionally with port (e.g. 1.1.1.1).'),
+        )
+        .default([]),
+      {
+        label: 'Trusted Resolvers',
+        description: 'Trusted DNS resolvers for wildcard detection.',
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      },
+    ),
     threads: z.number().int().positive().max(20000).optional().describe('Concurrent massdns resolves (-t)'),
     retries: z.number().int().min(1).max(20).default(5).describe('Retries for DNS enumeration'),
     wildcardStrict: z.boolean().default(false).describe('Strict wildcard checking (-sw)'),
@@ -94,10 +129,22 @@ type Output = {
 };
 
 const outputSchema: z.ZodType<Output> = z.object({
-  subdomains: z.array(z.string()),
-  rawOutput: z.string(),
-  domainCount: z.number(),
-  subdomainCount: z.number(),
+  subdomains: withPortMeta(z.array(z.string()), {
+    label: 'Subdomains',
+    description: 'Unique subdomains discovered by Shuffledns.',
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw Shuffledns output for debugging.',
+  }),
+  domainCount: withPortMeta(z.number(), {
+    label: 'Domain Count',
+    description: 'Number of domains enumerated.',
+  }),
+  subdomainCount: withPortMeta(z.number(), {
+    label: 'Subdomain Count',
+    description: 'Number of unique subdomains discovered.',
+  }),
 });
 
 const definition: ComponentDefinition<Input, Output> = {
@@ -114,8 +161,8 @@ const definition: ComponentDefinition<Input, Output> = {
     // Placeholder; real command is built dynamically in execute()
     command: ['--help'],
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs:
     'Bruteforce or resolve subdomains using Shuffledns with MassDNS. Supports resolvers, trusted resolvers, thread control, retries, and wildcard handling.',
   retryPolicy: {
@@ -125,7 +172,7 @@ const definition: ComponentDefinition<Input, Output> = {
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ContainerError', 'ValidationError', 'ConfigurationError'],
   } satisfies ComponentRetryPolicy,
-  metadata: {
+  ui: {
     slug: 'shuffledns-massdns',
     version: '1.0.0',
     type: 'scan',
@@ -140,41 +187,6 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'domains',
-        label: 'Target Domains',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Base domain(s) to scan (e.g., example.com, hackerone.com)'
-      },
-      {
-        id: 'seeds',
-        label: 'Subdomains to Resolve',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Full subdomains to validate in resolve mode (e.g., www.example.com, api.example.com). Required when mode is Resolve.'
-      },
-      {
-        id: 'words',
-        label: 'Wordlist',
-        dataType: port.list(port.text()),
-        required: false,
-        description: 'Words for bruteforce mode (e.g., www, api, admin). Required when mode is Bruteforce.'
-      },
-      {
-        id: 'resolvers',
-        label: 'Resolvers',
-        dataType: port.list(port.text()),
-        required: false,
-        description: 'DNS resolvers (defaults to 1.1.1.1 and 8.8.8.8 when not provided).',
-      },
-      { id: 'trustedResolvers', label: 'Trusted Resolvers', dataType: port.list(port.text()), required: false },
-    ],
-    outputs: [
-      { id: 'subdomains', label: 'Discovered Subdomains', dataType: port.list(port.text()) },
-      { id: 'rawOutput', label: 'Raw Output', dataType: port.text() },
-    ],
     parameters: [
       {
         id: 'mode',

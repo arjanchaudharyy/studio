@@ -47,9 +47,9 @@ dockerDescribe('Subfinder Integration (Docker)', () => {
     expect(component).toBeDefined();
 
     const typedComponent = component!;
-    const params = typedComponent.inputSchema.parse({ domains: ['example.com'] });
+    const params = typedComponent.inputs.parse({ domains: ['example.com'] });
 
-    const result = typedComponent.outputSchema.parse(await typedComponent.execute(params, context));
+    const result = typedComponent.outputs.parse(await typedComponent.execute(params, context));
 
     console.log('Subfinder result:', result);
 
@@ -74,11 +74,11 @@ dockerDescribe('Subfinder Integration (Docker)', () => {
   test('should handle invalid domain gracefully', async () => {
     const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
     const typedComponent = component!;
-    const params = typedComponent.inputSchema.parse({
+    const params = typedComponent.inputs.parse({
       domains: ['this-domain-definitely-does-not-exist-12345.invalid'],
     });
 
-    const result = typedComponent.outputSchema.parse(await typedComponent.execute(params, context));
+    const result = typedComponent.outputs.parse(await typedComponent.execute(params, context));
 
     expect(result).toHaveProperty('subdomains');
     expect(Array.isArray(result.subdomains)).toBe(true);

@@ -2,11 +2,11 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   runComponentWithRunner,
   type DockerRunnerConfig,
   ContainerError,
   ComponentRetryPolicy,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
@@ -36,24 +36,42 @@ const DOMAIN_FILE_NAME = 'domains.txt';
 const RESOLVER_FILE_NAME = 'resolvers.txt';
 
 const inputSchema = z.object({
-  domains: z.array(
-    z
-      .string()
-      .min(1)
-      .regex(/^[\w.-]+$/, 'Domains may only include letters, numbers, dots, underscores, and hyphens.'),
-  ),
-  recordTypes: z.array(recordTypeEnum).default(['A']),
-  resolvers: z
-    .array(
+  domains: withPortMeta(
+    z.array(
       z
         .string()
-        .min(1, 'Resolver addresses cannot be empty.')
-        .regex(
-          /^[\w.:+-]+$/,
-          'Resolvers should be hostnames or IPs, optionally including port (e.g. 1.1.1.1:53).',
-        ),
-    )
-    .default(['1.1.1.1:53', '1.0.0.1:53', '8.8.8.8:53', '8.8.4.4:53']),
+        .min(1)
+        .regex(/^[\w.-]+$/, 'Domains may only include letters, numbers, dots, underscores, and hyphens.'),
+    ),
+    {
+      label: 'Domains',
+      description: 'Domains or hostnames to resolve.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
+  recordTypes: withPortMeta(z.array(recordTypeEnum).default(['A']), {
+    label: 'Record Types',
+    description: 'DNS record types to resolve.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+  }),
+  resolvers: withPortMeta(
+    z
+      .array(
+        z
+          .string()
+          .min(1, 'Resolver addresses cannot be empty.')
+          .regex(
+            /^[\w.:+-]+$/,
+            'Resolvers should be hostnames or IPs, optionally including port (e.g. 1.1.1.1:53).',
+          ),
+      )
+      .default(['1.1.1.1:53', '1.0.0.1:53', '8.8.8.8:53', '8.8.4.4:53']),
+    {
+      label: 'Resolvers',
+      description: 'Custom DNS resolvers to use for queries.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
   retryCount: z.number().int().min(1).max(10).default(2),
   rateLimit: z.number().int().positive().max(10000).optional(),
   threads: z.number().int().min(1).max(10000).default(100),
@@ -123,14 +141,41 @@ const dnsxLineSchema = z
   .passthrough();
 
 const outputSchema: z.ZodType<Output> = z.object({
-  results: z.array(z.any()),
-  rawOutput: z.string(),
-  domainCount: z.number(),
-  recordCount: z.number(),
-  recordTypes: z.array(z.string()),
-  resolvers: z.array(z.string()),
-  resolvedHosts: z.array(z.string()),
-  errors: z.array(z.string()).optional(),
+  results: withPortMeta(z.array(z.any()), {
+    label: 'Results',
+    description: 'DNS resolution results returned by dnsx.',
+    allowAny: true,
+    reason: 'dnsx returns heterogeneous record payloads.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw dnsx output for debugging.',
+  }),
+  domainCount: withPortMeta(z.number(), {
+    label: 'Domain Count',
+    description: 'Number of domains resolved.',
+  }),
+  recordCount: withPortMeta(z.number(), {
+    label: 'Record Count',
+    description: 'Total number of DNS records returned.',
+  }),
+  recordTypes: withPortMeta(z.array(z.string()), {
+    label: 'Record Types',
+    description: 'Record types included in the output.',
+  }),
+  resolvers: withPortMeta(z.array(z.string()), {
+    label: 'Resolvers',
+    description: 'Resolvers that responded during the run.',
+  }),
+  resolvedHosts: withPortMeta(z.array(z.string()), {
+    label: 'Resolved Hosts',
+    description: 'List of hosts resolved during the run.',
+  }),
+  errors: withPortMeta(z.array(z.string()).optional(), {
+    label: 'Errors',
+    description: 'Errors encountered during dnsx execution.',
+  }),
 }) as z.ZodType<Output>;
 
 const splitCliArgs = (input: string): string[] => {
@@ -354,11 +399,11 @@ const definition: ComponentDefinition<Input, Output> = {
     // This allows dynamic args to be appended and properly passed to dnsx
     command: ['-c', 'dnsx "$@"', '--'],
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs:
     'Executes dnsx inside Docker to resolve DNS records for the provided domains. Supports multiple record types, custom resolvers, and rate limiting.',
-  metadata: {
+  ui: {
     slug: 'dnsx',
     version: '1.0.0',
     type: 'scan',
@@ -373,47 +418,6 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'domains',
-        label: 'Target Domains',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Array of domains or hostnames to resolve.',
-      },
-      {
-        id: 'recordTypes',
-        label: 'Record Types',
-        dataType: port.list(port.text()),
-        description: 'DNS record types to query (e.g. A, AAAA, CNAME).',
-      },
-      {
-        id: 'resolvers',
-        label: 'Resolvers',
-        dataType: port.list(port.text()),
-        description: 'Optional resolver IPs/hosts (e.g. 1.1.1.1:53).',
-      },
-    ],
-    outputs: [
-      {
-        id: 'results',
-        label: 'DNS Responses',
-        dataType: port.list(port.json()),
-        description: 'Structured dnsx JSONL output grouped by record type.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Raw dnsx JSONL output prior to normalisation.',
-      },
-      {
-        id: 'resolvedHosts',
-        label: 'Resolved Hosts',
-        dataType: port.list(port.text()),
-        description: 'Unique hostnames resolved by dnsx (ideal for chaining into httpx).',
-      },
-    ],
     parameters: [
       {
         id: 'outputMode',

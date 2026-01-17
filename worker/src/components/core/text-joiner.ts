@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, port, ValidationError } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  ComponentDefinition,
+  ValidationError,
+  withPortMeta,
+} from '@shipsec/component-sdk';
 
 // Support both direct text and file objects from previous components
 const manualTriggerFileSchema = z.object({
@@ -24,7 +29,15 @@ const fileLoaderFileSchema = z.object({
 const arrayInputSchema = z.array(z.string());
 
 const inputSchema = z.object({
-  items: z.union([arrayInputSchema, z.string(), manualTriggerFileSchema, fileLoaderFileSchema]).describe('Array of strings to join (or single string)'),
+  items: withPortMeta(
+    z.union([arrayInputSchema, z.string(), manualTriggerFileSchema, fileLoaderFileSchema])
+      .describe('Array of strings to join (or single string)'),
+    {
+      label: 'Items',
+      description: 'Array of strings to join. Accepts array output from text-splitter or direct text input.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
   separator: z.string().default('\n').describe('Separator to join with'),
   prefix: z.string().default('').describe('Prefix to add to each item'),
   suffix: z.string().default('').describe('Suffix to add to each item'),
@@ -38,8 +51,14 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  text: z.string(),
-  count: z.number(),
+  text: withPortMeta(z.string(), {
+    label: 'Joined Text',
+    description: 'Single string with all items joined by separator.',
+  }),
+  count: withPortMeta(z.number(), {
+    label: 'Count',
+    description: 'Number of items that were joined.',
+  }),
 });
 
 const definition: ComponentDefinition<Input, Output> = {
@@ -47,10 +66,10 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Text Joiner',
   category: 'transform',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Joins an array of strings into a single formatted string with optional prefix/suffix.',
-  metadata: {
+  ui: {
     slug: 'text-joiner',
     version: '1.0.0',
     type: 'process',
@@ -63,29 +82,6 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'items',
-        label: 'Items',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Array of strings to join. Accepts array output from text-splitter or direct text input.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'text',
-        label: 'Joined Text',
-        dataType: port.text(),
-        description: 'Single string with all items joined by separator.',
-      },
-      {
-        id: 'count',
-        label: 'Count',
-        dataType: port.number({ coerceFrom: [] }),
-        description: 'Number of items that were joined.',
-      },
-    ],
     examples: [
       'Join array of domains into newline-separated list for AI analysis.',
       'Convert multiple text fragments into single prompt for processing.',

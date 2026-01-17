@@ -5,6 +5,7 @@ import {
   type ComponentDefinition,
   type ExecutionContext,
   type TraceEvent,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 import { executeWorkflow } from '../workflow-runner';
@@ -21,8 +22,12 @@ describe('executeWorkflow', () => {
         label: 'Test Echo',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputSchema: z.object({ value: z.string() }),
-        outputSchema: z.object({ echoed: z.string() }),
+        inputs: z.object({
+          value: withPortMeta(z.string(), { label: 'Value' }),
+        }),
+        outputs: z.object({
+          echoed: withPortMeta(z.string(), { label: 'Echoed' }),
+        }),
         async execute(params, context) {
           context.emitProgress({ message: `Echoing ${params.value}`, level: 'debug' });
           return { echoed: params.value };
@@ -338,8 +343,12 @@ describe('executeWorkflow', () => {
         label: 'Capture Trigger',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputSchema: z.object({ label: z.string() }),
-        outputSchema: z.object({ triggeredBy: z.string().optional() }),
+        inputs: z.object({
+          label: withPortMeta(z.string(), { label: 'Label' }),
+        }),
+        outputs: z.object({
+          triggeredBy: withPortMeta(z.string().optional(), { label: 'Triggered By' }),
+        }),
         async execute(params, context) {
           const triggeredBy = context.metadata.triggeredBy;
           return triggeredBy ? { triggeredBy } : {};
@@ -489,8 +498,10 @@ describe('executeWorkflow', () => {
         label: 'Always Fail',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputSchema: z.object({ message: z.string() }),
-        outputSchema: z.never(),
+        inputs: z.object({
+          message: withPortMeta(z.string(), { label: 'Message' }),
+        }),
+        outputs: z.never(),
         async execute(params) {
           throw new Error(params.message);
         },
@@ -504,8 +515,12 @@ describe('executeWorkflow', () => {
         label: 'Record Execution',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputSchema: z.object({ label: z.string() }),
-        outputSchema: z.object({ label: z.string() }),
+        inputs: z.object({
+          label: withPortMeta(z.string(), { label: 'Label' }),
+        }),
+        outputs: z.object({
+          label: withPortMeta(z.string(), { label: 'Label' }),
+        }),
         async execute(params, context) {
           executionOrder.push(context.componentRef);
           return { label: params.label };
@@ -575,8 +590,10 @@ describe('executeWorkflow', () => {
         label: 'Always Fail',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputSchema: z.object({ message: z.string() }),
-        outputSchema: z.never(),
+        inputs: z.object({
+          message: withPortMeta(z.string(), { label: 'Message' }),
+        }),
+        outputs: z.never(),
         async execute(params) {
           throw new Error(params.message);
         },
@@ -592,8 +609,12 @@ describe('executeWorkflow', () => {
         label: 'Capture Failure Metadata',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputSchema: z.object({ label: z.string() }),
-        outputSchema: z.object({ label: z.string() }),
+        inputs: z.object({
+          label: withPortMeta(z.string(), { label: 'Label' }),
+        }),
+        outputs: z.object({
+          label: withPortMeta(z.string(), { label: 'Label' }),
+        }),
         async execute(params, context) {
           failureMetadata.push(context.metadata.failure);
           return { label: params.label };

@@ -2,11 +2,11 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   ConfigurationError,
   ComponentRetryPolicy,
+  withPortMeta,
 } from '@shipsec/component-sdk';
-import { llmProviderContractName, LLMProviderSchema } from './chat-model-contract';
+import { LLMProviderSchema, type LlmProviderConfig } from '@shipsec/contracts';
 
 const DEFAULT_MODEL = 'gpt-5.2';
 const DEFAULT_BASE_URL = process.env.OPENAI_BASE_URL ?? '';
@@ -20,10 +20,17 @@ const inputSchema = z.object({
     .string()
     .default(DEFAULT_BASE_URL)
     .describe('Optional override for the OpenAI-compatible API base URL.'),
-  apiKey: z
-    .string()
-    .min(1, 'API key is required')
-    .describe('Resolved OpenAI-compatible API key supplied via a Secret Loader node.'),
+  apiKey: withPortMeta(
+    z.string()
+      .min(1, 'API key is required')
+      .describe('Resolved OpenAI-compatible API key supplied via a Secret Loader node.'),
+    {
+      label: 'API Key',
+      description: 'Connect the Secret Loader output containing the OpenAI-compatible API key.',
+      editor: 'secret',
+      connectionType: { kind: 'primitive', name: 'secret' },
+    },
+  ),
   headers: z
     .record(z.string(), z.string())
     .optional()
@@ -33,7 +40,11 @@ const inputSchema = z.object({
 type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  chatModel: LLMProviderSchema,
+  chatModel: withPortMeta(LLMProviderSchema(), {
+    label: 'LLM Provider Config',
+    description:
+      'Portable provider payload (provider, model, overrides) for wiring into AI Agent or one-shot nodes.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -50,10 +61,10 @@ const definition: ComponentDefinition<Input, Output> = {
   category: 'ai',
   runner: { kind: 'inline' },
   retryPolicy: openaiProviderRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Emits a reusable OpenAI provider configuration that downstream AI components can consume.',
-  metadata: {
+  ui: {
     slug: 'openai-provider',
     version: '1.1.0',
     type: 'process',
@@ -64,24 +75,6 @@ const definition: ComponentDefinition<Input, Output> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    inputs: [
-      {
-        id: 'apiKey',
-        label: 'API Key',
-        dataType: port.secret(),
-        required: true,
-        description: 'Connect the Secret Loader output containing the OpenAI-compatible API key.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'chatModel',
-        label: 'LLM Provider Config',
-        dataType: port.credential(llmProviderContractName),
-        description:
-          'Portable provider payload (provider, model, overrides) for wiring into AI Agent or one-shot nodes.',
-      },
-    ],
     parameters: [
       {
         id: 'model',
@@ -106,6 +99,13 @@ const definition: ComponentDefinition<Input, Output> = {
         default: DEFAULT_BASE_URL,
         description:
           'Override for the OpenAI-compatible API base URL (leave blank for the default provider URL).',
+      },
+      {
+        id: 'headers',
+        label: 'Headers',
+        type: 'json',
+        required: false,
+        description: 'Optional HTTP headers included when invoking the model.',
       },
     ],
   },
@@ -142,7 +142,7 @@ const definition: ComponentDefinition<Input, Output> = {
         apiKey: effectiveApiKey,
         ...(trimmedBaseUrl ? { baseUrl: trimmedBaseUrl } : {}),
         ...(sanitizedHeaders ? { headers: sanitizedHeaders } : {}),
-      } satisfies z.infer<typeof LLMProviderSchema>,
+      } satisfies LlmProviderConfig,
     };
   },
 };

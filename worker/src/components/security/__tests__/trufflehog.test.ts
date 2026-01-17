@@ -33,7 +33,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
     });
@@ -53,7 +53,7 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
     });
@@ -101,7 +101,7 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/clean-repo',
       scanType: 'git',
     });
@@ -128,25 +128,25 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const gitParams = component.inputSchema.parse({
+    const gitParams = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
     });
     expect(gitParams.scanType).toBe('git');
 
-    const filesystemParams = component.inputSchema.parse({
+    const filesystemParams = component.inputs.parse({
       scanTarget: '/path/to/files',
       scanType: 'filesystem',
     });
     expect(filesystemParams.scanType).toBe('filesystem');
 
-    const s3Params = component.inputSchema.parse({
+    const s3Params = component.inputs.parse({
       scanTarget: 'my-bucket',
       scanType: 's3',
     });
     expect(s3Params.scanType).toBe('s3');
 
-    const dockerParams = component.inputSchema.parse({
+    const dockerParams = component.inputs.parse({
       scanTarget: 'myimage:latest',
       scanType: 'docker',
     });
@@ -157,7 +157,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
       branch: 'main',
@@ -172,7 +172,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
       customFlags: '--fail --concurrency=8',
@@ -190,7 +190,7 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
       onlyVerified: false,
@@ -233,7 +233,7 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
     });
@@ -252,7 +252,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: '/scan',
       scanType: 'filesystem',
       filesystemContent: {
@@ -275,7 +275,7 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
       filesystemContent: {
@@ -297,7 +297,7 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
       customFlags: '--fail',
@@ -318,7 +318,7 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       scanTarget: 'https://github.com/test/repo',
       scanType: 'git',
     });

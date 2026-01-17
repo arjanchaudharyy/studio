@@ -6,7 +6,7 @@ import type { ExecutionContext } from "@shipsec/component-sdk";
 const mockContext: ExecutionContext = {
   runId: "test-run",
   componentRef: "test-node",
-  metadata: { workflowId: "test-wf", executionId: "test-exec" },
+  ui: { workflowId: "test-wf", executionId: "test-exec" },
   logger: {
     debug: () => {},
     info: () => {},

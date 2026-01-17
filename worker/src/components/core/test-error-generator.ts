@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   NetworkError,
   RateLimitError,
   ServiceError,
@@ -11,6 +10,7 @@ import {
   NotFoundError,
   ValidationError,
   ConfigurationError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
@@ -33,13 +33,26 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Error Generator',
   category: 'transform',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema: z.object({
-    success: z.boolean(),
-    attempt: z.number(),
+  inputs: inputSchema,
+  outputs: z.object({
+    result: withPortMeta(z.unknown(), {
+      label: 'Result',
+      description: 'Result of the operation if it succeeds.',
+      allowAny: true,
+      reason: 'Test component returns variable output payloads.',
+      connectionType: { kind: 'any' },
+    }),
+    success: withPortMeta(z.boolean(), {
+      label: 'Success',
+      description: 'Whether the attempt completed successfully.',
+    }),
+    attempt: withPortMeta(z.number(), {
+      label: 'Attempt',
+      description: 'Attempt number for the execution.',
+    }),
   }),
   docs: 'A test component that generates specific error types and simulates retry scenarios.',
-  metadata: {
+  ui: {
     slug: 'test-error-generator',
     version: '1.0.0',
     type: 'process',
@@ -52,15 +65,6 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [],
-    outputs: [
-      {
-        id: 'result',
-        label: 'Result',
-        dataType: port.any(),
-        description: 'Result of the operation if it succeeds.',
-      },
-    ],
     parameters: [
       {
         id: 'mode',
@@ -96,6 +100,21 @@ const definition: ComponentDefinition<Input, Output> = {
         default: 1,
         description: 'Retries will continue until this attempt index (1-based) is reached.',
       },
+      {
+        id: 'alwaysFail',
+        label: 'Always Fail',
+        type: 'boolean',
+        required: false,
+        default: false,
+        description: 'Force failure on every attempt to simulate non-retryable errors.',
+      },
+      {
+        id: 'errorDetails',
+        label: 'Error Details',
+        type: 'json',
+        required: false,
+        description: 'Optional structured details injected into the error payload.',
+      },
     ],
   },
   async execute(params, context) {
@@ -105,7 +124,11 @@ const definition: ComponentDefinition<Input, Output> = {
     context.emitProgress(`Execution attempt ${currentAttempt}...`);
 
     if (params.mode === 'success') {
-      return { success: true, attempt: currentAttempt };
+      return {
+        result: { success: true, attempt: currentAttempt },
+        success: true,
+        attempt: currentAttempt,
+      };
     }
 
     const shouldFail = params.alwaysFail || currentAttempt < params.failUntilAttempt;
@@ -154,7 +177,11 @@ const definition: ComponentDefinition<Input, Output> = {
     }
 
     context.logger.info(`[Error Generator] Success reached on attempt ${currentAttempt}`);
-    return { success: true, attempt: currentAttempt };
+    return {
+      result: { success: true, attempt: currentAttempt },
+      success: true,
+      attempt: currentAttempt,
+    };
   },
 };
 
@@ -164,8 +191,8 @@ const retryLimitedDefinition: ComponentDefinition<Input, Output> = {
   ...definition,
   id: 'test.error.retry-limited',
   label: 'Error Generator (Limited Retry)',
-  metadata: {
-    ...definition.metadata,
+  ui: {
+    ...definition.ui,
     version: '1.0.0',
     type: 'process',
     category: 'transform',

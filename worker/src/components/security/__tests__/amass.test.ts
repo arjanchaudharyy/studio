@@ -23,7 +23,7 @@ describe('amass component', () => {
     const component = componentRegistry.get<AmassInput, AmassOutput>('shipsec.amass.enum');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       domains: ['example.com'],
     });
 
@@ -50,7 +50,7 @@ describe('amass component', () => {
       componentRef: 'amass-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       domains: ['example.com'],
       active: true,
     });
@@ -80,7 +80,7 @@ describe('amass component', () => {
 
     const result = await component.execute(params, context);
 
-    expect(result).toEqual(component.outputSchema.parse(JSON.parse(payload)));
+    expect(result).toEqual(component.outputs.parse(JSON.parse(payload)));
   });
 
   it('should propagate structured output when docker returns JSON', async () => {
@@ -92,14 +92,14 @@ describe('amass component', () => {
       componentRef: 'amass-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       domains: ['example.com', 'example.org'],
       bruteForce: true,
       includeIps: true,
       timeoutMinutes: 2,
     });
 
-    const payload = component.outputSchema.parse({
+    const payload = component.outputs.parse({
       subdomains: ['login.example.com', 'dev.example.org'],
       rawOutput: 'login.example.com\nlogin.example.com 93.184.216.34\ndev.example.org',
       domainCount: 2,

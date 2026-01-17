@@ -3,11 +3,11 @@ import {
   componentRegistry,
   ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   runComponentWithRunner,
   type DockerRunnerConfig,
   ContainerError,
   ValidationError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
@@ -22,10 +22,16 @@ const scanTypeSchema = z.enum([
 ]);
 
 const inputSchema = z.object({
-  scanTarget: z
-    .string()
-    .min(1, 'Scan target cannot be empty')
-    .describe('Target to scan (repository URL, filesystem path, S3 bucket, etc.)'),
+  scanTarget: withPortMeta(
+    z
+      .string()
+      .min(1, 'Scan target cannot be empty')
+      .describe('Target to scan (repository URL, filesystem path, S3 bucket, etc.)'),
+    {
+      label: 'Scan Target',
+      description: 'Target to scan (repository URL, filesystem path, bucket, etc.).',
+    },
+  ),
   scanType: scanTypeSchema
     .default('git')
     .describe('Type of scan to perform'),
@@ -108,11 +114,29 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  secrets: z.array(z.any()),
-  rawOutput: z.string(),
-  secretCount: z.number(),
-  verifiedCount: z.number(),
-  hasVerifiedSecrets: z.boolean(),
+  secrets: withPortMeta(z.array(z.any()), {
+    label: 'Secrets',
+    description: 'Secrets detected by TruffleHog.',
+    allowAny: true,
+    reason: 'TruffleHog returns heterogeneous secret payloads.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw TruffleHog output for debugging.',
+  }),
+  secretCount: withPortMeta(z.number(), {
+    label: 'Secret Count',
+    description: 'Total number of secrets detected.',
+  }),
+  verifiedCount: withPortMeta(z.number(), {
+    label: 'Verified Count',
+    description: 'Number of verified secrets detected.',
+  }),
+  hasVerifiedSecrets: withPortMeta(z.boolean(), {
+    label: 'Has Verified Secrets',
+    description: 'True when any verified secrets are detected.',
+  }),
 });
 
 // Helper function to build TruffleHog command arguments
@@ -244,10 +268,10 @@ const definition: ComponentDefinition<Input, Output> = {
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ContainerError', 'ValidationError', 'ConfigurationError'],
   } satisfies ComponentRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Scan for secrets and credentials using TruffleHog. Supports Git repositories, GitHub, GitLab, filesystems, S3 buckets, Docker images, and more.',
-  metadata: {
+  ui: {
     slug: 'trufflehog',
     version: '1.0.0',
     type: 'scan',
@@ -263,61 +287,6 @@ const definition: ComponentDefinition<Input, Output> = {
     isLatest: true,
     deprecated: false,
     example: '`trufflehog git https://github.com/org/repo --results=verified --json` - Scans a Git repository for verified secrets and outputs results in JSON format.',
-    inputs: [
-      {
-        id: 'scanTarget',
-        label: 'Scan Target',
-        dataType: port.text(),
-        required: true,
-        description: 'Repository URL, filesystem path, S3 bucket name, or Docker image to scan.',
-      },
-      {
-        id: 'scanType',
-        label: 'Scan Type',
-        dataType: port.text(),
-        required: true,
-        description: 'Type of scan: git, github, gitlab, s3, gcs, filesystem, or docker.',
-      },
-      {
-        id: 'filesystemContent',
-        label: 'Filesystem Content',
-        dataType: port.any(),
-        required: false,
-        description: 'Map of filename to content for filesystem scanning (uses isolated volumes).',
-      },
-    ],
-    outputs: [
-      {
-        id: 'secrets',
-        label: 'Detected Secrets',
-        dataType: port.list(port.any()),
-        description: 'Array of secrets discovered by TruffleHog with verification status.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Raw TruffleHog output for debugging.',
-      },
-      {
-        id: 'secretCount',
-        label: 'Secret Count',
-        dataType: port.number(),
-        description: 'Total number of secrets found.',
-      },
-      {
-        id: 'verifiedCount',
-        label: 'Verified Count',
-        dataType: port.number(),
-        description: 'Number of verified secrets.',
-      },
-      {
-        id: 'hasVerifiedSecrets',
-        label: 'Has Verified Secrets',
-        dataType: port.boolean(),
-        description: 'Boolean flag indicating if any verified secrets were found.',
-      },
-    ],
     examples: [
       'Scan a Git repository for verified secrets before deployment.',
       'Audit filesystem directories for accidentally committed credentials.',
@@ -326,6 +295,22 @@ const definition: ComponentDefinition<Input, Output> = {
       'Scan last 10 commits in CI/CD using sinceCommit=HEAD~10 to catch recent secrets.',
     ],
     parameters: [
+      {
+        id: 'scanType',
+        label: 'Scan Type',
+        type: 'select',
+        default: 'git',
+        description: 'Select the type of scan to perform.',
+        options: [
+          { label: 'Git', value: 'git' },
+          { label: 'GitHub', value: 'github' },
+          { label: 'GitLab', value: 'gitlab' },
+          { label: 'S3', value: 's3' },
+          { label: 'GCS', value: 'gcs' },
+          { label: 'Filesystem', value: 'filesystem' },
+          { label: 'Docker', value: 'docker' },
+        ],
+      },
       {
         id: 'filesystemContent',
         label: 'Filesystem Files',

@@ -29,7 +29,7 @@ describe('core.file.writer component', () => {
   it('registers with the expected metadata', () => {
     expect(component).toBeDefined();
     expect(component?.label).toBe('File Writer');
-    expect(component?.metadata?.slug).toBe('file-writer');
+    expect(component?.ui?.slug).toBe('file-writer');
   });
 
   it('uploads to the artifact service when local destinations are selected', async () => {
@@ -53,7 +53,7 @@ describe('core.file.writer component', () => {
       artifacts,
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       fileName: 'output.txt',
       content: 'Hello world',
       destination: {
@@ -78,7 +78,7 @@ describe('core.file.writer component', () => {
     if (!component) throw new Error('Component not registered');
 
     expect(() =>
-      component?.inputSchema.parse({
+      component?.inputs.parse({
         fileName: 'noop.txt',
         content: 'Missing destinations',
       }),
@@ -106,7 +106,7 @@ describe('core.file.writer component', () => {
       artifacts,
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       fileName: 'adapter.txt',
       content: 'Destination registry FTW',
       destination: {
@@ -131,7 +131,7 @@ describe('core.file.writer component', () => {
       componentRef: 'node-3',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       fileName: 'report.json',
       mimeType: 'application/json',
       content: { status: 'ok' },

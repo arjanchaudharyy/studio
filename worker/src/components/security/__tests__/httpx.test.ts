@@ -80,7 +80,7 @@ describeHttpx('httpx component', () => {
       componentRef: 'httpx-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       targets: ['https://example.com'],
     });
 
@@ -139,7 +139,7 @@ describeHttpx('httpx component', () => {
       componentRef: 'httpx-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       targets: ['https://example.com'],
       followRedirects: true,
     });
@@ -167,7 +167,7 @@ describeHttpx('httpx component', () => {
       componentRef: 'httpx-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       targets: [],
     });
 
@@ -190,7 +190,7 @@ describeHttpx('httpx component', () => {
       componentRef: 'httpx-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       targets: ['https://example.com'],
     });
 

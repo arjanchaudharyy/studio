@@ -15,19 +15,21 @@ import {
   componentRegistry,
   ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   type ExecutionContext,
   type AgentTraceEvent,
   ConfigurationError,
   ValidationError,
   fromHttpResponse,
+  withPortMeta,
 } from '@shipsec/component-sdk';
-import { llmProviderContractName, LLMProviderSchema } from './chat-model-contract';
 import {
+  LLMProviderSchema,
   McpToolArgumentSchema,
   McpToolDefinitionSchema,
-  mcpToolContractName,
-} from './mcp-tool-contract';
+  llmProviderContractName,
+  type LlmProviderConfig,
+  type McpToolDefinition,
+} from '@shipsec/contracts';
 
 
 // Define types for dependencies to enable dependency injection for testing
@@ -111,27 +113,59 @@ const reasoningStepSchema = z.object({
 });
 
 const inputSchema = z.object({
-  userInput: z
-    .string()
-    .min(1, 'Input text cannot be empty')
-    .describe('Incoming user text for this agent turn.'),
-  conversationState: conversationStateSchema
-    .optional()
-    .describe('Optional prior conversation state to maintain memory across turns.'),
-  chatModel: LLMProviderSchema
-    .default({
-      provider: 'openai',
-      modelId: DEFAULT_OPENAI_MODEL,
-    })
-    .describe('Chat model configuration (provider, model ID, API key, base URL).'),
-  modelApiKey: z
-    .string()
-    .optional()
-    .describe('Optional API key override supplied via a Secret Loader node.'),
-  mcpTools: z
-    .array(McpToolDefinitionSchema)
-    .optional()
-    .describe('Normalized MCP tool definitions emitted by provider components.'),
+  userInput: withPortMeta(
+    z.string()
+      .min(1, 'Input text cannot be empty')
+      .describe('Incoming user text for this agent turn.'),
+    {
+      label: 'User Input',
+      description: 'Incoming user text for this agent turn.',
+    },
+  ),
+  conversationState: withPortMeta(
+    conversationStateSchema
+      .optional()
+      .describe('Optional prior conversation state to maintain memory across turns.'),
+    {
+      label: 'Conversation State',
+      description: 'Optional prior conversation state to maintain memory across turns.',
+      connectionType: { kind: 'primitive', name: 'json' },
+    },
+  ),
+  chatModel: withPortMeta(
+    LLMProviderSchema()
+      .default({
+        provider: 'openai',
+        modelId: DEFAULT_OPENAI_MODEL,
+      })
+      .describe('Chat model configuration (provider, model ID, API key, base URL).'),
+    {
+      label: 'Chat Model',
+      description:
+        'Provider configuration. Example: {"provider":"gemini","modelId":"gemini-2.5-flash","apiKey":"gm-..."}',
+      connectionType: { kind: 'contract', name: llmProviderContractName, credential: true },
+    },
+  ),
+  modelApiKey: withPortMeta(
+    z.string()
+      .optional()
+      .describe('Optional API key override supplied via a Secret Loader node.'),
+    {
+      label: 'Model API Key',
+      description: 'Optional override API key supplied via a Secret Loader output.',
+      editor: 'secret',
+      connectionType: { kind: 'primitive', name: 'secret' },
+    },
+  ),
+  mcpTools: withPortMeta(
+    z.array(McpToolDefinitionSchema())
+      .optional()
+      .describe('Normalized MCP tool definitions emitted by provider components.'),
+    {
+      label: 'MCP Tools',
+      description: 'Connect outputs from MCP tool providers or mergers.',
+    },
+  ),
   systemPrompt: z
     .string()
     .default('')
@@ -206,14 +240,50 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  responseText: z.string(),
-  structuredOutput: z.unknown().nullable(),
-  conversationState: conversationStateSchema,
-  toolInvocations: z.array(toolInvocationSchema),
-  reasoningTrace: z.array(reasoningStepSchema),
-  usage: z.unknown().optional(),
-  rawResponse: z.unknown(),
-  agentRunId: z.string(),
+  responseText: withPortMeta(z.string(), {
+    label: 'Agent Response',
+    description: 'Final assistant message produced by the agent.',
+  }),
+  structuredOutput: withPortMeta(z.unknown().nullable(), {
+    label: 'Structured Output',
+    description: 'Parsed JSON object when structured output is enabled. Null otherwise.',
+    allowAny: true,
+    reason: 'Structured output is user-defined JSON.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  conversationState: withPortMeta(conversationStateSchema, {
+    label: 'Conversation State',
+    description: 'Updated conversation memory for subsequent agent turns.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  toolInvocations: withPortMeta(z.array(toolInvocationSchema), {
+    label: 'Tool Invocations',
+    description: 'Array of MCP tool calls executed during this run.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  reasoningTrace: withPortMeta(z.array(reasoningStepSchema), {
+    label: 'Reasoning Trace',
+    description: 'Sequence of Think → Act → Observe steps executed by the agent.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  usage: withPortMeta(z.unknown().optional(), {
+    label: 'Usage',
+    description: 'Token usage metadata returned by the provider, if available.',
+    allowAny: true,
+    reason: 'Usage payloads vary by model provider.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  rawResponse: withPortMeta(z.unknown(), {
+    label: 'Raw Response',
+    description: 'Raw provider response payload for debugging.',
+    allowAny: true,
+    reason: 'Provider responses vary by model provider.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  agentRunId: withPortMeta(z.string(), {
+    label: 'Agent Run ID',
+    description: 'Unique identifier for streaming and replaying this agent session.',
+  }),
 });
 
 type AgentStreamPart =
@@ -475,7 +545,7 @@ type RegisteredMcpTool = {
 };
 
 type RegisterMcpToolParams = {
-  tools?: Array<z.infer<typeof McpToolDefinitionSchema>>;
+  tools?: Array<McpToolDefinition>;
   sessionId: string;
   toolFactory: ToolFn;
   agentStream: AgentStreamRecorder;
@@ -812,8 +882,8 @@ const definition: ComponentDefinition<Input, Output> = {
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ValidationError', 'ConfigurationError', 'AuthenticationError'],
   } satisfies ComponentRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: `An AI SDK-powered agent that maintains conversation memory, calls MCP tools, and returns both the final answer and a reasoning trace.
 
 How it behaves:
@@ -827,7 +897,7 @@ Typical workflow:
 3. Downstream node (Console Log, Storage, etc.) → consume responseText or reasoningTrace.
 
 Loop the Conversation State output back into the next agent invocation to keep multi-turn context.`,
-  metadata: {
+  ui: {
     slug: 'ai-agent',
     version: '1.0.0',
     type: 'process',
@@ -838,74 +908,6 @@ Loop the Conversation State output back into the next agent invocation to keep m
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    inputs: [
-      {
-        id: 'userInput',
-        label: 'User Input',
-        dataType: port.text(),
-        required: true,
-        description: 'Incoming user text for this agent turn.',
-      },
-      {
-        id: 'chatModel',
-        label: 'Chat Model',
-        dataType: port.credential(llmProviderContractName),
-        required: false,
-        description: 'Provider configuration. Example: {"provider":"gemini","modelId":"gemini-2.5-flash","apiKey":"gm-..."}',
-      },
-      {
-        id: 'modelApiKey',
-        label: 'Model API Key',
-        dataType: port.secret(),
-        required: false,
-        description: 'Optional override API key supplied via a Secret Loader output.',
-      },
-      {
-        id: 'mcpTools',
-        label: 'MCP Tools',
-        dataType: port.list(port.contract(mcpToolContractName)),
-        required: false,
-        description: 'Connect outputs from MCP tool providers or mergers.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'responseText',
-        label: 'Agent Response',
-        dataType: port.text(),
-        description: 'Final assistant message produced by the agent.',
-      },
-      {
-        id: 'structuredOutput',
-        label: 'Structured Output',
-        dataType: port.json(),
-        description: 'Parsed JSON object when structured output is enabled. Null otherwise.',
-      },
-      {
-        id: 'conversationState',
-        label: 'Conversation State',
-        dataType: port.json(),
-        description: 'Updated conversation memory for subsequent agent turns.',
-      },
-      {
-        id: 'toolInvocations',
-        label: 'Tool Invocations',
-        dataType: port.json(),
-        description: 'Array of MCP tool calls executed during this run.',
-      },
-      {
-        id: 'reasoningTrace',
-        label: 'Reasoning Trace',
-        dataType: port.json(),
-        description: 'Sequence of Think → Act → Observe steps executed by the agent.',
-      },
-      {
-        id: 'agentRunId',
-        label: 'Agent Run ID',
-        dataType: port.text(),
-        description: 'Unique identifier for streaming and replaying this agent session.',
-      },
-    ],
     parameters: [
       {
         id: 'systemPrompt',

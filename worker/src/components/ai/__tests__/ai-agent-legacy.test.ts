@@ -189,7 +189,7 @@ describe('core.ai.agent component', () => {
   it('is registered with expected metadata', () => {
     expect(aiAgent.id).toBe('core.ai.agent');
     expect(aiAgent.label).toBe('AI SDK Agent');
-    expect(aiAgent.metadata.slug).toBe('ai-agent');
+    expect(aiAgent.ui.slug).toBe('ai-agent');
     expect(typeof aiAgent.execute).toBe('function');
   });
 
@@ -227,7 +227,7 @@ describe('core.ai.agent component', () => {
       secrets: secretsService,
     });
 
-    const params = aiAgent.inputSchema.parse({
+    const params = aiAgent.inputs.parse({
       userInput: 'Summarise the latest findings.',
       systemPrompt: 'You are a concise security analyst.',
       memorySize: 5,
@@ -370,7 +370,7 @@ describe('core.ai.agent component', () => {
         secrets: secretsService,
       });
 
-      const params = aiAgent.inputSchema.parse({
+      const params = aiAgent.inputs.parse({
         userInput: 'Check DNS for example.com',
         mcpTools: [
           {

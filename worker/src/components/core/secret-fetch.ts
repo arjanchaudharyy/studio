@@ -4,10 +4,10 @@ import {
   type ComponentDefinition,
   ConfigurationError,
   NotFoundError,
-  port,
-  registerContract,
   ValidationError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
+import { secretMetadataSchema } from '@shipsec/contracts';
 
 const inputSchema = z.object({
   secretId: z
@@ -20,7 +20,13 @@ const inputSchema = z.object({
     .positive()
     .optional()
     .describe('Optional version override'),
-  outputFormat: z.enum(['raw', 'json']).default('raw').describe('Format for the secret value').optional(),
+  outputFormat: withPortMeta(
+    z.enum(['raw', 'json']).default('raw').describe('Format for the secret value').optional(),
+    {
+      label: 'Output Format',
+      description: 'Return as raw string or JSON-decoded object.',
+    },
+  ),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -35,21 +41,18 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  secret: z.unknown(),
-  metadata: z.object({
-    secretId: z.string(),
-    version: z.number(),
-    format: z.enum(['raw', 'json']),
+  secret: withPortMeta(z.unknown(), {
+    label: 'Secret Value',
+    description: 'Resolved secret value. Masked in logs and traces.',
+    allowAny: true,
+    reason: 'Secret Loader can return raw strings or JSON objects.',
+    editor: 'secret',
+    connectionType: { kind: 'primitive', name: 'secret' },
   }),
-});
-
-const SECRET_METADATA_CONTRACT = 'core.secret-fetch.metadata.v1';
-
-registerContract({
-  name: SECRET_METADATA_CONTRACT,
-  schema: outputSchema.shape.metadata,
-  summary: 'Secret Fetch metadata payload',
-  description: 'Describes which secret/version was resolved and the output formatting used.',
+  metadata: withPortMeta(secretMetadataSchema(), {
+    label: 'Secret Metadata',
+    description: 'Information about the resolved secret version.',
+  }),
 });
 
 const definition: ComponentDefinition<Input, Output> = {
@@ -57,40 +60,17 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Secret Loader',
   category: 'input',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Fetch a secret from the ShipSec-managed secret store and expose it to downstream nodes.',
   requiresSecrets: true,
-  metadata: {
+  ui: {
     slug: 'secret-fetch',
     version: '1.1.0',
     type: 'input',
     category: 'input',
     description: 'Resolve a stored secret and provide it as masked output for other components.',
     icon: 'KeyRound',
-    inputs: [
-      {
-        id: 'outputFormat',
-        label: 'Output Format',
-        dataType: port.text({ coerceFrom: [] }),
-        required: false,
-        description: 'Return as raw string or JSON-decoded object.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'secret',
-        label: 'Secret Value',
-        dataType: port.secret(),
-        description: 'Resolved secret value. Masked in logs and traces.',
-      },
-      {
-        id: 'metadata',
-        label: 'Secret Metadata',
-        dataType: port.contract(SECRET_METADATA_CONTRACT),
-        description: 'Information about the resolved secret version.',
-      },
-    ],
     parameters: [
       {
         id: 'secretId',

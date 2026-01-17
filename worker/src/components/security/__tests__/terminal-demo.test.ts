@@ -31,7 +31,7 @@ describe('terminal demo component', () => {
       componentRef: 'terminal-demo',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       message: 'Test message',
       durationSeconds: 5,
     });
@@ -40,7 +40,7 @@ describe('terminal demo component', () => {
 
     const spy = vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(mockOutput);
 
-    const result = component.outputSchema.parse(await component.execute(params, context));
+    const result = component.outputs.parse(await component.execute(params, context));
 
     expect(spy).toHaveBeenCalled();
     expect(result.message).toBe('Test message');

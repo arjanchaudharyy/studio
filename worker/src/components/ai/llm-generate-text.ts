@@ -5,21 +5,26 @@ import { createGoogleGenerativeAI as createGoogleGenerativeAIImpl } from '@ai-sd
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   ConfigurationError,
   ComponentRetryPolicy,
+  withPortMeta,
 } from '@shipsec/component-sdk';
-import { llmProviderContractName, LLMProviderSchema } from './chat-model-contract';
+import { LLMProviderSchema, type LlmProviderConfig } from '@shipsec/contracts';
 
 const inputSchema = z.object({
   systemPrompt: z
     .string()
     .default('')
     .describe('Optional system instructions that prime the model.'),
-  userPrompt: z
-    .string()
-    .min(1, 'User prompt cannot be empty')
-    .describe('Primary user prompt sent to the model.'),
+  userPrompt: withPortMeta(
+    z.string()
+      .min(1, 'User prompt cannot be empty')
+      .describe('Primary user prompt sent to the model.'),
+    {
+      label: 'User Prompt',
+      description: 'User input sent to the model.',
+    },
+  ),
   temperature: z
     .number()
     .min(0)
@@ -33,11 +38,24 @@ const inputSchema = z.object({
     .max(1_000_000)
     .default(1024)
     .describe('Maximum number of tokens to request from the model.'),
-  chatModel: LLMProviderSchema.describe('Provider configuration emitted by a provider component.'),
-  modelApiKey: z
-    .string()
-    .optional()
-    .describe('Optional API key override (connect Secret Loader) to supersede the provider config.'),
+  chatModel: withPortMeta(
+    LLMProviderSchema(),
+    {
+      label: 'Provider Config',
+      description: 'Connect an OpenAI/Gemini/OpenRouter provider component output.',
+    },
+  ),
+  modelApiKey: withPortMeta(
+    z.string()
+      .optional()
+      .describe('Optional API key override (connect Secret Loader) to supersede the provider config.'),
+    {
+      label: 'API Key Override',
+      description: 'Optional override API key to supersede the provider config.',
+      editor: 'secret',
+      connectionType: { kind: 'primitive', name: 'secret' },
+    },
+  ),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -50,10 +68,28 @@ type Output = {
 };
 
 const outputSchema = z.object({
-  responseText: z.string(),
-  finishReason: z.string().nullable(),
-  rawResponse: z.unknown(),
-  usage: z.unknown().optional(),
+  responseText: withPortMeta(z.string(), {
+    label: 'Response Text',
+    description: 'Assistant response returned by the provider.',
+  }),
+  finishReason: withPortMeta(z.string().nullable(), {
+    label: 'Finish Reason',
+    description: 'Provider finish reason, if supplied.',
+  }),
+  rawResponse: withPortMeta(z.unknown(), {
+    label: 'Raw Response',
+    description: 'Raw response metadata returned by the provider for debugging.',
+    allowAny: true,
+    reason: 'Provider response payloads vary by model and API.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  usage: withPortMeta(z.unknown().optional(), {
+    label: 'Token Usage',
+    description: 'Token usage metadata returned by the provider, if available.',
+    allowAny: true,
+    reason: 'Provider usage payloads vary by model and API.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
 });
 
 type Dependencies = {
@@ -81,10 +117,10 @@ const definition: ComponentDefinition<Input, Output> = {
   category: 'ai',
   runner: { kind: 'inline' },
   retryPolicy: llmGenerateTextRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Runs a single LLM completion using a provider config emitted by the provider components.',
-  metadata: {
+  ui: {
     slug: 'ai-generate-text',
     version: '1.0.0',
     type: 'process',
@@ -96,49 +132,6 @@ const definition: ComponentDefinition<Input, Output> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    inputs: [
-      {
-        id: 'userPrompt',
-        label: 'User Prompt',
-        dataType: port.text(),
-        required: true,
-        description: 'User input sent to the model.',
-      },
-      {
-        id: 'chatModel',
-        label: 'Provider Config',
-        dataType: port.credential(llmProviderContractName),
-        required: true,
-        description: 'Connect an OpenAI/Gemini/OpenRouter provider component output.',
-      },
-      {
-        id: 'modelApiKey',
-        label: 'API Key Override',
-        dataType: port.secret(),
-        required: false,
-        description: 'Optional override API key to supersede the provider config.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'responseText',
-        label: 'Response Text',
-        dataType: port.text(),
-        description: 'Assistant response returned by the provider.',
-      },
-      {
-        id: 'rawResponse',
-        label: 'Raw Response',
-        dataType: port.json(),
-        description: 'Raw response metadata returned by the provider for debugging.',
-      },
-      {
-        id: 'usage',
-        label: 'Token Usage',
-        dataType: port.json(),
-        description: 'Token usage metadata returned by the provider, if available.',
-      },
-    ],
     parameters: [
       {
         id: 'systemPrompt',
@@ -213,7 +206,7 @@ const definition: ComponentDefinition<Input, Output> = {
 };
 
 function buildModelFactory(
-  config: z.infer<typeof LLMProviderSchema>,
+  config: LlmProviderConfig,
   apiKey: string,
   factories: {
     createOpenAI: typeof createOpenAIImpl;

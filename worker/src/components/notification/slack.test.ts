@@ -1,4 +1,5 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test';
+import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
+import { extractPorts } from '@shipsec/component-sdk';
 import { definition } from './slack';
 
 describe('Slack Component Template Support', () => {
@@ -71,7 +72,7 @@ describe('Slack Component Template Support', () => {
     });
 
     it('should resolve dynamic ports for variables', () => {
-        const ports = definition.resolvePorts!({ 
+        const resolved = definition.resolvePorts!({
             authType: 'bot_token',
             variables: [
                 { name: 'error_msg', type: 'string' },
@@ -79,8 +80,9 @@ describe('Slack Component Template Support', () => {
             ]
         });
 
-        const errorPort = ports.inputs!.find(i => i.id === 'error_msg');
-        const tsPort = ports.inputs!.find(i => i.id === 'timestamp');
+        const ports = extractPorts(resolved.inputs);
+        const errorPort = ports.find(i => i.id === 'error_msg');
+        const tsPort = ports.find(i => i.id === 'timestamp');
 
         expect(errorPort).toBeDefined();
         expect(tsPort).toBeDefined();

@@ -5,14 +5,15 @@ import {
   ComponentDefinition,
   ComponentRetryPolicy,
   ConfigurationError,
-  port,
   runComponentWithRunner,
   resolveDockerPath,
   ServiceError,
   ValidationError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 import type { DockerRunnerConfig } from '@shipsec/component-sdk';
+import { awsCredentialSchema } from '@shipsec/contracts';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 import { awsCredentialSchema, awsCredentialContractName } from '../core/credentials/aws-contract';
 
@@ -65,20 +66,39 @@ type NormalisedSeverity = (typeof severityLevels)[number];
 const statusLevels = ['FAILED', 'PASSED', 'WARNING', 'NOT_APPLICABLE', 'NOT_AVAILABLE', 'UNKNOWN'] as const;
 type NormalisedStatus = (typeof statusLevels)[number];
 
-// Using shared awsCredentialSchema from '../core/credentials/aws-contract'
-
 const inputSchema = z.object({
-  accountId: z
-    .string()
-    .min(1, 'Account ID is required')
-    .describe('AWS account to tag findings with (required for AWS scans).'),
-  credentials: awsCredentialSchema
-    .optional()
-    .describe('AWS credentials emitted by the AWS Account component. Required for authenticated AWS scans.'),
-  regions: z
-    .string()
-    .default('us-east-1')
-    .describe('Comma separated AWS regions (AWS mode only).'),
+  accountId: withPortMeta(
+    z
+      .string()
+      .min(1, 'Account ID is required')
+      .describe('AWS account to tag findings with (required for AWS scans).'),
+    {
+      label: 'Account ID',
+      description: 'Account identifier forwarded from the AWS Credentials component.',
+      connectionType: { kind: 'primitive', name: 'text' },
+    },
+  ),
+  credentials: withPortMeta(
+    awsCredentialSchema()
+      .optional()
+      .describe('AWS credentials emitted by the AWS Account component. Required for authenticated AWS scans.'),
+    {
+      label: 'AWS Credentials',
+      description: 'Structured credentials object (`{ accessKeyId, secretAccessKey, sessionToken? }`).',
+      connectionType: { kind: 'contract', name: 'core.credential.aws', credential: true },
+    },
+  ),
+  regions: withPortMeta(
+    z
+      .string()
+      .default('us-east-1')
+      .describe('Comma separated AWS regions (AWS mode only).'),
+    {
+      label: 'Regions',
+      description: 'Comma separated AWS regions to cover when scan mode is AWS.',
+      connectionType: { kind: 'primitive', name: 'text' },
+    },
+  ),
   scanMode: z
     .enum(['aws', 'cloud'])
     .default('aws')
@@ -171,10 +191,22 @@ const normalisedFindingSchema = z.object({
 type NormalisedFinding = z.infer<typeof normalisedFindingSchema>;
 
 const outputSchema = z.object({
-  scanId: z.string(),
-  findings: z.array(normalisedFindingSchema),
-  rawOutput: z.string(),
-  summary: z.object({
+  scanId: withPortMeta(z.string(), {
+    label: 'Scan ID',
+    description: 'Deterministic identifier for the scan run.',
+  }),
+  findings: withPortMeta(z.array(normalisedFindingSchema), {
+    label: 'Findings',
+    description:
+      'Array of normalized findings derived from Prowler ASFF output (includes severity, resource id, remediation).',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw Prowler output for debugging.',
+  }),
+  summary: withPortMeta(
+    z.object({
     totalFindings: z.number(),
     failed: z.number(),
     passed: z.number(),
@@ -186,9 +218,24 @@ const outputSchema = z.object({
     selectedFlagIds: z.array(recommendedFlagIdSchema),
     customFlags: z.string().nullable(),
   }),
-  command: z.array(z.string()),
-  stderr: z.string(),
-  errors: z.array(z.string()).optional(),
+    {
+      label: 'Summary',
+      description: 'Aggregate counts, regions, selected flag metadata, and other run statistics.',
+      connectionType: { kind: 'primitive', name: 'json' },
+    },
+  ),
+  command: withPortMeta(z.array(z.string()), {
+    label: 'Command',
+    description: 'Prowler command-line arguments used during the run.',
+  }),
+  stderr: withPortMeta(z.string(), {
+    label: 'Stderr',
+    description: 'Standard error output emitted by Prowler.',
+  }),
+  errors: withPortMeta(z.array(z.string()).optional(), {
+    label: 'Errors',
+    description: 'Errors encountered during the scan.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -310,11 +357,11 @@ const definition: ComponentDefinition<Input, Output> = {
     platform: 'linux/amd64',
     command: [], // Placeholder - actual command built dynamically in execute()
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs:
     'Execute Prowler inside Docker using `prowlercloud/prowler` (amd64 enforced on ARM hosts). Supports AWS account scans and the multi-cloud `prowler cloud` overview, with optional CLI flag customisation.',
-  metadata: {
+  ui: {
     slug: 'prowler-scan',
     version: '2.0.0',
     type: 'scan',
@@ -329,50 +376,6 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      {
-        id: 'accountId',
-        label: 'Account ID',
-        dataType: port.text(),
-        required: true,
-        description: 'Account identifier forwarded from the AWS Credentials component.',
-      },
-      {
-        id: 'credentials',
-        label: 'AWS Credentials',
-        dataType: port.credential(awsCredentialContractName),
-        required: false,
-        description: 'AWS credentials bundle from the AWS Credentials component.',
-      },
-      {
-        id: 'regions',
-        label: 'Regions',
-        dataType: port.text(),
-        required: false,
-        description: 'Comma separated AWS regions to cover when scan mode is AWS.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'scanId',
-        label: 'Scan ID',
-        dataType: port.text(),
-        description: 'Deterministic identifier for the scan run.',
-      },
-      {
-        id: 'findings',
-        label: 'Findings',
-        dataType: port.list(port.json()),
-        description:
-          'Array of normalized findings derived from Prowler ASFF output (includes severity, resource id, remediation).',
-      },
-      {
-        id: 'summary',
-        label: 'Summary',
-        dataType: port.json(),
-        description: 'Aggregate counts, regions, selected flag metadata, and other run statistics.',
-      },
-    ],
     parameters: [
       {
         id: 'scanMode',

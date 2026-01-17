@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  port,
   type ComponentDefinition,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z
@@ -20,7 +20,10 @@ const inputSchema = z
 export type GitHubConnectionProviderInput = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  connectionId: z.string(),
+  connectionId: withPortMeta(z.string(), {
+    label: 'GitHub Connection ID',
+    description: 'Selected GitHub connection identifier. Wire this into GitHub components.',
+  }),
 });
 
 export type GitHubConnectionProviderOutput = z.infer<typeof outputSchema>;
@@ -33,10 +36,10 @@ const definition: ComponentDefinition<
   label: 'GitHub Connection Provider',
   category: 'input',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Expose a selected GitHub integration connection so downstream components can reuse its OAuth token.',
-  metadata: {
+  ui: {
     slug: 'github-connection-provider',
     version: '1.0.0',
     type: 'input',
@@ -50,15 +53,6 @@ const definition: ComponentDefinition<
     },
     isLatest: true,
     deprecated: false,
-    inputs: [],
-    outputs: [
-      {
-        id: 'connectionId',
-        label: 'GitHub Connection ID',
-        dataType: port.text({ coerceFrom: [] }),
-        description: 'Selected GitHub connection identifier. Wire this into GitHub components.',
-      },
-    ],
     parameters: [
       {
         id: 'connectionId',

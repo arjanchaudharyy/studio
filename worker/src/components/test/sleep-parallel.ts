@@ -1,17 +1,32 @@
 import { z } from 'zod';
-import { componentRegistry, type ComponentDefinition } from '@shipsec/component-sdk';
+import { componentRegistry, type ComponentDefinition, withPortMeta } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
-  delay: z.number().int().nonnegative().describe('Artificial delay in milliseconds'),
-  label: z.string().describe('Label used for logs/emitted output'),
+  delay: withPortMeta(z.number().int().nonnegative().describe('Artificial delay in milliseconds'), {
+    label: 'Delay',
+    description: 'Artificial delay in milliseconds.',
+  }),
+  label: withPortMeta(z.string().describe('Label used for logs/emitted output'), {
+    label: 'Label',
+    description: 'Label used for logs/emitted output.',
+  }),
 });
 
 type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  label: z.string(),
-  startedAt: z.number(),
-  endedAt: z.number(),
+  label: withPortMeta(z.string(), {
+    label: 'Label',
+    description: 'Label emitted by the component.',
+  }),
+  startedAt: withPortMeta(z.number(), {
+    label: 'Started At',
+    description: 'Timestamp when the sleep started.',
+  }),
+  endedAt: withPortMeta(z.number(), {
+    label: 'Ended At',
+    description: 'Timestamp when the sleep ended.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -21,10 +36,10 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Parallel Sleep (Test)',
   category: 'transform',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Deterministic wait used for testing scheduler parallelism and benchmarking.',
-  metadata: {
+  ui: {
     slug: 'test-sleep-parallel',
     version: '1.0.0',
     type: 'process',

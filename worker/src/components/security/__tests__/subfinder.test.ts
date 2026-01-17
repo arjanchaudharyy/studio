@@ -28,13 +28,13 @@ describe('subfinder component', () => {
       componentRef: 'subfinder-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       domains: ['example.com'],
     });
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue('api.example.com\napp.example.com');
 
-    const result = component.outputSchema.parse(await component.execute(params, context));
+    const result = component.outputs.parse(await component.execute(params, context));
 
     expect(result.subdomains).toEqual(['api.example.com', 'app.example.com']);
     expect(result.rawOutput).toBe('api.example.com\napp.example.com');
@@ -51,7 +51,7 @@ describe('subfinder component', () => {
       componentRef: 'subfinder-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       domains: ['example.com'],
     });
 
@@ -64,16 +64,16 @@ describe('subfinder component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(payload);
 
-    const result = component.outputSchema.parse(await component.execute(params, context));
+    const result = component.outputs.parse(await component.execute(params, context));
 
-    expect(result).toEqual(component.outputSchema.parse(payload as SubfinderOutput));
+    expect(result).toEqual(component.outputs.parse(payload as SubfinderOutput));
   });
 
   it('should accept a single domain string and normalise to array', () => {
     const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputSchema.parse({ domains: 'example.com' }) as { domains: string[] };
+    const params = component.inputs.parse({ domains: 'example.com' }) as { domains: string[] };
     expect(params.domains).toEqual(['example.com']);
   });
 
@@ -81,7 +81,7 @@ describe('subfinder component', () => {
     const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputSchema.parse({ domain: 'legacy.example.com' }) as { domains: string[] };
+    const params = component.inputs.parse({ domain: 'legacy.example.com' }) as { domains: string[] };
     expect(params.domains).toEqual(['legacy.example.com']);
   });
 
@@ -98,7 +98,7 @@ describe('subfinder component', () => {
       componentRef: 'subfinder-secret-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       domains: ['example.com'],
       providerConfig: secretValue,
     });

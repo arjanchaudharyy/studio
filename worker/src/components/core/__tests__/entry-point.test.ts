@@ -24,7 +24,7 @@ describe('entry-point component', () => {
       componentRef: 'trigger-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       runtimeInputs: [
         { id: 'user', label: 'User', type: 'text', required: true },
         { id: 'action', label: 'Action', type: 'text', required: true },
@@ -55,7 +55,7 @@ describe('entry-point component', () => {
       componentRef: 'trigger-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       runtimeInputs: [
         { id: 'legacy', label: 'Legacy Text', type: 'string', required: true },
       ],
@@ -80,7 +80,7 @@ describe('entry-point component', () => {
       componentRef: 'trigger-test',
     });
 
-    const params = component.inputSchema.parse({});
+    const params = component.inputs.parse({});
 
     const result = await component.execute(params, context);
 
@@ -96,7 +96,7 @@ describe('entry-point component', () => {
       componentRef: 'trigger-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       runtimeInputs: [
         { id: 'user', label: 'User', type: 'text', required: true },
       ],

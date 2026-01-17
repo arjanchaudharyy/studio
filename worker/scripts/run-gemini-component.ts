@@ -20,13 +20,13 @@ async function main() {
     componentRef: 'gemini-generate',
   });
 
-  const providerParams = provider.inputSchema.parse({
+  const providerParams = provider.inputs.parse({
     model: 'gemini-2.5-flash',
     apiKey: process.env.GEMINI_API_KEY ?? 'replace-with-real-key',
   });
   const providerOutput = await provider.execute(providerParams, providerContext);
 
-  const generateParams = generator.inputSchema.parse({
+  const generateParams = generator.inputs.parse({
     systemPrompt: 'You are helpful.',
     userPrompt: 'What is 2+2?',
     chatModel: providerOutput.chatModel,

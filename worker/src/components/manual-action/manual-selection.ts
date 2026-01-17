@@ -3,9 +3,9 @@ import {
   componentRegistry,
   ComponentDefinition,
   ComponentRetryPolicy,
-  port,
-  registerContract,
   ValidationError,
+  withPortMeta,
+  type PortMeta,
 } from '@shipsec/component-sdk';
 
 /**
@@ -22,12 +22,41 @@ const inputSchema = z.object({
 type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  selection: z.any().describe('The selected option(s)'),
-  approved: z.boolean().describe('Whether the request was approved'),
-  respondedBy: z.string().describe('Who responded to the request'),
-  responseNote: z.string().optional().describe('Note provided by the responder'),
-  respondedAt: z.string().describe('When the request was resolved'),
-  requestId: z.string().describe('The ID of the human input request'),
+  selection: withPortMeta(z.any().describe('The selected option(s)'), {
+    label: 'Selection',
+    description: 'The selected option(s).',
+    allowAny: true,
+    reason: 'Selection shape depends on whether multiple selections are enabled.',
+    connectionType: { kind: 'any' },
+  }),
+  approved: withPortMeta(z.boolean().describe('Whether the request was approved'), {
+    label: 'Approved',
+    description: 'True when the selection is accepted.',
+    isBranching: true,
+    branchColor: 'green',
+  }),
+  rejected: withPortMeta(z.boolean().describe('Whether the request was rejected'), {
+    label: 'Rejected',
+    description: 'True when the selection is rejected.',
+    isBranching: true,
+    branchColor: 'red',
+  }),
+  respondedBy: withPortMeta(z.string().describe('Who responded to the request'), {
+    label: 'Responded By',
+    description: 'The user who resolved this request.',
+  }),
+  responseNote: withPortMeta(z.string().optional().describe('Note provided by the responder'), {
+    label: 'Response Note',
+    description: 'Optional comment left by the responder.',
+  }),
+  respondedAt: withPortMeta(z.string().describe('When the request was resolved'), {
+    label: 'Responded At',
+    description: 'Timestamp when the request was resolved.',
+  }),
+  requestId: withPortMeta(z.string().describe('The ID of the human input request'), {
+    label: 'Request ID',
+    description: 'Unique identifier for the manual selection request.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -51,25 +80,39 @@ function interpolate(template: string, vars: Record<string, any>): string {
   });
 }
 
-const mapTypeToPort = (type: string, id: string, label: string) => {
+const mapTypeToSchema = (
+  type: string,
+): { schema: z.ZodTypeAny; meta?: PortMeta } => {
   switch (type) {
-    case 'string': return { id, label, dataType: port.text(), required: false };
-    case 'number': return { id, label, dataType: port.number(), required: false };
-    case 'boolean': return { id, label, dataType: port.boolean(), required: false };
-    case 'secret': return { id, label, dataType: port.secret(), required: false };
-    case 'list': return { id, label, dataType: port.list(port.text()), required: false };
-    default: return { id, label, dataType: port.any(), required: false };
+    case 'string':
+      return { schema: z.string() };
+    case 'number':
+      return { schema: z.number() };
+    case 'boolean':
+      return { schema: z.boolean() };
+    case 'secret':
+      return {
+        schema: z.unknown(),
+        meta: {
+          editor: 'secret',
+          allowAny: true,
+          reason: 'Manual selection inputs can include secrets.',
+          connectionType: { kind: 'primitive', name: 'secret' } as const,
+        },
+      };
+    case 'list':
+      return { schema: z.array(z.string()) };
+    default:
+      return {
+        schema: z.unknown(),
+        meta: {
+          allowAny: true,
+          reason: 'Manual selection inputs can include arbitrary JSON.',
+          connectionType: { kind: 'primitive', name: 'json' } as const,
+        },
+      };
   }
 };
-
-const HUMAN_INPUT_PENDING_CONTRACT = 'core.manual-selection.pending.v1';
-
-registerContract({
-  name: HUMAN_INPUT_PENDING_CONTRACT,
-  schema: outputSchema,
-  summary: 'Manual selection pending response',
-  description: 'Indicates that a workflow is waiting for manual selection input.',
-});
 
 const definition: ComponentDefinition<Input, Output, Params> = {
   id: 'core.manual_action.selection',
@@ -80,10 +123,10 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     maxAttempts: 1,
     nonRetryableErrorTypes: ['ValidationError'],
   } satisfies ComponentRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Pauses workflow execution until a user selects an option. Supports Markdown and dynamic context variables.',
-  metadata: {
+  ui: {
     slug: 'manual-selection',
     version: '1.3.0',
     type: 'process',
@@ -96,27 +139,6 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [],
-    outputs: [
-      {
-        id: 'selection',
-        label: 'Selection',
-        dataType: port.any(),
-        description: 'The selected value(s)',
-      },
-      {
-        id: 'approved',
-        label: 'Approved',
-        dataType: port.boolean(),
-        description: 'True if approved, false if rejected',
-      },
-      {
-        id: 'respondedBy',
-        label: 'Responded By',
-        dataType: port.text(),
-        description: 'The user who resolved this request',
-      }
-    ],
     parameters: [
       {
         id: 'title',
@@ -169,20 +191,39 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     ],
   },
   resolvePorts(params: any) {
-    const inputs: any[] = [];
+    const inputShape: Record<string, z.ZodTypeAny> = {};
     if (params.variables && Array.isArray(params.variables)) {
         for (const v of params.variables) {
             if (!v || !v.name) continue;
-            inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name));
+            const { schema, meta } = mapTypeToSchema(v.type || 'json');
+            inputShape[v.name] = withPortMeta(schema.optional(), {
+              ...(meta ?? {}),
+              label: v.name,
+            });
         }
     }
     
     // Output port for the selection itself
-    const outputs: any[] = [
-        { id: 'selection', label: 'Selection', dataType: params.multiple ? port.list(port.text()) : port.text() },
-        { id: 'approved', label: 'Approved', dataType: port.boolean() },
-        { id: 'respondedBy', label: 'Responded By', dataType: port.text() },
-    ];
+    const outputShape: Record<string, z.ZodTypeAny> = {
+      selection: withPortMeta(
+        params.multiple ? z.array(z.string()) : z.string(),
+        {
+          label: 'Selection',
+          description: 'The selected value(s)',
+          connectionType: params.multiple
+            ? { kind: 'list', element: { kind: 'primitive', name: 'text' } }
+            : { kind: 'primitive', name: 'text' },
+        },
+      ),
+      approved: withPortMeta(z.boolean(), {
+        label: 'Approved',
+        description: 'True if approved, false if rejected',
+      }),
+      respondedBy: withPortMeta(z.string(), {
+        label: 'Responded By',
+        description: 'The user who resolved this request',
+      }),
+    };
 
     // Add dynamic ports for each option
     if (params.options && Array.isArray(params.options)) {
@@ -194,18 +235,16 @@ const definition: ComponentDefinition<Input, Output, Params> = {
                 // We use the value as the ID suffix. 
                 // Note: Values must be safe for port IDs (alphanumeric, -, _)
                 // We might want to sanitize it.
-                outputs.push({
-                    id: `option:${val}`, 
-                    label: `Option: ${label}`,
-                    dataType: port.boolean(),
-                    description: `Active when '${label}' is selected`,
-                    isBranching: true,
+                outputShape[`option:${val}`] = withPortMeta(z.boolean(), {
+                  label: `Option: ${label}`,
+                  description: `Active when '${label}' is selected`,
+                  isBranching: true,
                 });
             }
         }
     }
     
-    return { inputs, outputs };
+    return { inputs: z.object(inputShape), outputs: z.object(outputShape) };
   },
   async execute(params, context) {
     const titleTemplate = params.title || 'Input Required';

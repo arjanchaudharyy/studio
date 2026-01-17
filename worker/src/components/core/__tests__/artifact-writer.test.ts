@@ -16,7 +16,7 @@ describe('core.artifact.writer component', () => {
   it('should be registered with expected metadata', () => {
     expect(component).toBeDefined();
     expect(component?.label).toBe('Artifact Writer');
-    expect(component?.metadata?.slug).toBe('artifact-writer');
+    expect(component?.ui?.slug).toBe('artifact-writer');
   });
 
   it('uploads content to the artifact service when destinations are selected', async () => {
@@ -40,7 +40,7 @@ describe('core.artifact.writer component', () => {
       artifacts: mockArtifacts,
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       fileName: 'run-log.txt',
       content: 'Hello artifacts!',
       mimeType: 'text/plain',
@@ -75,7 +75,7 @@ describe('core.artifact.writer component', () => {
       },
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       fileName: 'noop.txt',
       content: 'No destinations',
       saveToRunArtifacts: false,
@@ -98,7 +98,7 @@ describe('core.artifact.writer component', () => {
       componentRef: 'artifact-writer-3',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       content: 'Need artifacts',
       saveToRunArtifacts: true,
       publishToArtifactLibrary: false,

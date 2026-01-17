@@ -113,7 +113,7 @@ describe('Nuclei Integration Tests', () => {
         rateLimit: 50,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.templateIds).toEqual(['CVE-2024-1234', 'CVE-2024-5678']);
       expect(parsed.targets).toHaveLength(2);
     });
@@ -140,7 +140,7 @@ http:
         customTemplateYaml: validTemplate,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.customTemplateYaml).toBe(validTemplate);
     });
 
@@ -172,7 +172,7 @@ exec:
         customTemplateArchive: zipBase64,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.customTemplateArchive).toBe(zipBase64);
     });
 
@@ -202,7 +202,7 @@ exec:
         templatePaths: ['cves/2024/', 'http/exposures/'],
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.templatePaths).toEqual(['cves/2024/', 'http/exposures/']);
     });
   });
@@ -215,7 +215,7 @@ exec:
         rateLimit: 50, // Low rate
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.rateLimit).toBe(50);
     });
 
@@ -226,7 +226,7 @@ exec:
         concurrency: 5,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.concurrency).toBe(5);
     });
 
@@ -238,7 +238,7 @@ exec:
         retries: 3,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.timeout).toBe(30);
       expect(parsed.retries).toBe(3);
     });
@@ -250,7 +250,7 @@ exec:
         includeRaw: true,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.includeRaw).toBe(true);
     });
 
@@ -261,7 +261,7 @@ exec:
         followRedirects: true,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.followRedirects).toBe(true);
     });
 
@@ -272,7 +272,7 @@ exec:
         updateTemplates: false,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.updateTemplates).toBe(false);
     });
   });
@@ -361,7 +361,7 @@ this is not json
         templateIds: ['CVE-2024-1234'],
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.targets).toHaveLength(3);
     });
 
@@ -376,7 +376,7 @@ this is not json
       };
 
       // Nuclei handles deduplication internally
-      const parsed = nucleiComponent.inputSchema.parse(input);
+      const parsed = nucleiComponent.inputs.parse(input);
       expect(parsed.targets).toHaveLength(3); // Input keeps duplicates
     });
   });
@@ -400,7 +400,7 @@ this is not json
         templateIds: ['CVE-2024-1234'],
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(nucleiInput);
+      const parsed = nucleiComponent.inputs.parse(nucleiInput);
       expect(parsed.targets).toHaveLength(2);
     });
 
@@ -426,7 +426,7 @@ this is not json
         customTemplateArchive: fileLoaderOutput.file.content,
       };
 
-      const parsed = nucleiComponent.inputSchema.parse(nucleiInput);
+      const parsed = nucleiComponent.inputs.parse(nucleiInput);
       expect(parsed.customTemplateArchive).toBeTruthy();
     });
   });

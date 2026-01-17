@@ -2,26 +2,49 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   ValidationError,
   ConfigurationError,
   fromHttpResponse,
   ComponentRetryPolicy,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
-  indicator: z.string().describe('The IP, Domain, File Hash, or URL to inspect.'),
+  indicator: withPortMeta(z.string().describe('The IP, Domain, File Hash, or URL to inspect.'), {
+    label: 'Indicator',
+  }),
   type: z.enum(['ip', 'domain', 'file', 'url']).default('ip').describe('The type of indicator.'),
-  apiKey: z.string().describe('Your VirusTotal API Key.'),
+  apiKey: withPortMeta(z.string().describe('Your VirusTotal API Key.'), {
+    label: 'API Key',
+    editor: 'secret',
+    connectionType: { kind: 'primitive', name: 'secret' },
+  }),
 });
 
 const outputSchema = z.object({
-  malicious: z.number().describe('Number of engines flagging this as malicious.'),
-  suspicious: z.number().describe('Number of engines flagging this as suspicious.'),
-  harmless: z.number().describe('Number of engines flagging this as harmless.'),
-  tags: z.array(z.string()).optional(),
-  reputation: z.number().optional(),
-  full_report: z.record(z.string(), z.any()).describe('The full raw JSON response from VirusTotal.'),
+  malicious: withPortMeta(z.number().describe('Number of engines flagging this as malicious.'), {
+    label: 'Malicious Count',
+  }),
+  suspicious: withPortMeta(z.number().describe('Number of engines flagging this as suspicious.'), {
+    label: 'Suspicious Count',
+  }),
+  harmless: withPortMeta(z.number().describe('Number of engines flagging this as harmless.'), {
+    label: 'Harmless Count',
+  }),
+  tags: withPortMeta(z.array(z.string()).optional(), {
+    label: 'Tags',
+    description: 'Tags returned by VirusTotal for the indicator.',
+  }),
+  reputation: withPortMeta(z.number().optional(), {
+    label: 'Reputation',
+  }),
+  full_report: withPortMeta(
+    z.record(z.string(), z.any()).describe('The full raw JSON response from VirusTotal.'),
+    {
+      label: 'Full Report',
+      connectionType: { kind: 'primitive', name: 'json' },
+    },
+  ),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -46,10 +69,10 @@ const definition: ComponentDefinition<Input, Output> = {
   category: 'security',
   runner: { kind: 'inline' },
   retryPolicy: virusTotalRetryPolicy,
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Check the reputation of an IP, Domain, File Hash, or URL using the VirusTotal v3 API.',
-  metadata: {
+  ui: {
     slug: 'virustotal-lookup',
     version: '1.0.0',
     type: 'scan', 
@@ -59,15 +82,6 @@ const definition: ComponentDefinition<Input, Output> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    inputs: [
-      { id: 'indicator', label: 'Indicator', dataType: port.text(), required: true },
-      { id: 'apiKey', label: 'API Key', dataType: port.secret(), required: true },
-    ],
-    outputs: [
-      { id: 'malicious', label: 'Malicious Count', dataType: port.number() },
-      { id: 'reputation', label: 'Reputation', dataType: port.number() },
-      { id: 'full_report', label: 'Full Report', dataType: port.json() },
-    ],
     parameters: [
        {
         id: 'type',
@@ -82,19 +96,6 @@ const definition: ComponentDefinition<Input, Output> = {
         ],
       },
     ],
-  },
-  resolvePorts(params) {
-      return {
-          inputs: [
-              { id: 'indicator', label: 'Indicator', dataType: port.text(), required: true },
-              { id: 'apiKey', label: 'API Key', dataType: port.secret(), required: true }
-          ],
-          outputs: [
-              { id: 'malicious', label: 'Malicious Count', dataType: port.number() },
-              { id: 'reputation', label: 'Reputation', dataType: port.number() },
-              { id: 'full_report', label: 'Full Report', dataType: port.json() },
-          ]
-      };
   },
   async execute(params, context) {
     const { indicator, type, apiKey } = params;

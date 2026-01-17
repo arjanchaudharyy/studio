@@ -2,9 +2,9 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
   runComponentWithRunner,
   type DockerRunnerConfig,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
@@ -25,10 +25,22 @@ const inputSchema = z.object({
 });
 
 const outputSchema = z.object({
-  message: z.string(),
-  stepsCompleted: z.number(),
-  durationSeconds: z.number(),
-  rawOutput: z.string(),
+  message: withPortMeta(z.string(), {
+    label: 'Message',
+    description: 'Message shown during the demo.',
+  }),
+  stepsCompleted: withPortMeta(z.number(), {
+    label: 'Steps Completed',
+    description: 'Number of progress updates completed.',
+  }),
+  durationSeconds: withPortMeta(z.number(), {
+    label: 'Duration (seconds)',
+    description: 'Total duration of the demo run.',
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Captured terminal output from the demo.',
+  }),
 });
 
 export type TerminalDemoInput = z.infer<typeof inputSchema>;
@@ -117,9 +129,9 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
   label: 'Terminal Stream Demo',
   category: 'security',
   runner,
-  inputSchema,
-  outputSchema,
-  metadata: {
+  inputs: inputSchema,
+  outputs: outputSchema,
+  ui: {
     slug: 'terminal-stream-demo',
     version: '2.1.0',
     type: 'process',
@@ -136,48 +148,6 @@ const definition: ComponentDefinition<TerminalDemoInput, TerminalDemoOutput> = {
     deprecated: false,
     example:
       'Displays a colorful progress bar that updates in real-time, demonstrating PTY terminal streaming with carriage returns and ANSI colors.',
-    inputs: [
-      {
-        id: 'message',
-        label: 'Message',
-        dataType: port.text(),
-        required: false,
-        description: 'Message to display in the terminal demo.',
-      },
-      {
-        id: 'durationSeconds',
-        label: 'Duration (seconds)',
-        dataType: port.number(),
-        required: false,
-        description: 'Total duration of the demo in seconds.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'message',
-        label: 'Message',
-        dataType: port.text(),
-        description: 'The message that was displayed.',
-      },
-      {
-        id: 'stepsCompleted',
-        label: 'Steps Completed',
-        dataType: port.number(),
-        description: 'Number of progress updates that were completed.',
-      },
-      {
-        id: 'durationSeconds',
-        label: 'Duration (seconds)',
-        dataType: port.number(),
-        description: 'Total duration of the demo in seconds.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Captured terminal stream output.',
-      },
-    ],
     examples: ['Run this component to see a live progress bar in the terminal viewer.'],
     parameters: [
       {

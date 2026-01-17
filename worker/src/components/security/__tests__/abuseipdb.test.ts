@@ -41,8 +41,8 @@ describe('abuseipdb component', () => {
   it('should have parameters defined in metadata', () => {
     const component = componentRegistry.get('security.abuseipdb.check');
     expect(component).toBeDefined();
-    expect(component!.metadata?.parameters).toBeDefined();
-    expect(component!.metadata?.parameters).toHaveLength(2);
+    expect(component!.ui?.parameters).toBeDefined();
+    expect(component!.ui?.parameters).toHaveLength(2);
   });
 
   it('should execute successfully with valid input', async () => {

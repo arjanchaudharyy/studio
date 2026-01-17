@@ -1,5 +1,12 @@
 import { z } from 'zod'
-import { componentRegistry, port, type ComponentDefinition } from '@shipsec/component-sdk'
+import {
+  componentRegistry,
+  type ComponentDefinition,
+  withPortMeta,
+  coerceBooleanFromText,
+  coerceNumberFromText,
+} from '@shipsec/component-sdk'
+import type { PortMeta } from '@shipsec/component-sdk/port-meta'
 
 const runtimeInputDefinitionSchema = z
   .object({
@@ -24,8 +31,15 @@ const inputSchema = z
 type Input = z.infer<typeof inputSchema>
 
 const outputSchema = z.object({
-  result: z.record(z.string(), z.unknown()),
-  childRunId: z.string(),
+  result: withPortMeta(z.record(z.string(), z.unknown()), {
+    label: 'Result',
+    allowAny: true,
+    reason: 'Child workflows can return any shape.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  childRunId: withPortMeta(z.string(), {
+    label: 'Child Run ID',
+  }),
 })
 
 type Output = z.infer<typeof outputSchema>
@@ -35,10 +49,10 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'Call Workflow',
   category: 'transform',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Execute another workflow synchronously and use its outputs.',
-  metadata: {
+  ui: {
     slug: 'workflow-call',
     version: '1.0.0',
     type: 'process',
@@ -48,19 +62,6 @@ const definition: ComponentDefinition<Input, Output> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    inputs: [],
-    outputs: [
-      {
-        id: 'result',
-        label: 'Result',
-        dataType: port.json(),
-      },
-      {
-        id: 'childRunId',
-        label: 'Child Run ID',
-        dataType: port.text(),
-      },
-    ],
     parameters: [
       {
         id: 'workflowId',
@@ -97,6 +98,14 @@ const definition: ComponentDefinition<Input, Output> = {
         default: 300,
         min: 1,
       },
+      {
+        id: 'childRuntimeInputs',
+        label: 'Child Runtime Inputs',
+        type: 'json',
+        required: false,
+        description: 'Internal configuration for child runtime input definitions.',
+        visibleWhen: { __internal: true },
+      },
     ],
     examples: [
       'Use a reusable enrichment workflow inside a larger pipeline.',
@@ -114,30 +123,28 @@ const definition: ComponentDefinition<Input, Output> = {
       'childWorkflowName',
     ])
 
-    const dynamicInputs = childRuntimeInputs
-      .map((runtimeInput) => {
-        const id = runtimeInput.id.trim()
-        if (!id || reservedIds.has(id)) {
-          return null
-        }
+    const inputShape: Record<string, z.ZodTypeAny> = {}
+    for (const runtimeInput of childRuntimeInputs) {
+      const id = runtimeInput.id.trim()
+      if (!id || reservedIds.has(id)) {
+        continue
+      }
 
-        const label = runtimeInput.label?.trim() || id
-        const runtimeType = (runtimeInput.type ?? 'text').toLowerCase()
-        const portType = runtimeInputTypeToPort(runtimeType)
-
-        return {
-          id,
-          label,
-          required: runtimeInput.required ?? true,
-          description: runtimeInput.description,
-          dataType: portType,
-        }
+      const label = runtimeInput.label?.trim() || id
+      const runtimeType = (runtimeInput.type ?? 'text').toLowerCase()
+      const required = runtimeInput.required ?? true
+      const { schema, meta } = runtimeInputTypeToSchema(runtimeType)
+      const schemaWithRequirement = required ? schema : schema.optional()
+      inputShape[id] = withPortMeta(schemaWithRequirement, {
+        ...(meta ?? {}),
+        label,
+        description: runtimeInput.description,
       })
-      .filter((value): value is NonNullable<typeof value> => value !== null)
+    }
 
     return {
-      inputs: dynamicInputs,
-      outputs: definition.metadata?.outputs ?? [],
+      inputs: z.object(inputShape),
+      outputs: outputSchema,
     }
   },
   async execute() {
@@ -149,22 +156,39 @@ const definition: ComponentDefinition<Input, Output> = {
 
 componentRegistry.register(definition)
 
-function runtimeInputTypeToPort(type: string) {
+function runtimeInputTypeToSchema(type: string): { schema: z.ZodTypeAny; meta?: PortMeta } {
   switch (type) {
     case 'string':
     case 'text':
-      return port.text()
+      return { schema: z.string() }
     case 'number':
-      return port.number({ coerceFrom: ['text'] })
+      return { schema: coerceNumberFromText() }
     case 'boolean':
-      return port.boolean({ coerceFrom: ['text'] })
+      return { schema: coerceBooleanFromText() }
     case 'file':
-      return port.file()
+      return {
+        schema: z.string(),
+        meta: { connectionType: { kind: 'primitive', name: 'file' } },
+      }
     case 'json':
-      return port.json()
+      return {
+        schema: z.unknown(),
+        meta: {
+          allowAny: true,
+          reason: 'Child workflow runtime inputs can be arbitrary JSON.',
+          connectionType: { kind: 'primitive', name: 'json' },
+        },
+      }
     case 'array':
-      return port.list(port.text())
+      return { schema: z.array(z.string()) }
     default:
-      return port.any()
+      return {
+        schema: z.unknown(),
+        meta: {
+          allowAny: true,
+          reason: 'Child workflow runtime inputs can be arbitrary JSON.',
+          connectionType: { kind: 'any' },
+        },
+      }
   }
 }

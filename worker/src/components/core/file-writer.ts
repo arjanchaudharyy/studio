@@ -1,10 +1,12 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, port, ValidationError } from '@shipsec/component-sdk';
 import {
-  DestinationConfigSchema,
-  type DestinationConfig,
-  ArtifactRemoteUploadSchema,
-} from '@shipsec/shared';
+  componentRegistry,
+  ComponentDefinition,
+  ValidationError,
+  withPortMeta,
+} from '@shipsec/component-sdk';
+import { destinationWriterSchema } from '@shipsec/contracts';
+import { type DestinationConfig, ArtifactRemoteUploadSchema } from '@shipsec/shared';
 import { createDestinationAdapter, type DestinationSaveInput } from '../../destinations';
 
 const contentFormatSchema = z.enum(['text', 'json', 'base64']);
@@ -15,10 +17,18 @@ const inputSchema = z.object({
     .min(1, 'File name is required')
     .default('output.txt')
     .describe('Name to use when persisting the generated file.'),
-  content: z
-    .any()
-    .optional()
-    .describe('Payload to store. Accepts strings, JSON objects, arrays, or base64 text.'),
+  content: withPortMeta(
+    z.any()
+      .optional()
+      .describe('Payload to store. Accepts strings, JSON objects, arrays, or base64 text.'),
+    {
+      label: 'Payload',
+      description:
+        'Payload to persist. Accepts strings, JSON data, buffers, or base64 text from upstream components.',
+      allowAny: true,
+      reason: 'File Writer accepts arbitrary payloads and serializes based on contentFormat.',
+    },
+  ),
   contentFormat: contentFormatSchema
     .default('text')
     .describe('Controls how the input payload is interpreted before writing.'),
@@ -30,21 +40,47 @@ const inputSchema = z.object({
     .record(z.string(), z.unknown())
     .optional()
     .describe('Optional metadata to attach to the artifact record.'),
-  destination: DestinationConfigSchema.describe(
-    'Destination adapter configuration produced by a destination component.',
+  destination: withPortMeta(
+    destinationWriterSchema(),
+    {
+      label: 'Destination',
+      description: 'Connect a destination provider to decide where the file should be stored.',
+    },
   ),
 });
 
 type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.object({
-  artifactId: z.string().optional(),
-  fileName: z.string(),
-  mimeType: z.string(),
-  size: z.number().nonnegative(),
-  destinations: z.array(z.enum(['run', 'library'])).default([]),
-  remoteUploads: z.array(ArtifactRemoteUploadSchema).optional(),
-  savedToArtifactLibrary: z.boolean(),
+  artifactId: withPortMeta(z.string().optional(), {
+    label: 'Artifact ID',
+    description: 'Artifact identifier returned when saving locally.',
+  }),
+  fileName: withPortMeta(z.string(), {
+    label: 'File Name',
+    description: 'Name of the file written to storage.',
+  }),
+  mimeType: withPortMeta(z.string(), {
+    label: 'MIME Type',
+    description: 'Detected or provided MIME type for the stored file.',
+  }),
+  size: withPortMeta(z.number().nonnegative(), {
+    label: 'Size',
+    description: 'Size of the stored payload in bytes.',
+  }),
+  destinations: withPortMeta(z.array(z.enum(['run', 'library'])).default([]), {
+    label: 'Destinations',
+    description: 'Destinations the file was written to.',
+  }),
+  remoteUploads: withPortMeta(z.array(ArtifactRemoteUploadSchema).optional(), {
+    label: 'Remote Uploads',
+    description: 'Remote upload responses returned by destination adapters.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  savedToArtifactLibrary: withPortMeta(z.boolean(), {
+    label: 'Saved To Library',
+    description: 'Indicates whether the file was stored in the artifact library.',
+  }),
 });
 
 type Output = z.infer<typeof outputSchema>;
@@ -89,11 +125,11 @@ const definition: ComponentDefinition<Input, Output> = {
   label: 'File Writer',
   category: 'output',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs:
     'Persists structured or binary output to the Artifact Library and/or S3. Use it to promote scanner reports, JSON payloads, or logs into durable storage.',
-  metadata: {
+  ui: {
     slug: 'file-writer',
     version: '1.0.0',
     type: 'process',
@@ -104,30 +140,6 @@ const definition: ComponentDefinition<Input, Output> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    inputs: [
-      {
-        id: 'content',
-        label: 'Payload',
-        dataType: port.any(),
-        description:
-          'Payload to persist. Accepts strings, JSON data, buffers, or base64 text from upstream components.',
-      },
-      {
-        id: 'destination',
-        label: 'Destination',
-        dataType: port.contract('destination.writer'),
-        required: true,
-        description: 'Connect a destination provider to decide where the file should be stored.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'artifactId',
-        label: 'Artifact ID',
-        dataType: port.text(),
-        description: 'Artifact identifier returned when saving locally.',
-      },
-    ],
     parameters: [
       {
         id: 'fileName',

@@ -23,7 +23,7 @@ describe('naabu component', () => {
     const component = componentRegistry.get<NaabuInput, NaabuOutput>('shipsec.naabu.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       targets: ['scanme.sh'],
     });
 
@@ -40,7 +40,7 @@ describe('naabu component', () => {
       componentRef: 'naabu-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       targets: ['scanme.sh'],
       ports: '80,443',
       enablePing: true,
@@ -74,7 +74,7 @@ describe('naabu component', () => {
       componentRef: 'naabu-test',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       targets: ['scanme.sh'],
     });
 

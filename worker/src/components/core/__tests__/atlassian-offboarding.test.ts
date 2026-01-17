@@ -94,7 +94,7 @@ describe('atlassian offboarding component', () => {
       componentRef: 'atlassian-offboarding-success',
     });
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       orgId,
       accessToken: 'direct-token',
       emailUsernames: ' Alice@example.com , alias@example.com\nBOB ',
@@ -133,7 +133,7 @@ describe('atlassian offboarding component', () => {
   it('rejects inputs that omit accessToken', () => {
     const component = getComponent();
     expect(() =>
-      component.inputSchema.parse({
+      component.inputs.parse({
         orgId: 'org-123',
         emailUsernames: ['alice'],
       }),
@@ -142,7 +142,7 @@ describe('atlassian offboarding component', () => {
 
   it('throws when provided access token trims to an empty string', async () => {
     const component = getComponent();
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       orgId: 'org-123',
       emailUsernames: ['alice'],
       accessToken: '   ',
@@ -160,7 +160,7 @@ describe('atlassian offboarding component', () => {
 
   it('throws when no valid usernames remain after trimming', async () => {
     const component = getComponent();
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['   ', '\n'],
@@ -185,7 +185,7 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['alice'],
@@ -214,7 +214,7 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['alice'],
@@ -240,7 +240,7 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['alice'],
@@ -265,7 +265,7 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['missing-user'],
@@ -312,7 +312,7 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['err-user'],
@@ -347,7 +347,7 @@ describe('atlassian offboarding component', () => {
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const params = component.inputSchema.parse({
+    const params = component.inputs.parse({
       orgId: 'org-123',
       accessToken: 'token',
       emailUsernames: ['network'],

@@ -2,8 +2,8 @@ import { z } from 'zod';
 import {
   componentRegistry,
   ComponentDefinition,
-  port,
-  registerContract,
+  withPortMeta,
+  type PortMeta,
 } from '@shipsec/component-sdk';
 
 /**
@@ -49,37 +49,52 @@ function interpolate(template: string, vars: Record<string, any>): string {
   });
 }
 
-const mapTypeToPort = (type: string, id: string, label: string) => {
+const mapTypeToSchema = (
+  type: string,
+): { schema: z.ZodTypeAny; meta?: PortMeta } => {
   switch (type) {
     case 'string':
-    case 'textarea': return { id, label, dataType: port.text(), required: false };
-    case 'number': return { id, label, dataType: port.number(), required: false };
-    case 'boolean': return { id, label, dataType: port.boolean(), required: false };
-    case 'secret': return { id, label, dataType: port.secret(), required: false };
-    case 'list': return { id, label, dataType: port.list(port.text()), required: false };
-    case 'enum': return { id, label, dataType: port.text(), required: false };
-    default: return { id, label, dataType: port.any(), required: false };
+    case 'textarea':
+      return { schema: z.string() };
+    case 'number':
+      return { schema: z.number() };
+    case 'boolean':
+      return { schema: z.boolean() };
+    case 'secret':
+      return {
+        schema: z.unknown(),
+        meta: {
+          editor: 'secret',
+          allowAny: true,
+          reason: 'Manual form fields can include secrets.',
+          connectionType: { kind: 'primitive', name: 'secret' } as const,
+        },
+      };
+    case 'list':
+      return { schema: z.array(z.string()) };
+    case 'enum':
+      return { schema: z.string() };
+    default:
+      return {
+        schema: z.unknown(),
+        meta: {
+          allowAny: true,
+          reason: 'Manual form fields can return arbitrary JSON values.',
+          connectionType: { kind: 'primitive', name: 'json' } as const,
+        },
+      };
   }
 };
-
-const HUMAN_FORM_PENDING_CONTRACT = 'core.manual-form.pending.v1';
-
-registerContract({
-  name: HUMAN_FORM_PENDING_CONTRACT,
-  schema: outputSchema,
-  summary: 'Manual form pending response',
-  description: 'Indicates that a workflow is waiting for manual form input.',
-});
 
 const definition: ComponentDefinition<Input, Output, Params> = {
   id: 'core.manual_action.form',
   label: 'Manual Form',
   category: 'manual_action',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Pauses workflow execution until a user fills out a form. Supports Markdown and dynamic context variables.',
-  metadata: {
+  ui: {
     slug: 'manual-form',
     version: '1.3.0',
     type: 'process',
@@ -92,8 +107,6 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     },
     isLatest: true,
     deprecated: false,
-    inputs: [],
-    outputs: [], // Dynamic outputs in resolvePorts
     parameters: [
       {
         id: 'title',
@@ -138,28 +151,40 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     ],
   },
   resolvePorts(params: any) {
-    const inputs: any[] = [];
+    const inputShape: Record<string, z.ZodTypeAny> = {};
     if (params.variables && Array.isArray(params.variables)) {
         for (const v of params.variables) {
             if (!v || !v.name) continue;
-            inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name));
+            const { schema, meta } = mapTypeToSchema(v.type || 'json');
+            inputShape[v.name] = withPortMeta(schema.optional(), {
+              ...(meta ?? {}),
+              label: v.name,
+            });
         }
     }
 
-    const outputs: any[] = [
-        { id: 'approved', label: 'Approved', dataType: port.boolean() },
-        { id: 'respondedBy', label: 'Responded By', dataType: port.text() },
-    ];
+    const outputShape: Record<string, z.ZodTypeAny> = {
+      approved: withPortMeta(z.boolean(), {
+        label: 'Approved',
+      }),
+      respondedBy: withPortMeta(z.string(), {
+        label: 'Responded By',
+      }),
+    };
 
     // parse schema to get output ports
     if (Array.isArray(params.schema)) {
         for (const field of params.schema) {
             if (!field.id) continue;
-            outputs.push(mapTypeToPort(field.type || 'string', field.id, field.label || field.id));
+            const { schema, meta } = mapTypeToSchema(field.type || 'string');
+            outputShape[field.id] = withPortMeta(schema, {
+              ...(meta ?? {}),
+              label: field.label || field.id,
+            });
         }
     }
 
-    return { inputs, outputs };
+    return { inputs: z.object(inputShape), outputs: z.object(outputShape) };
   },
   async execute(params, context) {
     const titleTemplate = params.title || 'Form Input Required';

@@ -3,16 +3,23 @@ import {
   componentRegistry,
   ComponentDefinition,
   ComponentRetryPolicy,
-  port,
   runComponentWithRunner,
   ServiceError,
+  withPortMeta,
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
 const inputSchema = z.object({
-  targets: z
-    .array(z.string().min(1, 'Target cannot be empty'))
-    .describe('Hostnames or URLs to probe for HTTP services'),
+  targets: withPortMeta(
+    z
+      .array(z.string().min(1, 'Target cannot be empty'))
+      .describe('Hostnames or URLs to probe for HTTP services'),
+    {
+      label: 'Targets',
+      description: 'Hostnames or URLs to probe for HTTP services.',
+      connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+    },
+  ),
   followRedirects: z
     .boolean()
     .optional()
@@ -79,11 +86,24 @@ const findingSchema = z.object({
 type Finding = z.infer<typeof findingSchema>;
 
 const outputSchema = z.object({
-  results: z.array(findingSchema),
-  rawOutput: z.string(),
-  targetCount: z.number(),
-  resultCount: z.number(),
-  options: z.object({
+  results: withPortMeta(z.array(findingSchema), {
+    label: 'HTTP Responses',
+    description: 'Structured metadata for each responsive endpoint.',
+    connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+  }),
+  rawOutput: withPortMeta(z.string(), {
+    label: 'Raw Output',
+    description: 'Raw httpx JSON lines for downstream processing.',
+  }),
+  targetCount: withPortMeta(z.number(), {
+    label: 'Target Count',
+    description: 'Number of targets scanned.',
+  }),
+  resultCount: withPortMeta(z.number(), {
+    label: 'Result Count',
+    description: 'Number of responsive endpoints returned.',
+  }),
+  options: withPortMeta(z.object({
     followRedirects: z.boolean(),
     tlsProbe: z.boolean(),
     preferHttps: z.boolean(),
@@ -91,6 +111,10 @@ const outputSchema = z.object({
     statusCodes: z.string().nullable(),
     threads: z.number().nullable(),
     path: z.string().nullable(),
+  }), {
+    label: 'Options',
+    description: 'Effective httpx options applied during the run.',
+    connectionType: { kind: 'primitive', name: 'json' },
   }),
 });
 
@@ -127,8 +151,8 @@ const definition: ComponentDefinition<Input, Output> = {
       HOME: '/root',
     },
   },
-  inputSchema,
-  outputSchema,
+  inputs: inputSchema,
+  outputs: outputSchema,
   docs: 'Run ProjectDiscovery httpx to probe hosts for live HTTP services, capturing metadata like status codes and titles.',
   retryPolicy: {
     maxAttempts: 2,
@@ -137,7 +161,7 @@ const definition: ComponentDefinition<Input, Output> = {
     backoffCoefficient: 2,
     nonRetryableErrorTypes: ['ValidationError', 'ConfigurationError'],
   } satisfies ComponentRetryPolicy,
-  metadata: {
+  ui: {
     slug: 'httpx',
     version: '1.0.0',
     type: 'scan',
@@ -153,29 +177,6 @@ const definition: ComponentDefinition<Input, Output> = {
     isLatest: true,
     deprecated: false,
     example: '`httpx -l targets.txt -json -status-code 200,301` - Probe discovered hosts and capture responsive endpoints with matching status codes.',
-    inputs: [
-      {
-        id: 'targets',
-        label: 'Targets',
-        dataType: port.list(port.text()),
-        required: true,
-        description: 'Hostnames or URLs to probe for HTTP services.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'results',
-        label: 'HTTP Responses',
-        dataType: port.list(port.json()),
-        description: 'Structured metadata for each responsive endpoint.',
-      },
-      {
-        id: 'rawOutput',
-        label: 'Raw Output',
-        dataType: port.text(),
-        description: 'Raw httpx JSON lines for downstream processing.',
-      },
-    ],
     examples: [
       'Validate Subfinder or Amass discoveries by probing for live web services.',
       'Filter Naabu results to identify hosts exposing HTTP/S services on uncommon ports.',
