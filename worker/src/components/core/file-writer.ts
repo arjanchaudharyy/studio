@@ -1,9 +1,13 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ValidationError,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import { destinationWriterSchema } from '@shipsec/contracts';
 import { type DestinationConfig, ArtifactRemoteUploadSchema } from '@shipsec/shared';
@@ -11,13 +15,8 @@ import { createDestinationAdapter, type DestinationSaveInput } from '../../desti
 
 const contentFormatSchema = z.enum(['text', 'json', 'base64']);
 
-const inputSchema = z.object({
-  fileName: z
-    .string()
-    .min(1, 'File name is required')
-    .default('output.txt')
-    .describe('Name to use when persisting the generated file.'),
-  content: withPortMeta(
+const inputSchema = inputs({
+  content: port(
     z.any()
       .optional()
       .describe('Payload to store. Accepts strings, JSON objects, arrays, or base64 text.'),
@@ -27,57 +26,94 @@ const inputSchema = z.object({
         'Payload to persist. Accepts strings, JSON data, buffers, or base64 text from upstream components.',
       allowAny: true,
       reason: 'File Writer accepts arbitrary payloads and serializes based on contentFormat.',
+      editor: 'textarea',
     },
   ),
-  contentFormat: contentFormatSchema
-    .default('text')
-    .describe('Controls how the input payload is interpreted before writing.'),
-  mimeType: z
-    .string()
-    .default('text/plain')
-    .describe('MIME type for the stored file.'),
-  metadata: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe('Optional metadata to attach to the artifact record.'),
-  destination: withPortMeta(
-    destinationWriterSchema(),
+  destination: port(destinationWriterSchema(), {
+    label: 'Destination',
+    description: 'Connect a destination provider to decide where the file should be stored.',
+  }),
+});
+
+const parameterSchema = parameters({
+  fileName: param(
+    z
+      .string()
+      .min(1, 'File name is required')
+      .default('output.txt')
+      .describe('Name to use when persisting the generated file.'),
     {
-      label: 'Destination',
-      description: 'Connect a destination provider to decide where the file should be stored.',
+      label: 'File Name',
+      editor: 'text',
+      description: 'Name for the generated artifact.',
+    },
+  ),
+  mimeType: param(
+    z.string().default('text/plain').describe('MIME type for the stored file.'),
+    {
+      label: 'MIME Type',
+      editor: 'text',
+      description: 'Content MIME type (text/plain, application/json, etc).',
+    },
+  ),
+  contentFormat: param(
+    contentFormatSchema
+      .default('text')
+      .describe('Controls how the input payload is interpreted before writing.'),
+    {
+      label: 'Content Format',
+      editor: 'select',
+      options: [
+        { label: 'Text', value: 'text' },
+        { label: 'JSON', value: 'json' },
+        { label: 'Base64', value: 'base64' },
+      ],
+      description: 'How to interpret the payload before writing.',
+    },
+  ),
+  metadata: param(
+    z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe('Optional metadata to attach to the artifact record.'),
+    {
+      label: 'Artifact Metadata',
+      editor: 'json',
+      description: 'Custom metadata stored with the artifact record.',
     },
   ),
 });
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
-const outputSchema = z.object({
-  artifactId: withPortMeta(z.string().optional(), {
+const outputSchema = outputs({
+  artifactId: port(z.string().optional(), {
     label: 'Artifact ID',
     description: 'Artifact identifier returned when saving locally.',
   }),
-  fileName: withPortMeta(z.string(), {
+  fileName: port(z.string(), {
     label: 'File Name',
     description: 'Name of the file written to storage.',
   }),
-  mimeType: withPortMeta(z.string(), {
+  mimeType: port(z.string(), {
     label: 'MIME Type',
     description: 'Detected or provided MIME type for the stored file.',
   }),
-  size: withPortMeta(z.number().nonnegative(), {
+  size: port(z.number().nonnegative(), {
     label: 'Size',
     description: 'Size of the stored payload in bytes.',
   }),
-  destinations: withPortMeta(z.array(z.enum(['run', 'library'])).default([]), {
+  destinations: port(z.array(z.enum(['run', 'library'])).default([]), {
     label: 'Destinations',
     description: 'Destinations the file was written to.',
   }),
-  remoteUploads: withPortMeta(z.array(ArtifactRemoteUploadSchema).optional(), {
+  remoteUploads: port(z.array(ArtifactRemoteUploadSchema).optional(), {
     label: 'Remote Uploads',
     description: 'Remote upload responses returned by destination adapters.',
     connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
   }),
-  savedToArtifactLibrary: withPortMeta(z.boolean(), {
+  savedToArtifactLibrary: port(z.boolean(), {
     label: 'Saved To Library',
     description: 'Indicates whether the file was stored in the artifact library.',
   }),
@@ -85,7 +121,7 @@ const outputSchema = z.object({
 
 type Output = z.infer<typeof outputSchema>;
 
-function buildBufferFromContent(content: unknown, format: Input['contentFormat']): Buffer {
+function buildBufferFromContent(content: unknown, format: Params['contentFormat']): Buffer {
   if (format === 'base64') {
     if (typeof content !== 'string') {
       throw new ValidationError('Base64 content must be provided as a string.', {
@@ -120,13 +156,14 @@ function buildBufferFromContent(content: unknown, format: Input['contentFormat']
   );
 }
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.file.writer',
   label: 'File Writer',
   category: 'output',
   runner: { kind: 'inline' },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs:
     'Persists structured or binary output to the Artifact Library and/or S3. Use it to promote scanner reports, JSON payloads, or logs into durable storage.',
   ui: {
@@ -140,55 +177,15 @@ const definition: ComponentDefinition<Input, Output> = {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    parameters: [
-      {
-        id: 'fileName',
-        label: 'File Name',
-        type: 'text',
-        default: 'output.txt',
-        description: 'Name for the generated artifact.',
-      },
-      {
-        id: 'mimeType',
-        label: 'MIME Type',
-        type: 'text',
-        default: 'text/plain',
-        description: 'Content MIME type (text/plain, application/json, etc).',
-      },
-      {
-        id: 'content',
-        label: 'Content',
-        type: 'textarea',
-        description: 'Manual payload fallback. Connections override this value.',
-      },
-      {
-        id: 'contentFormat',
-        label: 'Content Format',
-        type: 'select',
-        default: 'text',
-        options: [
-          { label: 'Text', value: 'text' },
-          { label: 'JSON', value: 'json' },
-          { label: 'Base64', value: 'base64' },
-        ],
-        description: 'How to interpret the payload before writing.',
-      },
-      {
-        id: 'metadata',
-        label: 'Artifact Metadata',
-        type: 'json',
-        description: 'Custom metadata stored with the artifact record.',
-      },
-    ],
   },
-  async execute(params, context) {
-    if (params.content === undefined || params.content === null) {
-      throw new ValidationError('No content provided. Connect an upstream node or set the Content parameter.', {
+  async execute({ inputs, params }, context) {
+    if (inputs.content === undefined || inputs.content === null) {
+      throw new ValidationError('No content provided. Connect an upstream node or set the Content input.', {
         fieldErrors: { content: ['Content is required'] },
       });
     }
 
-    const buffer = buildBufferFromContent(params.content, params.contentFormat);
+    const buffer = buildBufferFromContent(inputs.content, params.contentFormat);
 
     if (buffer.byteLength === 0) {
       context.logger.info('[FileWriter] Payload is empty; writing zero-byte file.');
@@ -205,7 +202,7 @@ const definition: ComponentDefinition<Input, Output> = {
       metadata: params.metadata,
     };
 
-    const adapter = createDestinationAdapter(params.destination as DestinationConfig);
+    const adapter = createDestinationAdapter(inputs.destination as DestinationConfig);
     const saveResult = await adapter.save(saveInput, context);
 
     const destinations = saveResult.destinations ?? [];

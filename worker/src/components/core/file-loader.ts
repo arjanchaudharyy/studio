@@ -1,22 +1,21 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
+  defineComponent,
   ConfigurationError,
   ComponentRetryPolicy,
-  withPortMeta,
+  inputs,
+  outputs,
+  port,
 } from '@shipsec/component-sdk';
 import { fileContractSchema } from '@shipsec/contracts';
 
-const inputSchema = z.object({
-  fileId: withPortMeta(
-    z.string().uuid().describe('File ID from uploaded files'),
-    {
-      label: 'File ID',
-      description: 'File ID from uploaded file (typically from Entry Point runtime input).',
-      connectionType: { kind: 'primitive', name: 'file' },
-    },
-  ),
+const inputSchema = inputs({
+  fileId: port(z.string().uuid().describe('File ID from uploaded files'), {
+    label: 'File ID',
+    description: 'File ID from uploaded file (typically from Entry Point runtime input).',
+    connectionType: { kind: 'primitive', name: 'file' },
+  }),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -32,21 +31,15 @@ type Output = {
   textContent: string; // decoded text content
 };
 
-const outputSchema = z.object({
-  file: withPortMeta(
-    fileContractSchema(),
-    {
-      label: 'File Data',
-      description: 'Complete file metadata and base64 encoded content.',
-    },
-  ),
-  textContent: withPortMeta(
-    z.string(),
-    {
-      label: 'Text Content',
-      description: 'Decoded text content of the file (UTF-8).',
-    },
-  ),
+const outputSchema = outputs({
+  file: port(fileContractSchema(), {
+    label: 'File Data',
+    description: 'Complete file metadata and base64 encoded content.',
+  }),
+  textContent: port(z.string(), {
+    label: 'Text Content',
+    description: 'Decoded text content of the file (UTF-8).',
+  }),
 });
 
 // Retry policy for file operations - quick retries for transient I/O issues
@@ -62,7 +55,7 @@ const fileLoaderRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.file.loader',
   label: 'File Loader',
   category: 'input',
@@ -88,10 +81,9 @@ const definition: ComponentDefinition<Input, Output> = {
       'Load a scope text file before passing content into Text Splitter or scanners.',
       'Fetch uploaded configuration archives to hand off to downstream components.',
     ],
-    parameters: [],
   },
-  async execute(params, context) {
-    context.logger.info(`[FileLoader] Loading file with ID: ${params.fileId}`);
+  async execute({ inputs }, context) {
+    context.logger.info(`[FileLoader] Loading file with ID: ${inputs.fileId}`);
 
     // Use storage interface (not concrete implementation!)
     const storage = context.storage;
@@ -106,7 +98,7 @@ const definition: ComponentDefinition<Input, Output> = {
     context.emitProgress('Fetching file from storage...');
 
     // Download file using interface
-    const { buffer, metadata } = await storage.downloadFile(params.fileId);
+    const { buffer, metadata } = await storage.downloadFile(inputs.fileId);
 
     context.logger.info(
       `[FileLoader] Loaded file: ${metadata.fileName} (${metadata.size} bytes, ${metadata.mimeType})`,

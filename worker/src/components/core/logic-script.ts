@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   ContainerError,
   runComponentWithRunner,
   type DockerRunnerConfig,
@@ -9,6 +8,11 @@ import {
   withPortMeta,
   coerceBooleanFromText,
   coerceNumberFromText,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  param,
 } from '@shipsec/component-sdk';
 
 const variableConfigSchema = z.object({
@@ -27,18 +31,35 @@ const variableConfigSchema = z.object({
   ]).default('json'),
 });
 
-const parameterSchema = z.object({
-  code: z.string().default(`function script(input: Input): Output {
+const parameterSchema = parameters({
+  code: param(
+    z.string().default(`function script(input: Input): Output {
   // Your logic here
   return {};
 }`),
-  variables: z.array(variableConfigSchema).optional().default([]),
-  returns: z.array(variableConfigSchema).optional().default([]),
+    {
+      label: 'Script Code',
+      editor: 'textarea',
+      rows: 15,
+      description: 'Define a function named `script`. Supports async/await and fetch().',
+    },
+  ),
+  variables: param(z.array(variableConfigSchema).optional().default([]), {
+    label: 'Input Variables',
+    editor: 'variable-list',
+    description: 'Define input variables that will be available in your script.',
+  }),
+  returns: param(z.array(variableConfigSchema).optional().default([]), {
+    label: 'Output Variables',
+    editor: 'variable-list',
+    description: 'Define output variables your script should return.',
+  }),
 });
 
-const inputSchema = parameterSchema.passthrough();
+const inputSchema = inputs({});
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 type Output = Record<string, unknown>;
 
 const mapTypeToSchema = (type: string, label: string) => {
@@ -181,14 +202,14 @@ const baseRunner: DockerRunnerConfig = {
   stdinJson: false, // Inputs are passed via mounted file now
 };
 
-
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.logic.script',
   label: 'Script / Logic',
   category: 'transform',
   runner: baseRunner,
   inputs: inputSchema,
-  outputs: z.record(z.string(), z.unknown()),
+  outputs: outputs({}),
+  parameters: parameterSchema,
   docs: 'Execute custom TypeScript code in a secure Docker container. Supports fetch(), async/await, and modern JS.',
   ui: {
     slug: 'logic-script',
@@ -200,33 +221,8 @@ const definition: ComponentDefinition<Input, Output> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    parameters: [
-      {
-        id: 'variables',
-        label: 'Input Variables',
-        type: 'variable-list',
-        default: [],
-        description: 'Define input variables that will be available in your script.',
-      },
-      {
-        id: 'returns',
-        label: 'Output Variables',
-        type: 'variable-list',
-        default: [],
-        description: 'Define output variables your script should return.',
-      },
-      {
-        id: 'code',
-        label: 'Script Code',
-        type: 'textarea',
-        rows: 15,
-        default: 'export async function script(input: Input): Promise<Output> {\\n  // Your logic here\\n  return {};\\n}',
-        description: 'Define a function named `script`. Supports async/await and fetch().',
-        required: true,
-      },
-    ],
   },
-  resolvePorts(params: any) {
+  resolvePorts(params: Params) {
     const inputShape: Record<string, z.ZodTypeAny> = {};
     const outputShape: Record<string, z.ZodTypeAny> = {};
     if (Array.isArray(params.variables)) {
@@ -242,18 +238,18 @@ const definition: ComponentDefinition<Input, Output> = {
       });
     }
     return {
-      inputs: z.object(inputShape),
-      outputs: z.object(outputShape),
+      inputs: inputs(inputShape),
+      outputs: outputs(outputShape),
     };
   },
-  async execute(params, context) {
+  async execute({ inputs, params }, context) {
     const { code, variables = [], returns = [] } = params;
 
     // 1. Prepare Inputs from connected ports (keep for logging purposes)
     const inputValues: Record<string, any> = {};
     variables.forEach((v) => {
-      if (v.name && params[v.name] !== undefined) {
-        inputValues[v.name] = params[v.name];
+      if (v.name && inputs[v.name] !== undefined) {
+        inputValues[v.name] = inputs[v.name];
       }
     });
 
@@ -290,21 +286,17 @@ const definition: ComponentDefinition<Input, Output> = {
     });
 
     // 5. Execute using the Docker runner
-    // We pass enriched params containing the processed code to runComponentWithRunner
+    // We pass enriched payload containing the processed code to runComponentWithRunner
     // They will be written to the mounted input.json file in the container
-    const runnerParams = {
-      ...params,
-      code: processedUserCode,
-    };
-
-    const result = await runComponentWithRunner<typeof runnerParams, Record<string, unknown>>(
+    const runnerPayload = { ...params, ...inputs, code: processedUserCode } as Record<string, unknown>;
+    const result = await runComponentWithRunner<typeof runnerPayload, Record<string, unknown>>(
       runnerConfig,
       async () => {
         throw new ContainerError('Docker runner should handle this execution', {
           details: { reason: 'fallback_triggered' },
         });
       },
-      runnerParams,
+      runnerPayload,
       context,
     );
 
@@ -329,7 +321,7 @@ const definition: ComponentDefinition<Input, Output> = {
 
     return finalOutput;
   },
-};
+});
 
 componentRegistry.register(definition);
 

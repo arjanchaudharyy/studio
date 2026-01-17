@@ -1,35 +1,61 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  type ComponentDefinition,
   ConfigurationError,
   NotFoundError,
   ValidationError,
-  withPortMeta,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 import { secretMetadataSchema } from '@shipsec/contracts';
 
-const inputSchema = z.object({
-  secretId: z
-    .string()
-    .min(1, 'Secret identifier is required')
-    .describe('Name or UUID of the secret in the ShipSec store'),
-  version: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe('Optional version override'),
-  outputFormat: withPortMeta(
-    z.enum(['raw', 'json']).default('raw').describe('Format for the secret value').optional(),
+const inputSchema = inputs({});
+
+const parameterSchema = parameters({
+  secretId: param(
+    z
+      .string()
+      .min(1, 'Secret identifier is required')
+      .describe('Name or UUID of the secret in the ShipSec store'),
     {
-      label: 'Output Format',
-      description: 'Return as raw string or JSON-decoded object.',
+      label: 'Secret Name',
+      editor: 'secret',
+      description: 'Name or UUID of the secret from the platform store.',
+    },
+  ),
+  version: param(
+    z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Optional version override'),
+    {
+      label: 'Version',
+      editor: 'number',
+      description: 'Optional version pin. Defaults to the active version.',
+    },
+  ),
+  outputFormat: param(
+    z.enum(['raw', 'json']).default('raw').describe('Format for the secret value'),
+    {
+      label: 'Default Output Format',
+      editor: 'select',
+      options: [
+        { label: 'Raw', value: 'raw' },
+        { label: 'JSON', value: 'json' },
+      ],
+      description: 'Format to use when returning the secret value.',
     },
   ),
 });
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
 type Output = {
   secret: unknown;
@@ -40,8 +66,8 @@ type Output = {
   };
 };
 
-const outputSchema = z.object({
-  secret: withPortMeta(z.unknown(), {
+const outputSchema = outputs({
+  secret: port(z.unknown(), {
     label: 'Secret Value',
     description: 'Resolved secret value. Masked in logs and traces.',
     allowAny: true,
@@ -49,19 +75,20 @@ const outputSchema = z.object({
     editor: 'secret',
     connectionType: { kind: 'primitive', name: 'secret' },
   }),
-  metadata: withPortMeta(secretMetadataSchema(), {
+  metadata: port(secretMetadataSchema(), {
     label: 'Secret Metadata',
     description: 'Information about the resolved secret version.',
   }),
 });
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.secret.fetch',
   label: 'Secret Loader',
   category: 'input',
   runner: { kind: 'inline' },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Fetch a secret from the ShipSec-managed secret store and expose it to downstream nodes.',
   requiresSecrets: true,
   ui: {
@@ -71,37 +98,8 @@ const definition: ComponentDefinition<Input, Output> = {
     category: 'input',
     description: 'Resolve a stored secret and provide it as masked output for other components.',
     icon: 'KeyRound',
-    parameters: [
-      {
-        id: 'secretId',
-        label: 'Secret Name',
-        type: 'secret',
-        required: true,
-        description: 'Name or UUID of the secret from the platform store.',
-      },
-      {
-        id: 'version',
-        label: 'Version',
-        type: 'number',
-        required: false,
-        description: 'Optional version pin. Defaults to the active version.',
-      },
-      {
-        id: 'defaultOutputFormat',
-        label: 'Default Output Format',
-        type: 'select',
-        required: false,
-        default: 'raw',
-        options: [
-          { label: 'Raw', value: 'raw' },
-          { label: 'JSON', value: 'json' },
-        ],
-        description: 'Default output format when no format is provided via input.',
-        helpText: 'Used when outputFormat input is not connected or empty.',
-      },
-    ],
   },
-  async execute(params, context) {
+  async execute({ params }, context) {
     if (!context.secrets) {
       throw new ConfigurationError(
         'Secret Fetch component requires the secrets service. Ensure the worker injects ISecretsService.',
@@ -148,6 +146,6 @@ const definition: ComponentDefinition<Input, Output> = {
     };
   },
 
-};
+});
 
 componentRegistry.register(definition);

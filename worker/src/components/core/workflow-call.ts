@@ -1,10 +1,15 @@
 import { z } from 'zod'
 import {
   componentRegistry,
-  type ComponentDefinition,
+  defineComponent,
   withPortMeta,
   coerceBooleanFromText,
   coerceNumberFromText,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk'
 import type { PortMeta } from '@shipsec/component-sdk/port-meta'
 
@@ -18,39 +23,67 @@ const runtimeInputDefinitionSchema = z
   })
   .strip()
 
-const inputSchema = z
-  .object({
-    workflowId: z.string().uuid(),
-    versionStrategy: z.enum(['latest', 'specific']).default('latest'),
-    versionId: z.string().uuid().optional(),
-    timeoutSeconds: z.number().int().positive().default(300),
-    childRuntimeInputs: z.array(runtimeInputDefinitionSchema).optional(),
-  })
-  .passthrough()
+const inputSchema = inputs({})
+
+const parameterSchema = parameters({
+  workflowId: param(z.string().uuid(), {
+    label: 'Workflow',
+    editor: 'select',
+    description: 'The workflow to execute',
+    options: [],
+  }),
+  versionStrategy: param(z.enum(['latest', 'specific']).default('latest'), {
+    label: 'Version',
+    editor: 'select',
+    options: [
+      { label: 'Latest', value: 'latest' },
+      { label: 'Specific', value: 'specific' },
+    ],
+  }),
+  versionId: param(z.string().uuid().optional(), {
+    label: 'Specific Version ID',
+    editor: 'text',
+    description: 'Only used when versionStrategy is "specific"',
+    visibleWhen: { versionStrategy: 'specific' },
+  }),
+  timeoutSeconds: param(z.number().int().positive().default(300), {
+    label: 'Timeout (seconds)',
+    editor: 'number',
+    min: 1,
+  }),
+  childRuntimeInputs: param(z.array(runtimeInputDefinitionSchema).optional(), {
+    label: 'Child Runtime Inputs',
+    editor: 'json',
+    description: 'Internal configuration for child runtime input definitions.',
+    visibleWhen: { __internal: true },
+  }),
+})
 
 type Input = z.infer<typeof inputSchema>
+type Params = z.infer<typeof parameterSchema>
 
-const outputSchema = z.object({
-  result: withPortMeta(z.record(z.string(), z.unknown()), {
+const outputSchema = outputs({
+  result: port(z.record(z.string(), z.unknown()), {
     label: 'Result',
     allowAny: true,
     reason: 'Child workflows can return any shape.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  childRunId: withPortMeta(z.string(), {
+  childRunId: port(z.string(), {
     label: 'Child Run ID',
   }),
 })
 
 type Output = z.infer<typeof outputSchema>
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.workflow.call',
   label: 'Call Workflow',
   category: 'transform',
   runner: { kind: 'inline' },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Execute another workflow synchronously and use its outputs.',
   ui: {
     slug: 'workflow-call',
@@ -62,57 +95,12 @@ const definition: ComponentDefinition<Input, Output> = {
     author: { name: 'ShipSecAI', type: 'shipsecai' },
     isLatest: true,
     deprecated: false,
-    parameters: [
-      {
-        id: 'workflowId',
-        label: 'Workflow',
-        type: 'select',
-        required: true,
-        description: 'The workflow to execute',
-        options: [],
-      },
-      {
-        id: 'versionStrategy',
-        label: 'Version',
-        type: 'select',
-        required: true,
-        default: 'latest',
-        options: [
-          { label: 'Latest', value: 'latest' },
-          { label: 'Specific', value: 'specific' },
-        ],
-      },
-      {
-        id: 'versionId',
-        label: 'Specific Version ID',
-        type: 'text',
-        required: false,
-        visibleWhen: { versionStrategy: 'specific' },
-        description: 'Only used when versionStrategy is "specific"',
-      },
-      {
-        id: 'timeoutSeconds',
-        label: 'Timeout (seconds)',
-        type: 'number',
-        required: false,
-        default: 300,
-        min: 1,
-      },
-      {
-        id: 'childRuntimeInputs',
-        label: 'Child Runtime Inputs',
-        type: 'json',
-        required: false,
-        description: 'Internal configuration for child runtime input definitions.',
-        visibleWhen: { __internal: true },
-      },
-    ],
     examples: [
       'Use a reusable enrichment workflow inside a larger pipeline.',
     ],
   },
-  resolvePorts(params) {
-    const parsed = inputSchema.safeParse(params)
+  resolvePorts(params: Params) {
+    const parsed = parameterSchema.safeParse(params)
     const childRuntimeInputs = parsed.success ? parsed.data.childRuntimeInputs ?? [] : []
     const reservedIds = new Set([
       'workflowId',
@@ -143,7 +131,7 @@ const definition: ComponentDefinition<Input, Output> = {
     }
 
     return {
-      inputs: z.object(inputShape),
+      inputs: inputs(inputShape),
       outputs: outputSchema,
     }
   },

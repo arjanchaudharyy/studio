@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
+  defineComponent,
   ValidationError,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
   withPortMeta,
 } from '@shipsec/component-sdk';
 import type { PortMeta } from '@shipsec/component-sdk/port-meta';
@@ -27,10 +32,13 @@ const runtimeInputDefinitionSchema = z.preprocess((value) => {
   description: z.string().optional().describe('Help text for the input'),
 }));
 
-const inputSchema = z.object({
-  runtimeInputs: z.array(runtimeInputDefinitionSchema).default([]).describe('Define inputs to collect when workflow is triggered'),
-  // Runtime data will be merged with this at execution time
-  __runtimeData: z.record(z.string(), z.unknown()).optional(),
+const inputSchema = inputs({
+  // Runtime data will be injected at execution time.
+  __runtimeData: port(z.record(z.string(), z.unknown()).optional(), {
+    label: 'Runtime Data',
+    editor: 'json',
+    valuePriority: 'manual-first',
+  }),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -38,15 +46,31 @@ type Input = z.infer<typeof inputSchema>;
 // Output is dynamic based on runtimeInputs configuration
 type Output = Record<string, unknown>;
 
-const outputSchema = z.record(z.string(), z.unknown());
+const outputSchema = outputs({}).catchall(z.unknown());
 
-const definition: ComponentDefinition<Input, Output> = {
+const parameterSchema = parameters({
+  runtimeInputs: param(
+    z.array(runtimeInputDefinitionSchema).default([]).describe('Define inputs to collect when workflow is triggered'),
+    {
+      label: 'Runtime Inputs',
+      editor: 'json',
+      description: 'Define what data to collect when the workflow is triggered',
+      placeholder: '[{\"id\":\"myInput\",\"label\":\"My Input\",\"type\":\"text\",\"required\":true}]',
+      helpText: 'Each input creates a corresponding output.',
+    },
+  ),
+});
+
+type Params = z.infer<typeof parameterSchema>;
+
+const definition = defineComponent({
   id: 'core.workflow.entrypoint',
   label: 'Entry Point',
   category: 'input',
   runner: { kind: 'inline' },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Defines the workflow entry point. Configure runtime inputs to collect data (files, text, etc.) when the workflow is triggered.',
   ui: {
     slug: 'entry-point',
@@ -66,20 +90,8 @@ const definition: ComponentDefinition<Input, Output> = {
       'Collect uploaded scope files or credentials before running security scans.',
       'Prompt operators for runtime parameters such as target domains or API keys.',
     ],
-    parameters: [
-      {
-        id: 'runtimeInputs',
-        label: 'Runtime Inputs',
-        type: 'json',
-        required: false,
-        default: [],
-        description: 'Define what data to collect when the workflow is triggered',
-        helpText: 'Each input creates a corresponding output. Example: [{"id":"uploadedFile","label":"Input File","type":"file","required":true}]',
-        placeholder: '[{"id":"myInput","label":"My Input","type":"text","required":true}]',
-      },
-    ],
   },
-  resolvePorts(params) {
+  resolvePorts(params: Params) {
     const runtimeInputs = Array.isArray(params.runtimeInputs)
       ? params.runtimeInputs
       : [];
@@ -105,11 +117,12 @@ const definition: ComponentDefinition<Input, Output> = {
     }
 
     return {
-      outputs: z.object(outputShape),
+      outputs: outputs(outputShape),
     };
   },
-  async execute(params, context) {
-    const { runtimeInputs, __runtimeData } = params;
+  async execute({ inputs, params }, context) {
+    const { runtimeInputs } = params;
+    const { __runtimeData } = inputs;
     context.logger.info(`[EntryPoint] Executing with runtime inputs: ${JSON.stringify(runtimeInputs)}`);
     
     // If no runtime inputs defined, return empty object

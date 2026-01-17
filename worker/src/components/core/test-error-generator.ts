@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
+  defineComponent,
   NetworkError,
   RateLimitError,
   ServiceError,
@@ -10,47 +10,108 @@ import {
   NotFoundError,
   ValidationError,
   ConfigurationError,
-  withPortMeta,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  mode: z.enum(['success', 'fail']).default('fail').describe('Whether to succeed or fail'),
-  errorType: z.string().default('ServiceError').describe('Class name of the error to throw'),
-  errorMessage: z.string().default('Simulated tool failure').describe('Error message'),
-  errorDetails: z.record(z.string(), z.any()).optional().describe('Structured details for the error'),
-  failUntilAttempt: z.number().int().min(1).default(1).describe('Keep failing until this attempt number is reached (exclusive)'),
-  alwaysFail: z.boolean().default(false).describe('Always fail regardless of attempt number (for testing non-retryable errors)'),
+const inputSchema = inputs({});
+
+const parameterSchema = parameters({
+  mode: param(z.enum(['success', 'fail']).default('fail').describe('Whether to succeed or fail'), {
+    label: 'Mode',
+    editor: 'select',
+    options: [
+      { label: 'Always Fail', value: 'fail' },
+      { label: 'Always Success', value: 'success' },
+    ],
+  }),
+  errorType: param(
+    z.string().default('ServiceError').describe('Class name of the error to throw'),
+    {
+      label: 'Error Type',
+      editor: 'text',
+      description:
+        'Type of error: NetworkError, RateLimitError, ServiceError, TimeoutError, AuthenticationError, NotFoundError, ValidationError, ConfigurationError',
+    },
+  ),
+  errorMessage: param(
+    z.string().default('Simulated tool failure').describe('Error message'),
+    {
+      label: 'Error Message',
+      editor: 'text',
+    },
+  ),
+  failUntilAttempt: param(
+    z
+      .number()
+      .int()
+      .min(1)
+      .default(1)
+      .describe('Keep failing until this attempt number is reached (exclusive)'),
+    {
+      label: 'Fail Until Attempt',
+      editor: 'number',
+      description: 'Retries will continue until this attempt index (1-based) is reached.',
+      min: 1,
+    },
+  ),
+  alwaysFail: param(
+    z
+      .boolean()
+      .default(false)
+      .describe('Always fail regardless of attempt number (for testing non-retryable errors)'),
+    {
+      label: 'Always Fail',
+      editor: 'boolean',
+      description: 'Force failure on every attempt to simulate non-retryable errors.',
+    },
+  ),
+  errorDetails: param(
+    z.record(z.string(), z.any()).optional().describe('Structured details for the error'),
+    {
+      label: 'Error Details',
+      editor: 'json',
+      description: 'Optional structured details injected into the error payload.',
+    },
+  ),
 });
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 type Output = {
   success: boolean;
   attempt: number;
 };
 
-const definition: ComponentDefinition<Input, Output> = {
+const outputSchema = outputs({
+  result: port(z.unknown(), {
+    label: 'Result',
+    description: 'Result of the operation if it succeeds.',
+    allowAny: true,
+    reason: 'Test component returns variable output payloads.',
+    connectionType: { kind: 'any' },
+  }),
+  success: port(z.boolean(), {
+    label: 'Success',
+    description: 'Whether the attempt completed successfully.',
+  }),
+  attempt: port(z.number(), {
+    label: 'Attempt',
+    description: 'Attempt number for the execution.',
+  }),
+});
+
+const definition = defineComponent({
   id: 'test.error.generator',
   label: 'Error Generator',
   category: 'transform',
   runner: { kind: 'inline' },
   inputs: inputSchema,
-  outputs: z.object({
-    result: withPortMeta(z.unknown(), {
-      label: 'Result',
-      description: 'Result of the operation if it succeeds.',
-      allowAny: true,
-      reason: 'Test component returns variable output payloads.',
-      connectionType: { kind: 'any' },
-    }),
-    success: withPortMeta(z.boolean(), {
-      label: 'Success',
-      description: 'Whether the attempt completed successfully.',
-    }),
-    attempt: withPortMeta(z.number(), {
-      label: 'Attempt',
-      description: 'Attempt number for the execution.',
-    }),
-  }),
+  outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'A test component that generates specific error types and simulates retry scenarios.',
   ui: {
     slug: 'test-error-generator',
@@ -65,59 +126,8 @@ const definition: ComponentDefinition<Input, Output> = {
     },
     isLatest: true,
     deprecated: false,
-    parameters: [
-      {
-        id: 'mode',
-        label: 'Mode',
-        type: 'select',
-        options: [
-          { label: 'Always Fail', value: 'fail' },
-          { label: 'Always Success', value: 'success' },
-        ],
-        required: true,
-        default: 'fail',
-      },
-      {
-        id: 'errorType',
-        label: 'Error Type',
-        type: 'text',
-        required: true,
-        default: 'ServiceError',
-        description: 'Type of error: NetworkError, RateLimitError, ServiceError, TimeoutError, AuthenticationError, NotFoundError, ValidationError, ConfigurationError',
-      },
-      {
-        id: 'errorMessage',
-        label: 'Error Message',
-        type: 'text',
-        required: true,
-        default: 'Simulated tool failure',
-      },
-      {
-        id: 'failUntilAttempt',
-        label: 'Fail Until Attempt',
-        type: 'number',
-        required: true,
-        default: 1,
-        description: 'Retries will continue until this attempt index (1-based) is reached.',
-      },
-      {
-        id: 'alwaysFail',
-        label: 'Always Fail',
-        type: 'boolean',
-        required: false,
-        default: false,
-        description: 'Force failure on every attempt to simulate non-retryable errors.',
-      },
-      {
-        id: 'errorDetails',
-        label: 'Error Details',
-        type: 'json',
-        required: false,
-        description: 'Optional structured details injected into the error payload.',
-      },
-    ],
   },
-  async execute(params, context) {
+  async execute({ params }, context) {
     const currentAttempt = context.metadata.attempt ?? 1;
     
     context.logger.info(`[Error Generator] Current attempt: ${currentAttempt}`);
@@ -187,7 +197,7 @@ const definition: ComponentDefinition<Input, Output> = {
 
 componentRegistry.register(definition);
 
-const retryLimitedDefinition: ComponentDefinition<Input, Output> = {
+const retryLimitedDefinition = defineComponent({
   ...definition,
   id: 'test.error.retry-limited',
   label: 'Error Generator (Limited Retry)',
@@ -204,6 +214,6 @@ const retryLimitedDefinition: ComponentDefinition<Input, Output> = {
     initialIntervalSeconds: 1,
     backoffCoefficient: 1,
   },
-};
+});
 
 componentRegistry.register(retryLimitedDefinition);

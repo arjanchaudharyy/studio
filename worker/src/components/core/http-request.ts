@@ -1,72 +1,110 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
   fromHttpResponse,
   TimeoutError,
   NetworkError,
   ComponentRetryPolicy,
   DEFAULT_SENSITIVE_HEADERS,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param,
   withPortMeta,
 } from '@shipsec/component-sdk';
 
-const inputSchema = z.object({
-  url: withPortMeta(z.string().url().describe('Target URL'), {
+const inputSchema = inputs({
+  url: port(z.string().url().describe('Target URL'), {
     label: 'URL',
     description: 'Target URL for the request.',
   }),
-  method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']).default('GET'),
-  headers: withPortMeta(
-    z.record(z.string(), z.string()).optional().describe('HTTP headers'),
-    {
-      label: 'Headers',
-      description: 'HTTP headers to include with the request.',
-      connectionType: { kind: 'primitive', name: 'json' },
-    },
-  ),
-  body: withPortMeta(
-    z.string().optional().describe('Raw body content (JSON, text, etc.)'),
-    {
-      label: 'Body',
-      description: 'Raw request body content.',
-    },
-  ),
-  contentType: z.string().default('application/json').describe('Content-Type header shorthand'),
-  timeout: z.number().int().positive().default(30000).describe('Timeout in milliseconds'),
-  failOnError: z.boolean().default(true).describe('Throw error on 4xx/5xx responses'),
+  headers: port(z.record(z.string(), z.string()).optional().describe('HTTP headers'), {
+    label: 'Headers',
+    description: 'HTTP headers to include with the request.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  body: port(z.string().optional().describe('Raw body content (JSON, text, etc.)'), {
+    label: 'Body',
+    description: 'Raw request body content.',
+  }),
+});
 
-  // Auth configuration
-  authType: z.enum(['none', 'bearer', 'basic', 'custom']).default('none').describe('Authentication method'),
-}).passthrough();
+const parameterSchema = parameters({
+  method: param(z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']).default('GET'), {
+    label: 'HTTP Method',
+    editor: 'select',
+    options: [
+      { label: 'GET', value: 'GET' },
+      { label: 'POST', value: 'POST' },
+      { label: 'PUT', value: 'PUT' },
+      { label: 'PATCH', value: 'PATCH' },
+      { label: 'DELETE', value: 'DELETE' },
+      { label: 'HEAD', value: 'HEAD' },
+      { label: 'OPTIONS', value: 'OPTIONS' },
+    ],
+  }),
+  contentType: param(z.string().default('application/json').describe('Content-Type header shorthand'), {
+    label: 'Content Type',
+    editor: 'select',
+    options: [
+      { label: 'JSON (application/json)', value: 'application/json' },
+      { label: 'Form URL Encoded', value: 'application/x-www-form-urlencoded' },
+      { label: 'Text/Plain', value: 'text/plain' },
+      { label: 'Custom', value: 'custom' },
+    ],
+    description: 'Sets the Content-Type header automatically.',
+  }),
+  authType: param(z.enum(['none', 'bearer', 'basic', 'custom']).default('none').describe('Authentication method'), {
+    label: 'Authentication',
+    editor: 'select',
+    options: [
+      { label: 'None', value: 'none' },
+      { label: 'Bearer Token', value: 'bearer' },
+      { label: 'Basic Auth', value: 'basic' },
+      { label: 'Custom Header', value: 'custom' },
+    ],
+  }),
+  timeout: param(z.number().int().positive().default(30000).describe('Timeout in milliseconds'), {
+    label: 'Timeout (ms)',
+    editor: 'number',
+    min: 1000,
+    max: 60000,
+  }),
+  failOnError: param(z.boolean().default(true).describe('Throw error on 4xx/5xx responses'), {
+    label: 'Fail on Error',
+    editor: 'boolean',
+    description: 'If true, workflow stops on 4xx/5xx errors. If false, returns status code for manual handling.',
+  }),
+});
 
 type Input = z.infer<typeof inputSchema>;
 
-type Params = {
-  authType?: 'none' | 'bearer' | 'basic' | 'custom';
-};
+type Params = z.infer<typeof parameterSchema>;
 
-const outputSchema = z.object({
-  status: withPortMeta(z.number(), {
+const outputSchema = outputs({
+  status: port(z.number(), {
     label: 'Status Code',
     description: 'HTTP status code (e.g. 200, 404).',
   }),
-  statusText: withPortMeta(z.string(), {
+  statusText: port(z.string(), {
     label: 'Status Text',
     description: 'HTTP status text returned by the server.',
   }),
-  data: withPortMeta(z.unknown().describe('Parsed JSON body if applicable, otherwise string'), {
+  data: port(z.unknown().describe('Parsed JSON body if applicable, otherwise string'), {
     label: 'Response Data',
     description: 'Automatically parsed JSON response body.',
     allowAny: true,
     reason: 'HTTP response bodies can be any JSON-compatible shape.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  headers: withPortMeta(z.record(z.string(), z.string()), {
+  headers: port(z.record(z.string(), z.string()), {
     label: 'Headers',
     description: 'Response headers returned by the server.',
     connectionType: { kind: 'primitive', name: 'json' },
   }),
-  rawBody: withPortMeta(z.string(), {
+  rawBody: port(z.string(), {
     label: 'Raw Body',
     description: 'Raw string content of the response.',
   }),
@@ -89,7 +127,7 @@ const httpRequestRetryPolicy: ComponentRetryPolicy = {
   ],
 };
 
-const definition: ComponentDefinition<Input, Output, Params> = {
+const definition = defineComponent({
   id: 'core.http.request',
   label: 'HTTP Request',
   category: 'transform',
@@ -97,6 +135,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
   retryPolicy: httpRequestRetryPolicy,
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Performs a generic HTTP request to any API endpoint. Supports all standard methods, headers, and body types.',
   ui: {
     slug: 'http-request',
@@ -116,64 +155,8 @@ const definition: ComponentDefinition<Input, Output, Params> = {
       'Trigger a PagerDuty alert via their REST API.',
       'Fetch threat intelligence data from VirusTotal.',
     ],
-    parameters: [
-      {
-        id: 'method',
-        label: 'HTTP Method',
-        type: 'select',
-        default: 'GET',
-        options: [
-          { label: 'GET', value: 'GET' },
-          { label: 'POST', value: 'POST' },
-          { label: 'PUT', value: 'PUT' },
-          { label: 'PATCH', value: 'PATCH' },
-          { label: 'DELETE', value: 'DELETE' },
-        ],
-        required: true,
-      },
-      {
-        id: 'contentType',
-        label: 'Content Type',
-        type: 'select',
-        default: 'application/json',
-        options: [
-          { label: 'JSON (application/json)', value: 'application/json' },
-          { label: 'Form URL Encoded', value: 'application/x-www-form-urlencoded' },
-          { label: 'Text/Plain', value: 'text/plain' },
-          { label: 'Custom', value: 'custom' },
-        ],
-        description: 'Sets the Content-Type header automatically.',
-      },
-      {
-        id: 'authType',
-        label: 'Authentication',
-        type: 'select',
-        default: 'none',
-        options: [
-          { label: 'None', value: 'none' },
-          { label: 'Bearer Token', value: 'bearer' },
-          { label: 'Basic Auth', value: 'basic' },
-          { label: 'Custom Header', value: 'custom' },
-        ],
-      },
-      {
-        id: 'timeout',
-        label: 'Timeout (ms)',
-        type: 'number',
-        default: 30000,
-        min: 1000,
-        max: 60000,
-      },
-      {
-        id: 'failOnError',
-        label: 'Fail on Error',
-        type: 'boolean',
-        default: true,
-        description: 'If true, workflow stops on 4xx/5xx errors. If false, returns status code for manual handling.',
-      },
-    ],
   },
-  resolvePorts(params) {
+  resolvePorts(params: Params) {
     const inputShape: Record<string, z.ZodTypeAny> = {
       url: withPortMeta(z.string().url(), {
         label: 'URL',
@@ -224,12 +207,20 @@ const definition: ComponentDefinition<Input, Output, Params> = {
       });
     }
 
-    return { inputs: z.object(inputShape) };
+    return { inputs: inputs(inputShape) };
   },
-  async execute(params, context) {
-    const { url, method, body, headers = {}, contentType, timeout, failOnError, authType, bearerToken, username, password, authHeaderName, authHeaderValue } = params;
-    const authHeaderNameValue = typeof authHeaderName === 'string' ? authHeaderName : undefined;
-    const authHeaderValueValue = typeof authHeaderValue === 'string' ? authHeaderValue : undefined;
+  async execute({ inputs, params }, context) {
+    const { method, contentType, timeout, failOnError, authType } = params;
+    const { url, body, headers = {} } = inputs;
+    const dynamicInputs = inputs as Record<string, unknown>;
+    const authHeaderNameValue =
+      typeof dynamicInputs.authHeaderName === 'string'
+        ? dynamicInputs.authHeaderName
+        : undefined;
+    const authHeaderValueValue =
+      typeof dynamicInputs.authHeaderValue === 'string'
+        ? dynamicInputs.authHeaderValue
+        : undefined;
 
     context.logger.info(`[HTTP] ${method} ${url}`);
 
@@ -240,10 +231,15 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     }
 
     // Handle Auth
-    if (authType === 'bearer' && bearerToken) {
-      finalHeaders.set('Authorization', `Bearer ${bearerToken}`);
-    } else if (authType === 'basic' && username && password) {
-      const b64 = btoa(`${username}:${password}`);
+    if (authType === 'bearer' && dynamicInputs.bearerToken) {
+      finalHeaders.set(
+        'Authorization',
+        `Bearer ${dynamicInputs.bearerToken}`,
+      );
+    } else if (authType === 'basic' && dynamicInputs.username && dynamicInputs.password) {
+      const b64 = btoa(
+        `${dynamicInputs.username}:${dynamicInputs.password}`,
+      );
       finalHeaders.set('Authorization', `Basic ${b64}`);
     } else if (authType === 'custom' && authHeaderNameValue && authHeaderValueValue) {
       finalHeaders.set(authHeaderNameValue, authHeaderValueValue);
@@ -255,8 +251,8 @@ const definition: ComponentDefinition<Input, Output, Params> = {
     try {
       context.emitProgress(`Requesting ${method} ${url}...`);
 
-      const sensitiveHeaders = authHeaderName
-        ? Array.from(new Set([...DEFAULT_SENSITIVE_HEADERS, authHeaderName]))
+      const sensitiveHeaders = authHeaderNameValue
+        ? Array.from(new Set([...DEFAULT_SENSITIVE_HEADERS, authHeaderNameValue]))
         : DEFAULT_SENSITIVE_HEADERS;
 
       const response = await context.http.fetch(url, {
@@ -321,7 +317,7 @@ const definition: ComponentDefinition<Input, Output, Params> = {
       throw error;
     }
   },
-};
+});
 
 componentRegistry.register(definition);
 

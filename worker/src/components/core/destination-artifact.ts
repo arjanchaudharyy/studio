@@ -1,19 +1,34 @@
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition, withPortMeta } from '@shipsec/component-sdk';
+import { componentRegistry, defineComponent, inputs, outputs, parameters, port, param } from '@shipsec/component-sdk';
 import { destinationWriterSchema } from '@shipsec/contracts';
 import { type DestinationConfig } from '@shipsec/shared';
 
-const inputSchema = z.object({
-  saveToRunArtifacts: z.boolean().default(true),
-  publishToArtifactLibrary: z.boolean().default(false),
-  label: z.string().max(120).optional(),
-  description: z.string().max(240).optional(),
+const inputSchema = inputs({});
+
+const parameterSchema = parameters({
+  saveToRunArtifacts: param(z.boolean().default(true), {
+    label: 'Save to run timeline',
+    editor: 'boolean',
+  }),
+  publishToArtifactLibrary: param(z.boolean().default(false), {
+    label: 'Publish to Artifact Library',
+    editor: 'boolean',
+  }),
+  label: param(z.string().max(120).optional(), {
+    label: 'Label override',
+    editor: 'text',
+  }),
+  description: param(z.string().max(240).optional(), {
+    label: 'Description',
+    editor: 'textarea',
+  }),
 });
 
 type Input = z.infer<typeof inputSchema>;
+type Params = z.infer<typeof parameterSchema>;
 
-const outputSchema = z.object({
-  destination: withPortMeta(destinationWriterSchema(), {
+const outputSchema = outputs({
+  destination: port(destinationWriterSchema(), {
     label: 'Destination',
     description: 'Connect this to writer components to store outputs in the artifact store.',
   }),
@@ -21,13 +36,14 @@ const outputSchema = z.object({
 
 type Output = z.infer<typeof outputSchema>;
 
-const definition: ComponentDefinition<Input, Output> = {
+const definition = defineComponent({
   id: 'core.destination.artifact',
   label: 'Artifact Destination',
   category: 'output',
   runner: { kind: 'inline' },
   inputs: inputSchema,
   outputs: outputSchema,
+  parameters: parameterSchema,
   docs: 'Produces a destination configuration that saves files to the run timeline and/or the shared Artifact Library.',
   ui: {
     slug: 'destination-artifact',
@@ -36,32 +52,8 @@ const definition: ComponentDefinition<Input, Output> = {
     category: 'output',
     description: 'Configure the built-in artifact destination for writers.',
     icon: 'HardDriveDownload',
-    parameters: [
-      {
-        id: 'saveToRunArtifacts',
-        label: 'Save to run timeline',
-        type: 'boolean',
-        default: true,
-      },
-      {
-        id: 'publishToArtifactLibrary',
-        label: 'Publish to Artifact Library',
-        type: 'boolean',
-        default: false,
-      },
-      {
-        id: 'label',
-        label: 'Label override',
-        type: 'text',
-      },
-      {
-        id: 'description',
-        label: 'Description',
-        type: 'textarea',
-      },
-    ],
   },
-  async execute(params, context): Promise<Output> {
+  async execute({ params }, context): Promise<Output> {
     const destinations: Array<'run' | 'library'> = [];
     if (params.saveToRunArtifacts) {
       destinations.push('run');
@@ -86,6 +78,6 @@ const definition: ComponentDefinition<Input, Output> = {
 
     return { destination };
   },
-};
+});
 
 componentRegistry.register(definition);
