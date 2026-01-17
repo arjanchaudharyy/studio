@@ -6,12 +6,13 @@
  */
 
 import { z } from 'zod';
+import type { ConnectionType, PortBindingType } from './types';
 
 export interface PortMeta {
   /** Display label for the port (defaults to field name if not provided) */
   label?: string;
-  /** Whether this port represents a credential binding */
-  bindingType?: 'credential';
+  /** Binding type for agent tools */
+  bindingType?: PortBindingType;
   /** Icon identifier (lucide-react or custom) */
   icon?: string;
   /** Description for tooltips/help text */
@@ -23,7 +24,7 @@ export interface PortMeta {
   /** Custom color for branching ports */
   branchColor?: 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'slate';
   /** Connection type override for unions/complex types */
-  connectionType?: string;
+  connectionType?: ConnectionType | string;
   /** Editor type override (e.g., 'textarea', 'select', 'secret') */
   editor?: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multi-select' | 'json' | 'secret';
   /** Allow z.any() or z.unknown() - must be explicitly set */
@@ -54,7 +55,8 @@ const METADATA_STORE = new WeakMap<z.ZodTypeAny, PortMeta>();
  * ```
  */
 export function withPortMeta<T extends z.ZodTypeAny>(schema: T, meta: PortMeta): T {
-  METADATA_STORE.set(schema, meta);
+  const existing = METADATA_STORE.get(schema);
+  METADATA_STORE.set(schema, mergePortMeta(existing, meta));
   return schema;
 }
 

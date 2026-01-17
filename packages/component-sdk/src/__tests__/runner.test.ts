@@ -147,8 +147,8 @@ describe('Component Runner', () => {
         label: 'Repeat Text',
         category: 'transform',
         runner: { kind: 'inline' },
-        inputSchema,
-        outputSchema,
+        inputs: inputSchema,
+        outputs: outputSchema,
         async execute(params) {
           return { result: params.text.repeat(params.repeat) };
         },
@@ -160,7 +160,7 @@ describe('Component Runner', () => {
       });
 
       // Validate input
-      const params = component.inputSchema.parse({
+      const params = component.inputs.parse({
         text: 'Hi!',
         repeat: 3,
       });
@@ -174,7 +174,7 @@ describe('Component Runner', () => {
       );
 
       // Validate output
-      const validatedOutput = component.outputSchema.parse(result);
+      const validatedOutput = component.outputs.parse(result);
 
       expect(validatedOutput.result).toBe('Hi!Hi!Hi!');
     });

@@ -11,7 +11,38 @@
 import { z } from 'zod';
 import { getPortMeta } from './port-meta';
 import { deriveConnectionType } from './zod-ports';
-import { ValidationError } from './errors';
+
+type ZodDef = { type?: string; typeName?: string; [key: string]: any };
+
+const LEGACY_TYPE_MAP: Record<string, string> = {
+  ZodString: 'string',
+  ZodNumber: 'number',
+  ZodBoolean: 'boolean',
+  ZodBigInt: 'bigint',
+  ZodDate: 'date',
+  ZodSymbol: 'symbol',
+  ZodAny: 'any',
+  ZodUnknown: 'unknown',
+  ZodObject: 'object',
+  ZodArray: 'array',
+  ZodRecord: 'record',
+  ZodUnion: 'union',
+  ZodDiscriminatedUnion: 'union',
+  ZodOptional: 'optional',
+  ZodNullable: 'nullable',
+  ZodDefault: 'default',
+  ZodEffects: 'effects',
+  ZodPipeline: 'pipe',
+};
+
+function getDefType(def: ZodDef | undefined): string | undefined {
+  const raw = def?.type ?? def?.typeName;
+  return raw ? LEGACY_TYPE_MAP[raw] ?? raw : undefined;
+}
+
+function getSchemaType(schema: z.ZodTypeAny): string | undefined {
+  return getDefType((schema as any)._def);
+}
 
 export interface SchemaValidationResult {
   valid: boolean;
@@ -28,15 +59,29 @@ const DEFAULT_MAX_DEPTH = 1;
  * @returns Validation result with any errors found
  */
 export function validateComponentSchema(
-  schema: z.ZodObject<any, any, any, any, any>,
+  schema: z.ZodTypeAny,
   options: ValidationOptions = {}
 ): SchemaValidationResult {
   const errors: string[] = [];
-  const shape = schema.shape;
+  const objectSchema = unwrapToObject(schema);
+  if (!objectSchema) {
+    return { valid: true, errors };
+  }
+  const shape = getObjectShape(objectSchema);
 
   for (const [fieldName, fieldSchema] of Object.entries(shape)) {
-    const portMeta = getPortMeta(fieldSchema);
-    const connType = deriveConnectionType(fieldSchema);
+    const typedSchema = fieldSchema as z.ZodTypeAny;
+    const portMeta = getPortMeta(typedSchema);
+    if (!portMeta) {
+      continue;
+    }
+    try {
+      deriveConnectionType(typedSchema);
+    } catch (error) {
+      errors.push(
+        `Field "${fieldName}": ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
 
     // Rule: Require label or default to field name
     if (!portMeta?.label) {
@@ -44,7 +89,7 @@ export function validateComponentSchema(
     }
 
     // Rule: Block z.any()/z.unknown() without explicit allowAny
-    const unwrapped = unwrapEffects(fieldSchema);
+    const unwrapped = unwrapEffects(typedSchema);
     if (isAnyOrUnknown(unwrapped) && !portMeta?.allowAny) {
       errors.push(
         `Field "${fieldName}": z.any() or z.unknown() requires explicit meta.allowAny=true${portMeta?.reason ? ` (${portMeta.reason})` : ''}`
@@ -58,7 +103,7 @@ export function validateComponentSchema(
 
     // Rule: Check depth limit (default 1 level)
     if (options.maxDepth !== undefined) {
-      const depth = calculateDepth(fieldSchema);
+      const depth = calculateDepth(typedSchema);
       if (depth > options.maxDepth) {
         errors.push(
           `Field "${fieldName}": Nesting depth ${depth} exceeds max depth ${options.maxDepth}. Use meta.connectionType for complex nested types.`
@@ -72,9 +117,9 @@ export function validateComponentSchema(
     }
 
     // Rule: Union/complex types require explicit connectionType or editor
-    const unwrappedForUnion = unwrapEffects(fieldSchema);
+    const unwrappedForUnion = unwrapEffects(typedSchema);
     if (isUnionType(unwrappedForUnion)) {
-      if (!portMeta?.connectionType && !portMeta?.editor) {
+      if (!portMeta?.connectionType && !portMeta?.editor && !portMeta?.schemaName) {
         errors.push(
           `Field "${fieldName}": Union types require explicit meta.connectionType or meta.editor override`
         );
@@ -101,7 +146,7 @@ export interface ValidationOptions {
  */
 function calculateDepth(schema: z.ZodTypeAny): number {
   const unwrapped = unwrapEffects(schema);
-  const typeName = unwrapped._def?.typeName;
+  const typeName = getSchemaType(unwrapped);
 
   // Primitives: depth 1
   if (isPrimitiveType(unwrapped)) {
@@ -109,8 +154,8 @@ function calculateDepth(schema: z.ZodTypeAny): number {
   }
 
   // Object: depth = 1 + max(field depth)
-  if (typeName === 'ZodObject') {
-    const shape = (unwrapped as any).shape();
+  if (typeName === 'object') {
+    const shape = getObjectShape(unwrapped);
     let maxChildDepth = 0;
 
     for (const field of Object.values(shape)) {
@@ -122,14 +167,20 @@ function calculateDepth(schema: z.ZodTypeAny): number {
   }
 
   // Array: depth = element depth
-  if (typeName === 'ZodArray') {
-    const element = (unwrapped as any)._def.type;
+  if (typeName === 'array') {
+    const element = (unwrapped as any)._def.element ?? (unwrapped as any)._def.type;
     return calculateDepth(element as z.ZodTypeAny);
   }
 
   // Record: depth = value depth
-  if (typeName === 'ZodRecord') {
-    const value = (unwrapped as any)._def.valueType;
+  if (typeName === 'record') {
+    const value =
+      (unwrapped as any)._def.valueType ??
+      (unwrapped as any)._def.value ??
+      (unwrapped as any)._def.keyType;
+    if (!value) {
+      return 1;
+    }
     return calculateDepth(value as z.ZodTypeAny);
   }
 
@@ -144,12 +195,25 @@ function unwrapEffects(schema: z.ZodTypeAny): z.ZodTypeAny {
   let current = schema;
 
   while (true) {
-    const def = (current as any)._def;
+    const def = (current as any)._def as ZodDef | undefined;
 
     if (!def) break;
 
-    if (def.typeName === 'ZodOptional' || def.typeName === 'ZodNullable' || def.typeName === 'ZodDefault') {
+    const typeName = getDefType(def);
+
+    if (typeName === 'optional' || typeName === 'nullable' || typeName === 'default') {
       current = def.innerType;
+      continue;
+    }
+
+    if (typeName === 'effects') {
+      current = def.schema;
+      continue;
+    }
+
+    if (typeName === 'pipe') {
+      current = def.out ?? def.schema ?? def.innerType ?? def.in ?? current;
+      if (current === schema) break;
       continue;
     }
 
@@ -159,32 +223,69 @@ function unwrapEffects(schema: z.ZodTypeAny): z.ZodTypeAny {
   return current;
 }
 
+function unwrapToObject(
+  schema: z.ZodTypeAny
+): z.AnyZodObject | null {
+  let current = schema;
+
+  while (true) {
+    const def = (current as any)._def as ZodDef | undefined;
+    const typeName = getDefType(def);
+
+    if (!def) {
+      return null;
+    }
+
+    if (typeName === 'object') {
+      return current as z.AnyZodObject;
+    }
+
+    if (typeName === 'optional' || typeName === 'nullable' || typeName === 'default') {
+      current = def.innerType;
+      continue;
+    }
+
+    if (typeName === 'effects') {
+      current = def.schema;
+      continue;
+    }
+
+    if (typeName === 'pipe') {
+      current = def.out ?? def.schema ?? def.innerType ?? def.in ?? current;
+      continue;
+    }
+
+    return null;
+  }
+}
+
 /**
  * Check if schema is z.any() or z.unknown()
  */
 function isAnyOrUnknown(schema: z.ZodTypeAny): boolean {
-  const typeName = schema._def?.typeName;
-  return typeName === 'ZodAny' || typeName === 'ZodUnknown';
+  const typeName = getSchemaType(schema);
+  return typeName === 'any' || typeName === 'unknown';
 }
 
 /**
  * Check if schema is a primitive type
  */
 function isPrimitiveType(schema: z.ZodTypeAny): boolean {
-  const typeName = schema._def?.typeName;
-  return [
-    'ZodString',
-    'ZodNumber',
-    'ZodBoolean',
-    'ZodBigInt',
-    'ZodDate',
-    'ZodSymbol',
-  ].includes(typeName);
+  const typeName = getSchemaType(schema);
+  return ['string', 'number', 'boolean', 'bigint', 'date', 'symbol'].includes(typeName ?? '');
 }
 
 /**
  * Check if schema is a union type
  */
 function isUnionType(schema: z.ZodTypeAny): boolean {
-  return schema._def?.typeName === 'ZodUnion';
+  return getSchemaType(schema) === 'union';
+}
+
+function getObjectShape(schema: z.ZodTypeAny): Record<string, z.ZodTypeAny> {
+  const shape = (schema as any).shape;
+  if (typeof shape === 'function') {
+    return shape();
+  }
+  return shape ?? {};
 }

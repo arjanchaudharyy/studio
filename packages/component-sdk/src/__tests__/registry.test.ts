@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { z } from 'zod';
 import { ComponentRegistry } from '../registry';
+import { withPortMeta } from '../port-meta';
 import type { ComponentDefinition } from '../types';
 
 describe('ComponentRegistry', () => {
@@ -16,8 +17,8 @@ describe('ComponentRegistry', () => {
       label: 'Test Component',
       category: 'transform',
       runner: { kind: 'inline' },
-      inputSchema: z.object({ input: z.string() }),
-      outputSchema: z.object({ output: z.string() }),
+      inputs: z.object({ input: withPortMeta(z.string(), { label: 'Input' }) }),
+      outputs: z.object({ output: withPortMeta(z.string(), { label: 'Output' }) }),
       execute: async (params: any) => ({ output: params.input }),
     };
 
@@ -35,8 +36,8 @@ describe('ComponentRegistry', () => {
       label: 'Duplicate',
       category: 'transform',
       runner: { kind: 'inline' },
-      inputSchema: z.object({}),
-      outputSchema: z.object({}),
+      inputs: z.object({}),
+      outputs: z.object({}),
       execute: async () => ({}),
     };
 
@@ -58,8 +59,8 @@ describe('ComponentRegistry', () => {
       label: 'One',
       category: 'input',
       runner: { kind: 'inline' },
-      inputSchema: z.object({}),
-      outputSchema: z.object({}),
+      inputs: z.object({}),
+      outputs: z.object({}),
       execute: async () => ({}),
     };
 
@@ -68,8 +69,8 @@ describe('ComponentRegistry', () => {
       label: 'Two',
       category: 'output',
       runner: { kind: 'inline' },
-      inputSchema: z.object({}),
-      outputSchema: z.object({}),
+      inputs: z.object({}),
+      outputs: z.object({}),
       execute: async () => ({}),
     };
 
@@ -88,8 +89,8 @@ describe('ComponentRegistry', () => {
       label: 'Exists',
       category: 'transform',
       runner: { kind: 'inline' },
-      inputSchema: z.object({}),
-      outputSchema: z.object({}),
+      inputs: z.object({}),
+      outputs: z.object({}),
       execute: async () => ({}),
     };
 
@@ -106,8 +107,8 @@ describe('ComponentRegistry', () => {
       label: 'Clear Test',
       category: 'transform',
       runner: { kind: 'inline' },
-      inputSchema: z.object({}),
-      outputSchema: z.object({}),
+      inputs: z.object({}),
+      outputs: z.object({}),
       execute: async () => ({}),
     };
 

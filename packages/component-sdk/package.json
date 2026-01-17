@@ -11,7 +11,8 @@
     "./interfaces": "./src/interfaces.ts",
     "./types": "./src/types.ts",
     "./registry": "./src/registry.ts",
-    "./ports": "./src/ports.ts"
+    "./port-meta": "./src/port-meta.ts",
+    "./zod-ports": "./src/zod-ports.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -1,10 +1,27 @@
 import type { ComponentDefinition } from './types';
 import { ConfigurationError } from './errors';
 import { z } from 'zod';
-import { extractPorts, deriveConnectionType } from './zod-ports';
+import { extractPorts } from './zod-ports';
+import { getPortMeta } from './port-meta';
 import { validateComponentSchema } from './schema-validation';
 
 type AnyComponentDefinition = ComponentDefinition<any, any, any>;
+
+type ZodDef = { type?: string; typeName?: string; [key: string]: any };
+
+const LEGACY_TYPE_MAP: Record<string, string> = {
+  ZodObject: 'object',
+  ZodOptional: 'optional',
+  ZodNullable: 'nullable',
+  ZodDefault: 'default',
+  ZodEffects: 'effects',
+  ZodPipeline: 'pipe',
+};
+
+function getDefType(def: ZodDef | undefined): string | undefined {
+  const raw = def?.type ?? def?.typeName;
+  return raw ? LEGACY_TYPE_MAP[raw] ?? raw : undefined;
+}
 
 export interface CachedComponentMetadata {
   definition: AnyComponentDefinition;
@@ -25,47 +42,39 @@ export class ComponentRegistry {
     }
 
     // Validate component schemas against ShipSec typing rules
-    if (definition.inputSchema._def?.typeName === 'ZodObject') {
-      const validation = validateComponentSchema(definition.inputSchema);
-      if (!validation.valid) {
-        throw new ConfigurationError(
-          `Component ${definition.id} has invalid input schema: ${validation.errors.join(', ')}`,
-          {
-            configKey: 'inputSchema',
-            details: { componentId: definition.id, errors: validation.errors },
-          }
-        );
-      }
+    const inputValidation = validateComponentSchema(definition.inputs);
+    if (!inputValidation.valid) {
+      throw new ConfigurationError(
+        `Component ${definition.id} has invalid input schema: ${inputValidation.errors.join(', ')}`,
+        {
+          configKey: 'inputs',
+          details: { componentId: definition.id, errors: inputValidation.errors },
+        }
+      );
     }
 
-    if (definition.outputSchema._def?.typeName === 'ZodObject') {
-      const validation = validateComponentSchema(definition.outputSchema);
-      if (!validation.valid) {
-        throw new ConfigurationError(
-          `Component ${definition.id} has invalid output schema: ${validation.errors.join(', ')}`,
-          {
-            configKey: 'outputSchema',
-            details: { componentId: definition.id, errors: validation.errors },
-          }
-        );
-      }
+    const outputValidation = validateComponentSchema(definition.outputs);
+    if (!outputValidation.valid) {
+      throw new ConfigurationError(
+        `Component ${definition.id} has invalid output schema: ${outputValidation.errors.join(', ')}`,
+        {
+          configKey: 'outputs',
+          details: { componentId: definition.id, errors: outputValidation.errors },
+        }
+      );
     }
+
+    validatePortMetadata(definition);
 
     // Compute derived ports and connection types
-    const inputPorts = definition.inputSchema._def?.typeName === 'ZodObject'
-      ? extractPorts(definition.inputSchema as z.ZodObject<any, any, any, any, any>)
-      : [];
-
-    const outputPorts = definition.outputSchema._def?.typeName === 'ZodObject'
-      ? extractPorts(definition.outputSchema as z.ZodObject<any, any, any, any, any>)
-      : [];
+    const inputPorts = extractPorts(definition.inputs);
+    const outputPorts = extractPorts(definition.outputs);
 
     const connectionTypes: Record<string, any> = {};
     for (const port of [...inputPorts, ...outputPorts]) {
-      connectionTypes[port.id] = deriveConnectionType(
-        (definition.inputSchema as any).shape?.[port.id] ??
-        (definition.outputSchema as any).shape?.[port.id]
-      );
+      if (port.connectionType) {
+        connectionTypes[port.id] = port.connectionType;
+      }
     }
 
     this.components.set(definition.id, {
@@ -99,6 +108,96 @@ export class ComponentRegistry {
 
   clear(): void {
     this.components.clear();
+  }
+}
+
+function validatePortMetadata(definition: AnyComponentDefinition) {
+  const inputSchema = definition.inputs;
+  const outputSchema = definition.outputs;
+  const parameterIds = new Set(definition.ui?.parameters?.map((param) => param.id) ?? []);
+
+  const inputObject = unwrapToObject(inputSchema);
+  if (inputObject) {
+    const shape = getObjectShape(inputObject);
+    for (const [fieldName, fieldSchema] of Object.entries(shape)) {
+      if (fieldName.startsWith('__')) {
+        continue;
+      }
+      const portMeta = getPortMeta(fieldSchema);
+      if (!portMeta && !parameterIds.has(fieldName)) {
+        throw new ConfigurationError(
+          `Component ${definition.id} input \"${fieldName}\" must be a port (add withPortMeta) or a UI parameter (declare in ui.parameters).`,
+          {
+            configKey: 'inputs',
+            details: { componentId: definition.id, fieldName },
+          }
+        );
+      }
+    }
+  }
+
+  const outputObject = unwrapToObject(outputSchema);
+  if (outputObject) {
+    const shape = getObjectShape(outputObject);
+    for (const [fieldName, fieldSchema] of Object.entries(shape)) {
+      if (fieldName.startsWith('__')) {
+        continue;
+      }
+      const portMeta = getPortMeta(fieldSchema);
+      if (!portMeta) {
+        throw new ConfigurationError(
+          `Component ${definition.id} output \"${fieldName}\" must declare withPortMeta for port metadata.`,
+          {
+            configKey: 'outputs',
+            details: { componentId: definition.id, fieldName },
+          }
+        );
+      }
+    }
+  }
+}
+
+function getObjectShape(schema: z.ZodTypeAny): Record<string, z.ZodTypeAny> {
+  const shape = (schema as any).shape;
+  if (typeof shape === 'function') {
+    return shape();
+  }
+  return shape ?? {};
+}
+
+function unwrapToObject(
+  schema: z.ZodTypeAny
+): z.AnyZodObject | null {
+  let current = schema;
+
+  while (true) {
+    const def = (current as any)._def as ZodDef | undefined;
+    const typeName = getDefType(def);
+
+    if (!def) {
+      return null;
+    }
+
+    if (typeName === 'object') {
+      return current as z.AnyZodObject;
+    }
+
+    if (typeName === 'optional' || typeName === 'nullable' || typeName === 'default') {
+      current = def.innerType;
+      continue;
+    }
+
+    if (typeName === 'effects') {
+      current = def.schema;
+      continue;
+    }
+
+    if (typeName === 'pipe') {
+      current = def.out ?? def.schema ?? def.innerType ?? def.in ?? current;
+      continue;
+    }
+
+    return null;
   }
 }
 

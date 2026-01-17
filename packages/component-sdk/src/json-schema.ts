@@ -7,6 +7,45 @@
 
 import { z } from 'zod';
 
+type ZodDef = { type?: string; typeName?: string; [key: string]: any };
+
+const LEGACY_TYPE_MAP: Record<string, string> = {
+  ZodString: 'string',
+  ZodNumber: 'number',
+  ZodBoolean: 'boolean',
+  ZodBigInt: 'bigint',
+  ZodDate: 'date',
+  ZodSymbol: 'symbol',
+  ZodAny: 'any',
+  ZodUnknown: 'unknown',
+  ZodObject: 'object',
+  ZodArray: 'array',
+  ZodRecord: 'record',
+  ZodUnion: 'union',
+  ZodDiscriminatedUnion: 'union',
+  ZodOptional: 'optional',
+  ZodNullable: 'nullable',
+  ZodDefault: 'default',
+  ZodEffects: 'effects',
+  ZodPipeline: 'pipe',
+  ZodLiteral: 'literal',
+  ZodEnum: 'enum',
+  ZodNativeEnum: 'nativeEnum',
+};
+
+function getDefType(def: ZodDef | undefined): string | undefined {
+  const raw = def?.type ?? def?.typeName;
+  return raw ? LEGACY_TYPE_MAP[raw] ?? raw : undefined;
+}
+
+function getObjectShape(schema: z.ZodTypeAny): Record<string, z.ZodTypeAny> {
+  const shape = (schema as any).shape;
+  if (typeof shape === 'function') {
+    return shape();
+  }
+  return shape ?? {};
+}
+
 /**
  * Generate JSON schema from Zod schema
  *
@@ -24,14 +63,15 @@ export function getToolSchema(schema: z.ZodTypeAny): Record<string, unknown> {
  * Simplified implementation - may use zod-to-json-schema for complex cases
  */
 function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
-  const def = (schema as any)._def;
+  const def = (schema as any)._def as ZodDef | undefined;
+  const typeName = getDefType(def);
 
   // Handle ZodObject
-  if (def.typeName === 'ZodObject') {
+  if (typeName === 'object') {
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
 
-    for (const [key, field] of Object.entries(def.shape())) {
+    for (const [key, field] of Object.entries(getObjectShape(schema))) {
       const fieldSchema = field as z.ZodTypeAny;
       properties[key] = zodToJsonSchema(fieldSchema);
 
@@ -49,38 +89,40 @@ function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
   }
 
   // Handle ZodString
-  if (def.typeName === 'ZodString') {
+  if (typeName === 'string') {
     return { type: 'string' };
   }
 
   // Handle ZodNumber
-  if (def.typeName === 'ZodNumber') {
+  if (typeName === 'number') {
     return { type: 'number' };
   }
 
   // Handle ZodBoolean
-  if (def.typeName === 'ZodBoolean') {
+  if (typeName === 'boolean') {
     return { type: 'boolean' };
   }
 
   // Handle ZodArray
-  if (def.typeName === 'ZodArray') {
+  if (typeName === 'array') {
+    const element = (def as any).element ?? (def as any).type;
     return {
       type: 'array',
-      items: zodToJsonSchema((def as any).type),
+      items: element ? zodToJsonSchema(element) : {},
     };
   }
 
   // Handle ZodRecord
-  if (def.typeName === 'ZodRecord') {
+  if (typeName === 'record') {
+    const valueType = (def as any).valueType ?? (def as any).value ?? (def as any).keyType;
     return {
       type: 'object',
-      additionalProperties: zodToJsonSchema((def as any).valueType),
+      additionalProperties: valueType ? zodToJsonSchema(valueType) : {},
     };
   }
 
   // Handle ZodUnion
-  if (def.typeName === 'ZodUnion') {
+  if (typeName === 'union') {
     const options = (def as any).options.map((opt: z.ZodTypeAny) => zodToJsonSchema(opt));
     return {
       anyOf: options,
@@ -88,12 +130,12 @@ function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
   }
 
   // Handle ZodAny / ZodUnknown
-  if (def.typeName === 'ZodAny' || def.typeName === 'ZodUnknown') {
+  if (typeName === 'any' || typeName === 'unknown') {
     return {};
   }
 
   // Handle ZodLiteral
-  if (def.typeName === 'ZodLiteral') {
+  if (typeName === 'literal') {
     return {
       type: typeof (def as any).value,
       const: (def as any).value,
@@ -101,7 +143,7 @@ function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
   }
 
   // Handle ZodEnum
-  if (def.typeName === 'ZodEnum') {
+  if (typeName === 'enum' || typeName === 'nativeEnum') {
     return {
       type: typeof (def as any).values[0],
       enum: (def as any).values,
@@ -109,12 +151,12 @@ function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
   }
 
   // Handle ZodOptional
-  if (def.typeName === 'ZodOptional') {
+  if (typeName === 'optional') {
     return zodToJsonSchema((def as any).innerType);
   }
 
   // Handle ZodNullable
-  if (def.typeName === 'ZodNullable') {
+  if (typeName === 'nullable') {
     return {
       anyOf: [
         zodToJsonSchema((def as any).innerType),
@@ -124,10 +166,17 @@ function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
   }
 
   // Handle ZodDefault
-  if (def.typeName === 'ZodDefault') {
+  if (typeName === 'default') {
     const innerSchema = zodToJsonSchema((def as any).innerType);
     innerSchema.default = (def as any).defaultValue();
     return innerSchema;
+  }
+
+  if (typeName === 'effects' || typeName === 'pipe') {
+    const next = (def as any).out ?? (def as any).schema ?? (def as any).innerType ?? (def as any).in;
+    if (next) {
+      return zodToJsonSchema(next);
+    }
   }
 
   // Fallback: treat as unknown
@@ -141,15 +190,17 @@ function isOptional(schema: z.ZodTypeAny): boolean {
   let current = schema;
 
   while (true) {
-    const def = (current as any)._def;
+    const def = (current as any)._def as ZodDef | undefined;
 
     if (!def) break;
 
-    if (def.typeName === 'ZodOptional') {
+    const typeName = getDefType(def);
+
+    if (typeName === 'optional') {
       return true;
     }
 
-    if (def.typeName === 'ZodDefault' || def.typeName === 'ZodNullable') {
+    if (typeName === 'default' || typeName === 'nullable') {
       current = def.innerType;
       continue;
     }

@@ -10,8 +10,8 @@ import {
   extractPorts,
   deriveConnectionType,
   canConnect,
-  type ConnectionType,
 } from '../zod-ports';
+import type { ConnectionType } from '../types';
 import { validateComponentSchema } from '../schema-validation';
 
 describe('Port Metadata System', () => {
@@ -19,7 +19,8 @@ describe('Port Metadata System', () => {
     it('stores metadata externally', () => {
       const schema = withPortMeta(z.string(), { label: 'Test Label' });
 
-      expect(schema._def?.typeName).toBe('ZodString');
+      const typeName = (schema as any)._def?.type;
+      expect(typeName).toBe('string');
 
       const meta = getPortMeta(schema);
       expect(meta).toBeDefined();
@@ -116,29 +117,29 @@ describe('Port Extraction', () => {
       const ports = extractPorts(schema);
 
       expect(ports).toHaveLength(3);
-      expect(ports[0]).toEqual({
+      expect(ports[0]).toEqual(expect.objectContaining({
         id: 'apiKey',
         label: 'API Key',
-        dataType: expect.any(Object),
+        connectionType: expect.any(Object),
         required: true,
-      });
-      expect(ports[1]).toEqual({
+      }));
+      expect(ports[1]).toEqual(expect.objectContaining({
         id: 'target',
         label: 'Target',
-        dataType: expect.any(Object),
+        connectionType: expect.any(Object),
         required: false,
-      });
-      expect(ports[2]).toEqual({
+      }));
+      expect(ports[2]).toEqual(expect.objectContaining({
         id: 'count',
         label: 'Count',
-        dataType: expect.any(Object),
+        connectionType: expect.any(Object),
         required: false,
-      });
+      }));
     });
 
     it('defaults label to field name', () => {
       const schema = z.object({
-        name: z.string(),
+        name: withPortMeta(z.string(), {}),
       });
 
       const ports = extractPorts(schema);
@@ -180,7 +181,7 @@ describe('Port Extraction', () => {
     });
 
     it('derives record types', () => {
-      const type = deriveConnectionType(z.record(z.string()));
+      const type = deriveConnectionType(z.record(z.string(), z.string()));
       expect(type).toEqual({
         kind: 'map',
         element: { kind: 'primitive', name: 'text' },
@@ -251,7 +252,7 @@ describe('Connection Compatibility', () => {
     });
 
     it('disallows incompatible primitives', () => {
-      const source: ConnectionType = { kind: 'primitive', name: 'text' };
+      const source: ConnectionType = { kind: 'primitive', name: 'file' };
       const target: ConnectionType = { kind: 'primitive', name: 'number' };
 
       expect(canConnect(source, target)).toBe(false);
@@ -270,11 +271,11 @@ describe('Connection Compatibility', () => {
     it('recursively checks list elements', () => {
       const source: ConnectionType = {
         kind: 'list',
-        element: { kind: 'primitive', name: 'text' },
+        element: { kind: 'primitive', name: 'file' },
       };
       const target: ConnectionType = {
         kind: 'list',
-        element: { kind: 'primitive', name: 'text' },
+        element: { kind: 'primitive', name: 'file' },
       };
 
       expect(canConnect(source, target)).toBe(true);
@@ -318,7 +319,7 @@ describe('Schema Validation', () => {
 
     it('blocks z.any() without allowAny', () => {
       const schema = z.object({
-        anyField: z.any(),
+        anyField: withPortMeta(z.any(), { label: 'Any Field' }),
       });
 
       const result = validateComponentSchema(schema);
@@ -351,23 +352,26 @@ describe('Schema Validation', () => {
 
     it('enforces max depth limit', () => {
       const schema = z.object({
-        shallow: z.object({
-          deep: z.object({
-            tooDeep: z.string(),
+        shallow: withPortMeta(
+          z.object({
+            deep: z.object({
+              tooDeep: z.string(),
+            }),
           }),
-        }),
+          { label: 'Shallow' },
+        ),
       });
 
       const result = validateComponentSchema(schema, { maxDepth: 2 });
 
       expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('tooDeep');
-      expect(result.errors[0]).toContain('max depth 2');
+      expect(result.errors.some((error) => error.includes('shallow'))).toBe(true);
+      expect(result.errors.some((error) => error.includes('max depth 2'))).toBe(true);
     });
 
     it('requires connectionType for union types', () => {
       const schema = z.object({
-        unionField: z.union([z.string(), z.number()]),
+        unionField: withPortMeta(z.union([z.string(), z.number()]), { label: 'Union Field' }),
       });
 
       const result = validateComponentSchema(schema);

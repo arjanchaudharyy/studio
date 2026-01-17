@@ -105,54 +105,21 @@ export interface AgentTracePublisher {
   publish(event: AgentTraceEvent): Promise<void> | void;
 }
 
-export type PrimitivePortTypeName =
-  | 'any'
-  | 'text'
-  | 'secret'
-  | 'number'
-  | 'boolean'
-  | 'file'
-  | 'json';
+export type PortBindingType = 'credential' | 'action' | 'config';
 
-export type PrimitiveCoercionSource = Exclude<
-  PrimitivePortTypeName,
-  'secret' | 'file'
->;
-
-export interface PrimitivePortType {
-  kind: 'primitive';
-  name: PrimitivePortTypeName;
-  coercion?: {
-    from?: PrimitiveCoercionSource[];
-  };
-}
-
-export interface ListPortType {
-  kind: 'list';
-  element: PrimitivePortType | ContractPortType;
-}
-
-export interface MapPortType {
-  kind: 'map';
-  value: PrimitivePortType;
-}
-
-export interface ContractPortType {
-  kind: 'contract';
-  name: string;
+export interface ConnectionType {
+  kind: 'primitive' | 'contract' | 'list' | 'map' | 'any';
+  name?: string;
+  element?: ConnectionType;
   credential?: boolean;
 }
-
-export type PortDataType =
-  | PrimitivePortType
-  | ListPortType
-  | MapPortType
-  | ContractPortType;
 
 export interface ComponentPortMetadata {
   id: string;
   label: string;
-  dataType: PortDataType;
+  connectionType: ConnectionType;
+  bindingType?: PortBindingType;
+  editor?: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multi-select' | 'json' | 'secret';
   required?: boolean;
   description?: string;
   valuePriority?: 'manual-first' | 'connection-first';
@@ -238,8 +205,6 @@ export interface ComponentUiMetadata {
   isLatest?: boolean;
   deprecated?: boolean;
   example?: string;
-  inputs?: ComponentPortMetadata[];
-  outputs?: ComponentPortMetadata[];
   parameters?: ComponentParameterMetadata[];
   examples?: string[];
   /** UI-only component - should not be included in workflow execution */
@@ -351,10 +316,10 @@ export interface ComponentDefinition<I = unknown, O = unknown, P = Record<string
   label: string;
   category: ComponentCategory;
   runner: RunnerConfig;
-  inputSchema: z.ZodType<I>;
-  outputSchema: z.ZodType<O>;
+  inputs: z.ZodType<I>;
+  outputs: z.ZodType<O>;
   docs?: string;
-  metadata?: ComponentUiMetadata;
+  ui?: ComponentUiMetadata;
   requiresSecrets?: boolean;
 
   /** Retry policy for this component (optional, uses default if not specified) */
@@ -364,7 +329,7 @@ export interface ComponentDefinition<I = unknown, O = unknown, P = Record<string
   resolvePorts?: (
     params: P,
   ) => {
-    inputs?: ComponentPortMetadata[];
-    outputs?: ComponentPortMetadata[];
+    inputs?: z.ZodObject<any, any>;
+    outputs?: z.ZodObject<any, any>;
   };
 }

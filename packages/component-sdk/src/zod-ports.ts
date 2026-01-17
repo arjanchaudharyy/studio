@@ -2,26 +2,91 @@
  * Zod Port Extraction and Connection Types
  *
  * Derives port metadata and connection types from Zod schemas.
- * This replaces the legacy PortDataType system with Zod-first derivation.
+ * This replaces the legacy port-type system with Zod-first derivation.
  */
 
 import { z } from 'zod';
-import type { ComponentPortMetadata } from './types';
+import type { ComponentPortMetadata, ConnectionType } from './types';
 import { getPortMeta, mergePortMeta, type PortMeta } from './port-meta';
-
-export interface ConnectionType {
-  kind: 'primitive' | 'contract' | 'list' | 'map' | 'any';
-  name?: string; // primitive name or contract name
-  element?: ConnectionType; // for list/map
-  credential?: boolean; // for contract ports
-}
 
 export interface ValidationResult {
   ok: boolean;
   error?: string;
 }
 
-const CONNECTION_TYPE_SYMBOL = Symbol('shipsec.connectionType');
+type ZodDef = { type?: string; typeName?: string; [key: string]: any };
+
+const LEGACY_TYPE_MAP: Record<string, string> = {
+  ZodString: 'string',
+  ZodNumber: 'number',
+  ZodBoolean: 'boolean',
+  ZodBigInt: 'bigint',
+  ZodDate: 'date',
+  ZodSymbol: 'symbol',
+  ZodAny: 'any',
+  ZodUnknown: 'unknown',
+  ZodObject: 'object',
+  ZodArray: 'array',
+  ZodRecord: 'record',
+  ZodUnion: 'union',
+  ZodDiscriminatedUnion: 'union',
+  ZodOptional: 'optional',
+  ZodNullable: 'nullable',
+  ZodDefault: 'default',
+  ZodEffects: 'effects',
+  ZodPipeline: 'pipe',
+  ZodLiteral: 'literal',
+  ZodEnum: 'enum',
+  ZodNativeEnum: 'nativeEnum',
+};
+
+function getDefType(def: ZodDef | undefined): string | undefined {
+  const raw = def?.type ?? def?.typeName;
+  return raw ? LEGACY_TYPE_MAP[raw] ?? raw : undefined;
+}
+
+function getSchemaType(schema: z.ZodTypeAny): string | undefined {
+  return getDefType((schema as any)._def);
+}
+
+function getEnumValueTypes(def: ZodDef): string[] {
+  if (Array.isArray(def.values)) {
+    return def.values.map((value) => typeof value);
+  }
+  if (def.entries && typeof def.entries === 'object') {
+    return Object.values(def.entries).map((value) => typeof value);
+  }
+  return [];
+}
+
+function getArrayElement(def: ZodDef): z.ZodTypeAny | undefined {
+  return def.element ?? def.type;
+}
+
+function getRecordValue(def: ZodDef): z.ZodTypeAny | undefined {
+  return def.valueType ?? def.value ?? def.keyType;
+}
+
+function editorToConnectionType(editor?: PortMeta['editor']): ConnectionType | undefined {
+  switch (editor) {
+    case 'number':
+      return { kind: 'primitive', name: 'number' };
+    case 'boolean':
+      return { kind: 'primitive', name: 'boolean' };
+    case 'json':
+      return { kind: 'primitive', name: 'json' };
+    case 'secret':
+      return { kind: 'primitive', name: 'secret' };
+    case 'multi-select':
+      return { kind: 'list', element: { kind: 'primitive', name: 'text' } };
+    case 'text':
+    case 'textarea':
+    case 'select':
+      return { kind: 'primitive', name: 'text' };
+    default:
+      return undefined;
+  }
+}
 
 /**
  * Extract port metadata from a Zod schema (object keys)
@@ -31,24 +96,36 @@ const CONNECTION_TYPE_SYMBOL = Symbol('shipsec.connectionType');
  * @returns Array of ComponentPortMetadata derived from schema keys
  */
 export function extractPorts(
-  schema: z.ZodObject<any, any, any, any, any>,
+  schema: z.ZodTypeAny,
   defaultLabelPrefix: string = ''
 ): ComponentPortMetadata[] {
   const ports: ComponentPortMetadata[] = [];
-  const shape = schema.shape;
+  const objectSchema = unwrapToObject(schema);
+  if (!objectSchema) {
+    return ports;
+  }
+  const shape = typeof objectSchema.shape === 'function' ? objectSchema.shape() : objectSchema.shape;
 
-  for (const [fieldName, fieldSchema] of Object.entries(shape)) {
-    const portMeta = getPortMeta(fieldSchema);
-    const connectionType = deriveConnectionType(fieldSchema);
-    const isRequired = !isOptional(fieldSchema);
+  for (const [fieldName, fieldSchema] of Object.entries(
+    shape as Record<string, z.ZodTypeAny>,
+  )) {
+    const typedSchema = fieldSchema as z.ZodTypeAny;
+    const portMeta = getPortMeta(typedSchema);
+    if (!portMeta) {
+      continue;
+    }
+    const connectionType = deriveConnectionType(typedSchema);
+    const isRequired = !isOptional(typedSchema);
 
-    const metadata: PortMeta = portMeta || {};
+    const metadata: PortMeta = portMeta;
     const label = metadata.label || fieldName;
 
     ports.push({
       id: fieldName,
       label,
-      dataType: toLegacyPortDataType(connectionType),
+      connectionType,
+      bindingType: metadata.bindingType,
+      editor: metadata.editor,
       required: isRequired,
       description: metadata.description,
       valuePriority: metadata.valuePriority,
@@ -70,23 +147,41 @@ export function deriveConnectionType(schema: z.ZodTypeAny): ConnectionType {
   // Check for explicit connection type override in metadata
   const portMeta = getPortMeta(schema);
   if (portMeta?.connectionType) {
-    return {
-      kind: 'contract',
-      name: portMeta.connectionType,
-    };
+    if (typeof portMeta.connectionType === 'string') {
+      return {
+        kind: 'contract',
+        name: portMeta.connectionType,
+      };
+    }
+    return portMeta.connectionType;
   }
 
   // Unwrap optional, nullable, default effects
   const unwrapped = unwrapEffects(schema);
+  const defType = getSchemaType(unwrapped);
 
   // Handle explicit any/unknown with allowAny flag
-  if (unwrapped._def?.typeName === 'ZodAny' || unwrapped._def?.typeName === 'ZodUnknown') {
+  if (defType === 'any' || defType === 'unknown') {
     if (portMeta?.allowAny) {
       return { kind: 'any' };
     }
     throw new Error(
       `z.any() or z.unknown() requires explicit allowAny=true${portMeta?.reason ? `: ${portMeta.reason}` : ''}`
     );
+  }
+
+  // Check for schemaName (named contract)
+  if (portMeta?.schemaName) {
+    return {
+      kind: 'contract',
+      name: portMeta.schemaName,
+      credential: portMeta.isCredential,
+    };
+  }
+
+  const editorConnectionType = editorToConnectionType(portMeta?.editor);
+  if (editorConnectionType) {
+    return editorConnectionType;
   }
 
   // Primitive types
@@ -98,8 +193,12 @@ export function deriveConnectionType(schema: z.ZodTypeAny): ConnectionType {
   }
 
   // Array types
-  if (unwrapped._def?.typeName === 'ZodArray') {
-    const element = deriveConnectionType((unwrapped as any)._def.type);
+  if (defType === 'array') {
+    const elementSchema = getArrayElement((unwrapped as any)._def ?? {});
+    if (!elementSchema) {
+      throw new Error('Array schema is missing element type');
+    }
+    const element = deriveConnectionType(elementSchema);
     return {
       kind: 'list',
       element,
@@ -107,8 +206,12 @@ export function deriveConnectionType(schema: z.ZodTypeAny): ConnectionType {
   }
 
   // Record types
-  if (unwrapped._def?.typeName === 'ZodRecord') {
-    const value = deriveConnectionType((unwrapped as any)._def.valueType);
+  if (defType === 'record') {
+    const valueSchema = getRecordValue((unwrapped as any)._def ?? {});
+    if (!valueSchema) {
+      throw new Error('Record schema is missing value type');
+    }
+    const value = deriveConnectionType(valueSchema);
     return {
       kind: 'map',
       element: value,
@@ -116,25 +219,15 @@ export function deriveConnectionType(schema: z.ZodTypeAny): ConnectionType {
   }
 
   // Union types - require explicit connectionType override
-  if (unwrapped._def?.typeName === 'ZodUnion') {
+  if (defType === 'union') {
     if (portMeta?.connectionType) {
-      return {
-        kind: 'contract',
-        name: portMeta.connectionType,
-      };
+      return typeof portMeta.connectionType === 'string'
+        ? { kind: 'contract', name: portMeta.connectionType }
+        : portMeta.connectionType;
     }
     throw new Error(
       'Union types require explicit meta.connectionType override to define compatibility'
     );
-  }
-
-  // Check for schemaName (named contract)
-  if (portMeta?.schemaName) {
-    return {
-      kind: 'contract',
-      name: portMeta.schemaName,
-      credential: portMeta.isCredential,
-    };
   }
 
   // Default: treat as any with error (developer should be explicit)
@@ -186,25 +279,25 @@ function unwrapEffects(schema: z.ZodTypeAny): z.ZodTypeAny {
   let current = schema;
 
   while (true) {
-    const def = (current as any)._def;
+    const def = (current as any)._def as ZodDef | undefined;
 
     if (!def) break;
 
-    // ZodOptional: z.optional()
-    if (def.typeName === 'ZodOptional') {
+    const typeName = getDefType(def);
+
+    if (typeName === 'optional' || typeName === 'nullable' || typeName === 'default') {
       current = def.innerType;
       continue;
     }
 
-    // ZodNullable: z.nullable()
-    if (def.typeName === 'ZodNullable') {
-      current = def.innerType;
+    if (typeName === 'effects') {
+      current = def.schema;
       continue;
     }
 
-    // ZodDefault: z.default()
-    if (def.typeName === 'ZodDefault') {
-      current = def.innerType;
+    if (typeName === 'pipe') {
+      current = def.out ?? def.schema ?? def.innerType ?? def.in ?? current;
+      if (current === schema) break;
       continue;
     }
 
@@ -218,18 +311,22 @@ function unwrapEffects(schema: z.ZodTypeAny): z.ZodTypeAny {
  * Check if schema is optional (has optional effect)
  */
 function isOptional(schema: z.ZodTypeAny): boolean {
-  const unwrapped = unwrapEffects(schema);
-  const def = (unwrapped as any)._def;
-
-  // Check if wrapped in optional
   let current = schema;
   while (true) {
-    const currentDef = (current as any)._def;
-    if (currentDef?.typeName === 'ZodOptional') {
+    const currentDef = (current as any)._def as ZodDef | undefined;
+    if (!currentDef) {
+      break;
+    }
+    const typeName = getDefType(currentDef);
+    if (typeName === 'optional' || typeName === 'default') {
       return true;
     }
-    if (currentDef?.typeName === 'ZodDefault' || currentDef?.typeName === 'ZodNullable') {
-      current = currentDef.innerType;
+    if (typeName === 'nullable' || typeName === 'effects') {
+      current = typeName === 'effects' ? currentDef.schema : currentDef.innerType;
+      continue;
+    }
+    if (typeName === 'pipe') {
+      current = currentDef.out ?? currentDef.schema ?? currentDef.innerType ?? currentDef.in ?? current;
       continue;
     }
     break;
@@ -238,40 +335,93 @@ function isOptional(schema: z.ZodTypeAny): boolean {
   return false;
 }
 
+function unwrapToObject(
+  schema: z.ZodTypeAny
+): z.AnyZodObject | null {
+  let current = schema;
+
+  while (true) {
+    const def = (current as any)._def as ZodDef | undefined;
+    const typeName = getDefType(def);
+
+    if (!def) {
+      return null;
+    }
+
+    if (typeName === 'object') {
+      return current as z.AnyZodObject;
+    }
+
+    if (typeName === 'optional' || typeName === 'nullable' || typeName === 'default') {
+      current = def.innerType;
+      continue;
+    }
+
+    if (typeName === 'effects') {
+      current = def.schema;
+      continue;
+    }
+
+    if (typeName === 'pipe') {
+      current = def.out ?? def.schema ?? def.innerType ?? def.in ?? current;
+      continue;
+    }
+
+    return null;
+  }
+}
+
 /**
  * Check if schema is a primitive type
  */
 function isPrimitiveType(schema: z.ZodTypeAny): boolean {
-  const typeName = schema._def?.typeName;
-  return [
-    'ZodString',
-    'ZodNumber',
-    'ZodBoolean',
-    'ZodBigInt',
-    'ZodDate',
-    'ZodSymbol',
-  ].includes(typeName);
+  const typeName = getSchemaType(schema);
+  return ['string', 'number', 'boolean', 'bigint', 'date', 'symbol', 'enum', 'literal'].includes(
+    typeName ?? ''
+  );
 }
 
 /**
  * Get primitive type name
  */
 function getPrimitiveTypeName(schema: z.ZodTypeAny): string {
-  const typeName = schema._def?.typeName;
+  const typeName = getSchemaType(schema);
+  const def = (schema as any)._def as ZodDef | undefined;
 
   switch (typeName) {
-    case 'ZodString':
+    case 'string':
       return 'text';
-    case 'ZodNumber':
+    case 'number':
       return 'number';
-    case 'ZodBoolean':
+    case 'boolean':
       return 'boolean';
-    case 'ZodBigInt':
+    case 'bigint':
       return 'number';
-    case 'ZodDate':
+    case 'date':
       return 'text';
-    case 'ZodSymbol':
+    case 'symbol':
       return 'text';
+    case 'enum': {
+      const valueTypes = getEnumValueTypes(def ?? {});
+      if (valueTypes.every((type) => type === 'number')) {
+        return 'number';
+      }
+      if (valueTypes.every((type) => type === 'boolean')) {
+        return 'boolean';
+      }
+      return 'text';
+    }
+    case 'literal': {
+      const values = Array.isArray(def?.values) ? def?.values : [];
+      const sample = values[0];
+      if (typeof sample === 'number') {
+        return 'number';
+      }
+      if (typeof sample === 'boolean') {
+        return 'boolean';
+      }
+      return 'text';
+    }
     default:
       return 'any';
   }
@@ -280,7 +430,7 @@ function getPrimitiveTypeName(schema: z.ZodTypeAny): string {
 /**
  * Check if primitive can coerce from source to target
  */
-function canCoercePrimitive(source: string, target: string): string {
+function canCoercePrimitive(source: string, target: string): boolean {
   // Number and boolean can be coerced to text
   if (target === 'text') {
     return ['number', 'boolean', 'text'].includes(source);
@@ -294,40 +444,74 @@ function canCoercePrimitive(source: string, target: string): string {
   return false;
 }
 
-/**
- * Convert ConnectionType to legacy PortDataType format
- * (Temporary helper during migration - will be removed in Phase 6)
- */
-function toLegacyPortDataType(connType: ConnectionType): any {
+export function describeConnectionType(connType: ConnectionType): string {
+  if (connType.kind === 'any') {
+    return 'any';
+  }
+
   if (connType.kind === 'primitive') {
-    return { kind: 'primitive', name: connType.name };
+    return connType.name ?? 'any';
   }
 
   if (connType.kind === 'contract') {
-    return {
-      kind: 'contract',
-      name: connType.name,
-      credential: connType.credential,
-    };
+    if (connType.name) {
+      return connType.credential ? `credential:${connType.name}` : `contract:${connType.name}`;
+    }
+    return 'contract';
   }
 
   if (connType.kind === 'list') {
-    return {
-      kind: 'list',
-      element: toLegacyPortDataType(connType.element!),
-    };
+    return `list<${describeConnectionType(connType.element!)}>`;
   }
 
   if (connType.kind === 'map') {
-    return {
-      kind: 'map',
-      value: toLegacyPortDataType(connType.element!),
-    };
+    return `map<${describeConnectionType(connType.element!)}>`;
+  }
+
+  return 'unknown';
+}
+
+export function createPlaceholderForConnectionType(connType?: ConnectionType): unknown {
+  if (!connType) {
+    return null;
+  }
+
+  if (connType.kind === 'primitive') {
+    switch (connType.name) {
+      case 'text':
+        return '__placeholder__';
+      case 'secret':
+        return 'secret-placeholder';
+      case 'number':
+        return 1;
+      case 'boolean':
+        return false;
+      case 'file':
+        return {};
+      case 'json':
+        return {};
+      case 'any':
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  if (connType.kind === 'list') {
+    return [createPlaceholderForConnectionType(connType.element)];
+  }
+
+  if (connType.kind === 'map') {
+    return { placeholder: createPlaceholderForConnectionType(connType.element) };
+  }
+
+  if (connType.kind === 'contract') {
+    return connType.credential ? 'credential-placeholder' : {};
   }
 
   if (connType.kind === 'any') {
-    return { kind: 'primitive', name: 'any' };
+    return null;
   }
 
-  throw new Error(`Unknown connection type: ${connType.kind}`);
+  return null;
 }
