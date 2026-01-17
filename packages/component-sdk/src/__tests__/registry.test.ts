@@ -13,7 +13,7 @@ describe('ComponentRegistry', () => {
   });
 
   it('should register a component', () => {
-    const component: ComponentDefinition = {
+    const component = defineComponent({
       id: 'test.component',
       label: 'Test Component',
       category: 'transform',
@@ -21,7 +21,7 @@ describe('ComponentRegistry', () => {
       inputs: inputs({ input: port(z.string(), { label: 'Input' }) }),
       outputs: outputs({ output: port(z.string(), { label: 'Output' }) }),
       execute: async ({ inputs: payload }) => ({ output: payload.input }),
-    };
+    });
 
     registry.register(component);
 
@@ -32,7 +32,7 @@ describe('ComponentRegistry', () => {
   });
 
   it('should throw error when registering duplicate component', () => {
-    const component: ComponentDefinition = {
+    const component = defineComponent({
       id: 'duplicate.component',
       label: 'Duplicate',
       category: 'transform',
@@ -40,7 +40,7 @@ describe('ComponentRegistry', () => {
       inputs: inputs({}),
       outputs: outputs({}),
       execute: async () => ({}),
-    };
+    });
 
     registry.register(component);
 
@@ -55,7 +55,7 @@ describe('ComponentRegistry', () => {
   });
 
   it('should list all registered components', () => {
-    const component1: ComponentDefinition = {
+    const component1 = defineComponent({
       id: 'component.one',
       label: 'One',
       category: 'input',
@@ -63,9 +63,9 @@ describe('ComponentRegistry', () => {
       inputs: inputs({}),
       outputs: outputs({}),
       execute: async () => ({}),
-    };
+    });
 
-    const component2: ComponentDefinition = {
+    const component2 = defineComponent({
       id: 'component.two',
       label: 'Two',
       category: 'output',
@@ -73,7 +73,7 @@ describe('ComponentRegistry', () => {
       inputs: inputs({}),
       outputs: outputs({}),
       execute: async () => ({}),
-    };
+    });
 
     registry.register(component1);
     registry.register(component2);
@@ -85,7 +85,7 @@ describe('ComponentRegistry', () => {
   });
 
   it('should check if component exists', () => {
-    const component: ComponentDefinition = {
+    const component = defineComponent({
       id: 'exists.component',
       label: 'Exists',
       category: 'transform',
@@ -93,7 +93,7 @@ describe('ComponentRegistry', () => {
       inputs: inputs({}),
       outputs: outputs({}),
       execute: async () => ({}),
-    };
+    });
 
     expect(registry.has('exists.component')).toBe(false);
 
@@ -103,7 +103,7 @@ describe('ComponentRegistry', () => {
   });
 
   it('should clear all components', () => {
-    const component: ComponentDefinition = {
+    const component = defineComponent({
       id: 'clear.test',
       label: 'Clear Test',
       category: 'transform',
@@ -111,7 +111,7 @@ describe('ComponentRegistry', () => {
       inputs: inputs({}),
       outputs: outputs({}),
       execute: async () => ({}),
-    };
+    });
 
     registry.register(component);
     expect(registry.list()).toHaveLength(1);
@@ -121,7 +121,7 @@ describe('ComponentRegistry', () => {
   });
 
   it('should extract parameters from schema when provided', () => {
-    const component: ComponentDefinition = {
+    const component = defineComponent({
       id: 'param.component',
       label: 'Param Component',
       category: 'transform',
@@ -139,7 +139,7 @@ describe('ComponentRegistry', () => {
         }),
       }),
       execute: async ({ inputs: payload }) => ({ output: payload.input }),
-    };
+    });
 
     registry.register(component);
 

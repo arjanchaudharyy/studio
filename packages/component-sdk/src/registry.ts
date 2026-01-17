@@ -9,7 +9,7 @@ import { extractParameters } from './zod-parameters';
 import { getPortMeta } from './port-meta';
 import { validateComponentSchema, validateParameterSchema } from './schema-validation';
 
-type AnyComponentDefinition = ComponentDefinition<any, any, any>;
+type AnyComponentDefinition = ComponentDefinition<any, any, any, any, any, any>;
 
 type ZodDef = { type?: string; typeName?: string; [key: string]: any };
 
@@ -38,7 +38,9 @@ export interface CachedComponentMetadata {
 export class ComponentRegistry {
   private components = new Map<string, CachedComponentMetadata>();
 
-  register<I, O, P = Record<string, unknown>>(definition: ComponentDefinition<I, O, P>): void {
+  register<IS extends Record<string, any>, OS extends Record<string, any>, PS extends Record<string, any> = {}>(
+    definition: ComponentDefinition<IS, OS, PS, any, any, any>
+  ): void {
     if (this.components.has(definition.id)) {
       throw new ConfigurationError(`Component ${definition.id} is already registered`, {
         configKey: 'componentId',
@@ -107,9 +109,11 @@ export class ComponentRegistry {
     });
   }
 
-  get<I, O>(id: string): ComponentDefinition<I, O> | undefined {
+  get<IS extends Record<string, any>, OS extends Record<string, any>>(
+    id: string
+  ): ComponentDefinition<IS, OS, any, any, any, any> | undefined {
     const cached = this.components.get(id);
-    return cached?.definition as ComponentDefinition<I, O> | undefined;
+    return cached?.definition as ComponentDefinition<IS, OS, any, any, any, any> | undefined;
   }
 
   getMetadata(id: string): CachedComponentMetadata | undefined {

@@ -116,6 +116,9 @@ export interface ConnectionType {
 
 declare const PortBrand: unique symbol;
 declare const ParamBrand: unique symbol;
+declare const InputsBrand: unique symbol;
+declare const OutputsBrand: unique symbol;
+declare const ParametersBrand: unique symbol;
 
 export type PortSchema<T extends z.ZodTypeAny = z.ZodTypeAny> = T & {
   readonly [PortBrand]: true;
@@ -125,17 +128,65 @@ export type ParamSchema<T extends z.ZodTypeAny = z.ZodTypeAny> = T & {
   readonly [ParamBrand]: true;
 };
 
-export type InputsSchema<T = unknown> = z.ZodObject<Record<string, PortSchema>> & {
-  readonly [PortBrand]: true;
-};
+/**
+ * Branded input schema that stores the inferred type for type-safe component definitions.
+ *
+ * The inferred type is stored in the `__inferred` property for easy extraction.
+ *
+ * @example
+ * ```ts
+ * const inputSchema = inputs({
+ *   text: port(z.string()),
+ *   count: port(z.number()),
+ * });
+ *
+ * type InputType = InferredInputs<typeof inputSchema>;
+ * // Result: { text: string; count: number; }
+ * ```
+ */
+export type InputsSchema<Shape extends Record<string, any> = Record<string, any>> =
+  z.ZodObject<Shape> & {
+    readonly [InputsBrand]: true;
+    readonly __inferred: z.infer<z.ZodObject<Shape>>;
+  };
 
-export type OutputsSchema<T = unknown> = z.ZodObject<Record<string, PortSchema>> & {
-  readonly [PortBrand]: true;
-};
+/**
+ * Branded output schema that stores the inferred type for type-safe component definitions.
+ *
+ * @example
+ * ```ts
+ * const outputSchema = outputs({
+ *   result: port(z.string()),
+ * });
+ *
+ * type OutputType = InferredOutputs<typeof outputSchema>;
+ * // Result: { result: string; }
+ * ```
+ */
+export type OutputsSchema<Shape extends Record<string, any> = Record<string, any>> =
+  z.ZodObject<Shape> & {
+    readonly [OutputsBrand]: true;
+    readonly __inferred: z.infer<z.ZodObject<Shape>>;
+  };
 
-export type ParametersSchema<T = unknown> = z.ZodObject<Record<string, ParamSchema>> & {
-  readonly [ParamBrand]: true;
-};
+/**
+ * Branded parameter schema that stores the inferred type for type-safe component definitions.
+ *
+ * @example
+ * ```ts
+ * const paramSchema = parameters({
+ *   mode: param(z.enum(['upper', 'lower'])),
+ * });
+ *
+ * type ParamType = InferredParams<typeof paramSchema>;
+ * // Result: { mode: 'upper' | 'lower'; }
+ * ```
+ */
+export type ParametersSchema<Shape extends Record<string, any> = Record<string, any>> =
+  z.ZodObject<Shape> & {
+    readonly [ParametersBrand]: true;
+    readonly __inferred: z.infer<z.ZodObject<Shape>>;
+  };
 
 export interface ComponentPortMetadata {
   id: string;
@@ -334,14 +385,21 @@ export const DEFAULT_RETRY_POLICY: ComponentRetryPolicy = {
   ],
 };
 
-export interface ComponentDefinition<I = unknown, O = unknown, P = Record<string, unknown>> {
+export interface ComponentDefinition<
+  IShape extends Record<string, any> = Record<string, any>,
+  OShape extends Record<string, any> = Record<string, any>,
+  PShape extends Record<string, any> = Record<string, any>,
+  I = z.infer<z.ZodObject<IShape>>,
+  O = z.infer<z.ZodObject<OShape>>,
+  P = z.infer<z.ZodObject<PShape>>
+> {
   id: string;
   label: string;
   category: ComponentCategory;
   runner: RunnerConfig;
-  inputs: InputsSchema<I>;
-  outputs: OutputsSchema<O>;
-  parameters?: ParametersSchema<P>;
+  inputs: InputsSchema<IShape>;
+  outputs: OutputsSchema<OShape>;
+  parameters?: ParametersSchema<PShape>;
   docs?: string;
   ui?: ComponentUiMetadata;
   requiresSecrets?: boolean;
@@ -353,8 +411,8 @@ export interface ComponentDefinition<I = unknown, O = unknown, P = Record<string
   resolvePorts?: (
     params: P,
   ) => {
-    inputs?: InputsSchema;
-    outputs?: OutputsSchema;
+    inputs?: InputsSchema<any>;
+    outputs?: OutputsSchema<any>;
   };
 }
 

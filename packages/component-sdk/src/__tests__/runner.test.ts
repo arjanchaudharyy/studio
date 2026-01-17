@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import { runComponentInline, runComponentWithRunner } from '../runner';
 import { createExecutionContext } from '../context';
-import type { ComponentDefinition } from '../types';
+import { defineComponent } from '../define-component';
 import { inputs, outputs, port } from '../schema-builders';
 
 const enableDockerRunnerTests = process.env.ENABLE_DOCKER_TESTS === 'true';
@@ -140,10 +140,7 @@ describe('Component Runner', () => {
         result: port(z.string(), { label: 'Result' }),
       });
 
-      const component: ComponentDefinition<
-        z.infer<typeof inputSchema>,
-        z.infer<typeof outputSchema>
-      > = {
+      const component = defineComponent({
         id: 'test.repeat',
         label: 'Repeat Text',
         category: 'transform',
@@ -153,7 +150,7 @@ describe('Component Runner', () => {
       async execute({ inputs }) {
         return { result: inputs.text.repeat(inputs.repeat) };
       },
-    };
+    });
 
       const context = createExecutionContext({
         runId: 'integration-test',
