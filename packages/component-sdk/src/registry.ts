@@ -167,7 +167,7 @@ function getObjectShape(schema: z.ZodTypeAny): Record<string, z.ZodTypeAny> {
 
 function unwrapToObject(
   schema: z.ZodTypeAny
-): z.AnyZodObject | null {
+): z.ZodObject<any, any> | null {
   let current = schema;
 
   while (true) {
@@ -179,7 +179,7 @@ function unwrapToObject(
     }
 
     if (typeName === 'object') {
-      return current as z.AnyZodObject;
+      return current as z.ZodObject<any, any>;
     }
 
     if (typeName === 'optional' || typeName === 'nullable' || typeName === 'default') {
