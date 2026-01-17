@@ -24,10 +24,14 @@ export * from './http/har-builder';
 export * from './http/instrumented-fetch';
 export * from './http/adapters/interface';
 export * from './http/adapters';
+export * from './define-component';
 
 // NEW Zod-first typing system (Phase 1)
 export * from './port-meta';
+export * from './param-meta';
+export * from './schema-builders';
 export * from './zod-ports';
+export * from './zod-parameters';
 export * from './json-schema';
 export * from './schema-validation';
 export * from './zod-coerce';

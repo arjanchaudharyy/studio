@@ -114,6 +114,29 @@ export interface ConnectionType {
   credential?: boolean;
 }
 
+declare const PortBrand: unique symbol;
+declare const ParamBrand: unique symbol;
+
+export type PortSchema<T extends z.ZodTypeAny = z.ZodTypeAny> = T & {
+  readonly [PortBrand]: true;
+};
+
+export type ParamSchema<T extends z.ZodTypeAny = z.ZodTypeAny> = T & {
+  readonly [ParamBrand]: true;
+};
+
+export type InputsSchema<T = unknown> = z.ZodObject<Record<string, PortSchema>> & {
+  readonly [PortBrand]: true;
+};
+
+export type OutputsSchema<T = unknown> = z.ZodObject<Record<string, PortSchema>> & {
+  readonly [PortBrand]: true;
+};
+
+export type ParametersSchema<T = unknown> = z.ZodObject<Record<string, ParamSchema>> & {
+  readonly [ParamBrand]: true;
+};
+
 export interface ComponentPortMetadata {
   id: string;
   label: string;
@@ -318,6 +341,7 @@ export interface ComponentDefinition<I = unknown, O = unknown, P = Record<string
   runner: RunnerConfig;
   inputs: z.ZodType<I>;
   outputs: z.ZodType<O>;
+  parameters?: ParametersSchema<P>;
   docs?: string;
   ui?: ComponentUiMetadata;
   requiresSecrets?: boolean;
@@ -329,7 +353,35 @@ export interface ComponentDefinition<I = unknown, O = unknown, P = Record<string
   resolvePorts?: (
     params: P,
   ) => {
-    inputs?: z.ZodObject<any, any>;
-    outputs?: z.ZodObject<any, any>;
+    inputs?: z.ZodObject<any, any> | InputsSchema;
+    outputs?: z.ZodObject<any, any> | OutputsSchema;
+  };
+}
+
+export interface ExecutionPayload<I, P> {
+  inputs: I;
+  params: P;
+}
+
+export interface UnifiedComponentDefinition<
+  I = unknown,
+  O = unknown,
+  P = Record<string, unknown>,
+> {
+  id: string;
+  label: string;
+  category: ComponentCategory;
+  runner: RunnerConfig;
+  inputs: InputsSchema<I>;
+  outputs: OutputsSchema<O>;
+  parameters?: ParametersSchema<P>;
+  docs?: string;
+  ui?: ComponentUiMetadata;
+  requiresSecrets?: boolean;
+  retryPolicy?: ComponentRetryPolicy;
+  execute: (payload: ExecutionPayload<I, P>, context: ExecutionContext) => Promise<O>;
+  resolvePorts?: (params: P) => {
+    inputs?: InputsSchema;
+    outputs?: OutputsSchema;
   };
 }

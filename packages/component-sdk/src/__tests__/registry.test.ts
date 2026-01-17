@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'bun:test';
 import { z } from 'zod';
 import { ComponentRegistry } from '../registry';
 import { withPortMeta } from '../port-meta';
+import { defineComponent } from '../define-component';
+import { inputs, outputs, param, parameters, port } from '../schema-builders';
 import type { ComponentDefinition } from '../types';
 
 describe('ComponentRegistry', () => {
@@ -117,5 +119,74 @@ describe('ComponentRegistry', () => {
 
     registry.clear();
     expect(registry.list()).toHaveLength(0);
+  });
+
+  it('should extract parameters from schema when provided', () => {
+    const component: ComponentDefinition = {
+      id: 'param.component',
+      label: 'Param Component',
+      category: 'transform',
+      runner: { kind: 'inline' },
+      inputs: z.object({ input: withPortMeta(z.string(), { label: 'Input' }) }),
+      outputs: z.object({ output: withPortMeta(z.string(), { label: 'Output' }) }),
+      parameters: parameters({
+        mode: param(z.string().default('fast'), {
+          label: 'Mode',
+          editor: 'select',
+          options: [
+            { label: 'Fast', value: 'fast' },
+            { label: 'Safe', value: 'safe' },
+          ],
+        }),
+      }),
+      execute: async (params: any) => ({ output: params.input }),
+    };
+
+    registry.register(component);
+
+    const metadata = registry.getMetadata('param.component');
+    expect(metadata?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'mode',
+          default: 'fast',
+          type: 'select',
+        }),
+      ]),
+    );
+  });
+
+  it('should register unified component definitions', () => {
+    const component = defineComponent({
+      id: 'unified.component',
+      label: 'Unified Component',
+      category: 'transform',
+      runner: { kind: 'inline' },
+      inputs: inputs({
+        input: port(z.string(), { label: 'Input' }),
+      }),
+      outputs: outputs({
+        output: port(z.string(), { label: 'Output' }),
+      }),
+      parameters: parameters({
+        mode: param(z.string().default('fast'), {
+          label: 'Mode',
+          editor: 'select',
+          options: [
+            { label: 'Fast', value: 'fast' },
+            { label: 'Safe', value: 'safe' },
+          ],
+        }),
+      }),
+      async execute({ inputs, params }) {
+        return { output: `${inputs.input}-${params.mode}` };
+      },
+    });
+
+    registry.register(component);
+
+    const retrieved = registry.get('unified.component');
+    expect(retrieved).toBeDefined();
+    expect(retrieved?.label).toBe('Unified Component');
   });
 });

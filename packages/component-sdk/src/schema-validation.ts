@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { getPortMeta } from './port-meta';
+import { getParamMeta } from './param-meta';
 import { deriveConnectionType } from './zod-ports';
 
 type ZodDef = { type?: string; typeName?: string; [key: string]: any };
@@ -124,6 +125,39 @@ export function validateComponentSchema(
           `Field "${fieldName}": Union types require explicit meta.connectionType or meta.editor override`
         );
       }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+export function validateParameterSchema(
+  schema: z.ZodTypeAny
+): SchemaValidationResult {
+  const errors: string[] = [];
+  const objectSchema = unwrapToObject(schema);
+  if (!objectSchema) {
+    return { valid: true, errors };
+  }
+  const shape = getObjectShape(objectSchema);
+
+  for (const [fieldName, fieldSchema] of Object.entries(shape)) {
+    const typedSchema = fieldSchema as z.ZodTypeAny;
+    const paramMeta = getParamMeta(typedSchema);
+    if (!paramMeta) {
+      errors.push(`Field "${fieldName}": parameters require param() metadata`);
+      continue;
+    }
+
+    if (!paramMeta.label) {
+      errors.push(`Field "${fieldName}": param() metadata requires a label`);
+    }
+
+    if (!paramMeta.editor) {
+      errors.push(`Field "${fieldName}": param() metadata requires an editor type`);
     }
   }
 

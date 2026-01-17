@@ -1,11 +1,16 @@
-import type { ComponentDefinition } from './types';
+import type {
+  ComponentDefinition,
+  ComponentParameterMetadata,
+  UnifiedComponentDefinition,
+} from './types';
 import { ConfigurationError } from './errors';
 import { z } from 'zod';
 import { extractPorts } from './zod-ports';
+import { extractParameters } from './zod-parameters';
 import { getPortMeta } from './port-meta';
-import { validateComponentSchema } from './schema-validation';
+import { validateComponentSchema, validateParameterSchema } from './schema-validation';
 
-type AnyComponentDefinition = ComponentDefinition<any, any, any>;
+type AnyComponentDefinition = ComponentDefinition<any, any, any> | UnifiedComponentDefinition<any, any, any>;
 
 type ZodDef = { type?: string; typeName?: string; [key: string]: any };
 
@@ -27,13 +32,16 @@ export interface CachedComponentMetadata {
   definition: AnyComponentDefinition;
   inputs: any[];
   outputs: any[];
+  parameters: ComponentParameterMetadata[];
   connectionTypes: Record<string, any>;
 }
 
 export class ComponentRegistry {
   private components = new Map<string, CachedComponentMetadata>();
 
-  register<I, O, P = Record<string, unknown>>(definition: ComponentDefinition<I, O, P>): void {
+  register<I, O, P = Record<string, unknown>>(
+    definition: ComponentDefinition<I, O, P> | UnifiedComponentDefinition<I, O, P>,
+  ): void {
     if (this.components.has(definition.id)) {
       throw new ConfigurationError(`Component ${definition.id} is already registered`, {
         configKey: 'componentId',
@@ -64,11 +72,27 @@ export class ComponentRegistry {
       );
     }
 
+    if (definition.parameters) {
+      const parameterValidation = validateParameterSchema(definition.parameters);
+      if (!parameterValidation.valid) {
+        throw new ConfigurationError(
+          `Component ${definition.id} has invalid parameter schema: ${parameterValidation.errors.join(', ')}`,
+          {
+            configKey: 'parameters',
+            details: { componentId: definition.id, errors: parameterValidation.errors },
+          }
+        );
+      }
+    }
+
     validatePortMetadata(definition);
 
     // Compute derived ports and connection types
     const inputPorts = extractPorts(definition.inputs);
     const outputPorts = extractPorts(definition.outputs);
+    const parameterFields = definition.parameters
+      ? extractParameters(definition.parameters)
+      : definition.ui?.parameters ?? [];
 
     const connectionTypes: Record<string, any> = {};
     for (const port of [...inputPorts, ...outputPorts]) {
@@ -81,6 +105,7 @@ export class ComponentRegistry {
       definition: definition as AnyComponentDefinition,
       inputs: inputPorts,
       outputs: outputPorts,
+      parameters: parameterFields,
       connectionTypes,
     });
   }
@@ -114,7 +139,10 @@ export class ComponentRegistry {
 function validatePortMetadata(definition: AnyComponentDefinition) {
   const inputSchema = definition.inputs;
   const outputSchema = definition.outputs;
-  const parameterIds = new Set(definition.ui?.parameters?.map((param) => param.id) ?? []);
+  const useLegacyParameters = !definition.parameters;
+  const parameterIds = new Set(
+    useLegacyParameters ? definition.ui?.parameters?.map((param) => param.id) ?? [] : []
+  );
 
   const inputObject = unwrapToObject(inputSchema);
   if (inputObject) {
@@ -126,7 +154,7 @@ function validatePortMetadata(definition: AnyComponentDefinition) {
       const portMeta = getPortMeta(fieldSchema);
       if (!portMeta && !parameterIds.has(fieldName)) {
         throw new ConfigurationError(
-          `Component ${definition.id} input \"${fieldName}\" must be a port (add withPortMeta) or a UI parameter (declare in ui.parameters).`,
+          `Component ${definition.id} input \"${fieldName}\" must be a port (use port() or withPortMeta).`,
           {
             configKey: 'inputs',
             details: { componentId: definition.id, fieldName },
@@ -146,7 +174,7 @@ function validatePortMetadata(definition: AnyComponentDefinition) {
       const portMeta = getPortMeta(fieldSchema);
       if (!portMeta) {
         throw new ConfigurationError(
-          `Component ${definition.id} output \"${fieldName}\" must declare withPortMeta for port metadata.`,
+          `Component ${definition.id} output \"${fieldName}\" must declare port() or withPortMeta for port metadata.`,
           {
             configKey: 'outputs',
             details: { componentId: definition.id, fieldName },

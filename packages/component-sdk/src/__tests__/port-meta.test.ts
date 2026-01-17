@@ -6,6 +6,7 @@ import {
   mergePortMeta,
   type PortMeta,
 } from '../port-meta';
+import { port } from '../schema-builders';
 import {
   extractPorts,
   deriveConnectionType,
@@ -59,6 +60,14 @@ describe('Port Metadata System', () => {
 
       const retrieved = getPortMeta(schema);
       expect(retrieved).toEqual(meta);
+    });
+  });
+
+  describe('port', () => {
+    it('wraps schema and stores metadata', () => {
+      const schema = port(z.string(), { label: 'Port Label' });
+      const meta = getPortMeta(schema);
+      expect(meta?.label).toBe('Port Label');
     });
   });
 
