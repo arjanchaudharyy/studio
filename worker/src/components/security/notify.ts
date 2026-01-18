@@ -407,7 +407,7 @@ cat "$MESSAGE_FILE" | "$@"
 componentRegistry.register(definition);
 
 // Create local type aliases for backward compatibility
-type Input = typeof inputSchema['__inferred'];
-type Output = typeof outputSchema['__inferred'];
+type Input = typeof inputSchema;
+type Output = typeof outputSchema;
 
 export type { Input as NotifyInput, Output as NotifyOutput };
