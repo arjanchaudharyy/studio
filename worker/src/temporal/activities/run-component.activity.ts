@@ -262,7 +262,20 @@ export async function runComponentActivity(
     });
   }
 
-  const parsedInputs = component.inputs.parse(inputs);
+  // For components with dynamic ports (resolvePorts), resolve the actual input/output schemas
+  let inputsSchema = component.inputs;
+  let outputsSchema = component.outputs;
+  if (typeof component.resolvePorts === 'function') {
+    const resolved = component.resolvePorts(params);
+    if (resolved?.inputs) {
+      inputsSchema = resolved.inputs;
+    }
+    if (resolved?.outputs) {
+      outputsSchema = resolved.outputs;
+    }
+  }
+
+  const parsedInputs = inputsSchema.parse(inputs);
   const parsedParams = component.parameters
     ? component.parameters.parse(params)
     : params;

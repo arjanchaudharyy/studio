@@ -286,7 +286,7 @@ export async function shipsecWorkflowRun(
           const childInputs: Record<string, unknown> = {}
           for (const id of childInputIds) {
             if (reservedIds.has(id)) continue
-            childInputs[id] = mergedParams[id]
+            childInputs[id] = mergedInputs[id]
           }
 
           const childRunId = `shipsec-run-${uuid4()}`
