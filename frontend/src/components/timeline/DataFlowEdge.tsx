@@ -31,7 +31,7 @@ interface AnimatedPacket {
 }
 
 // Data packet visualization component
-const DataPacket = memo(({ packet, onHover }: {
+const DataPacketComponent = memo(({ packet, onHover }: {
   packet: DataPacket;
   onHover: (packet: DataPacket | null) => void
 }) => {
@@ -256,7 +256,7 @@ export const DataFlowEdge = memo(({ id, source, target, sourceX, sourceY, target
               transform: 'translate(-50%, -50%)',
             }}
           >
-            <DataPacket
+            <DataPacketComponent
               packet={animatedPacket.packet}
               onHover={setHoveredPacket}
             />

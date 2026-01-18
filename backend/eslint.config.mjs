@@ -40,8 +40,9 @@ export default [
       "no-undef": "off",
 
       // Enable stricter rules gradually
-      "no-redeclare": "error",
-      "no-import-assign": "off",
+      "no-redeclare": "off", // Use TypeScript version instead
+      "@typescript-eslint/no-redeclare": "error",
+      "no-import-assign": "error",
       "no-unused-vars": "off",
       "no-empty": "off",
       "no-control-regex": "off",

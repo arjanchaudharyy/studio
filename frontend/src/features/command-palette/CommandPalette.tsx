@@ -22,7 +22,7 @@ import {
     Search,
     ArrowRight,
     Hash,
-    Command,
+    Command as CommandIcon,
     CornerDownLeft,
     Box,
     Puzzle,
