@@ -288,4 +288,7 @@ componentRegistry.register(definition);
 type Input = typeof inputSchema['__inferred'];
 type Output = typeof outputSchema['__inferred'];
 
-export type { Input as SubfinderInput, Output as SubfinderOutput };
+type SubfinderInput = typeof inputSchema;
+type SubfinderOutput = typeof outputSchema;
+
+export type { SubfinderInput, SubfinderOutput };

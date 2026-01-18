@@ -91,18 +91,6 @@ const resultSchema = z.object({
 
 type Result = z.infer<typeof resultSchema>;
 
-type Output = {
-  orgId: string;
-  requestedEmails: string[];
-  results: Result[];
-  summary: {
-    requested: number;
-    found: number;
-    deleted: number;
-    failed: number;
-  };
-  searchRaw?: unknown;
-};
 
 const outputSchema = outputs({
   orgId: port(z.string(), {
@@ -512,3 +500,8 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+export type Input = typeof inputSchema;
+export type Output = typeof outputSchema;
+
+export { Input as AtlassianOffboardingInput, Output as AtlassianOffboardingOutput };

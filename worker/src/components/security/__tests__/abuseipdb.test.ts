@@ -1,25 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'bun:test';
 import * as sdk from '@shipsec/component-sdk';
 import { componentRegistry } from '../../index';
-import { definition } from '../abuseipdb';
-
-interface AbuseIPDBOutput {
-  ipAddress: string;
-  isPublic?: boolean;
-  ipVersion?: number;
-  isWhitelisted?: boolean;
-  abuseConfidenceScore: number;
-  countryCode?: string;
-  usageType?: string;
-  isp?: string;
-  domain?: string;
-  hostnames?: string[];
-  totalReports?: number;
-  numDistinctUsers?: number;
-  lastReportedAt?: string;
-  reports?: Record<string, unknown>[];
-  full_report: Record<string, unknown>;
-}
+import { AbuseIPDBInput, AbuseIPDBOutput, definition } from '../abuseipdb';
 
 describe('abuseipdb component', () => {
   beforeAll(async () => {
@@ -46,7 +28,7 @@ describe('abuseipdb component', () => {
   });
 
   it('should execute successfully with valid input', async () => {
-     const component = componentRegistry.get('security.abuseipdb.check');
+     const component = componentRegistry.get<AbuseIPDBInput, AbuseIPDBOutput>('security.abuseipdb.check');
      if (!component) throw new Error('Component not registered');
 
      const context = sdk.createExecutionContext({
@@ -87,7 +69,7 @@ describe('abuseipdb component', () => {
          headers: { 'Content-Type': 'application/json' }
      }));
 
-     const result = await component.execute(executePayload, context) as AbuseIPDBOutput;
+     const result = await component.execute(executePayload, context);
 
      expect(fetchSpy).toHaveBeenCalled();
      const callArgs = fetchSpy.mock.calls[0];
@@ -101,7 +83,7 @@ describe('abuseipdb component', () => {
   });
 
   it('should handle 404', async () => {
-      const component = componentRegistry.get('security.abuseipdb.check');
+      const component = componentRegistry.get<AbuseIPDBInput, AbuseIPDBOutput>('security.abuseipdb.check');
       if (!component) throw new Error('Component not registered');
  
       const context = sdk.createExecutionContext({
@@ -123,8 +105,8 @@ describe('abuseipdb component', () => {
       vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, {
           status: 404,
       }));
- 
-      const result = await component.execute(executePayload, context) as AbuseIPDBOutput;
+
+      const result = await component.execute(executePayload, context);
       expect(result.abuseConfidenceScore).toBe(0);
       expect(result.full_report.error).toBe('Not Found');
   });
@@ -158,7 +140,7 @@ describe('abuseipdb component', () => {
   });
 
   it('should throw ValidationError when ipAddress is missing', async () => {
-    const component = componentRegistry.get('security.abuseipdb.check');
+    const component = componentRegistry.get<AbuseIPDBInput, AbuseIPDBOutput>('security.abuseipdb.check');
     if (!component) throw new Error('Component not registered');
 
     const context = sdk.createExecutionContext({
@@ -181,7 +163,7 @@ describe('abuseipdb component', () => {
   });
 
   it('should throw ConfigurationError when apiKey is missing', async () => {
-    const component = componentRegistry.get('security.abuseipdb.check');
+    const component = componentRegistry.get<AbuseIPDBInput, AbuseIPDBOutput>('security.abuseipdb.check');
     if (!component) throw new Error('Component not registered');
 
     const context = sdk.createExecutionContext({
@@ -204,7 +186,7 @@ describe('abuseipdb component', () => {
   });
 
   it('should include verbose parameter in request when enabled', async () => {
-    const component = componentRegistry.get('security.abuseipdb.check');
+    const component = componentRegistry.get<AbuseIPDBInput, AbuseIPDBOutput>('security.abuseipdb.check');
     if (!component) throw new Error('Component not registered');
 
     const context = sdk.createExecutionContext({

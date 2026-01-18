@@ -1,6 +1,8 @@
 import { beforeAll, afterEach, describe, expect, it, vi } from 'bun:test';
 import { createExecutionContext } from '@shipsec/component-sdk';
 import { componentRegistry } from '../../index';
+import { AtlassianOffboardingInput, AtlassianOffboardingOutput } from '../atlassian-offboarding';
+
 
 describe('atlassian offboarding component', () => {
   const originalFetch = globalThis.fetch;
@@ -16,7 +18,7 @@ describe('atlassian offboarding component', () => {
   });
 
   const getComponent = () => {
-    const component = componentRegistry.get('shipsec.atlassian.offboarding');
+    const component = componentRegistry.get<AtlassianOffboardingInput, AtlassianOffboardingOutput>('shipsec.atlassian.offboarding');
     if (!component) {
       throw new Error('Component not registered');
     }
@@ -98,7 +100,7 @@ describe('atlassian offboarding component', () => {
       inputs: {
         orgId,
         accessToken: 'direct-token',
-        emailUsernames: ' Alice@example.com , alias@example.com\nBOB ',
+        emailUsernames: ['Alice@example.com', 'alias@example.com', 'bob'],
       },
       params: {}
     };
@@ -208,12 +210,12 @@ describe('atlassian offboarding component', () => {
     const component = getComponent();
 
     const fetchMock = vi.fn<(url: unknown, init?: any) => Promise<Response>>().mockResolvedValueOnce(
-        new Response('{"error":"bad request"}', {
-          status: 400,
-          statusText: 'Bad Request',
-          headers: { 'Content-Type': 'application/json' },
-        }),
-      );
+      new Response('{"error":"bad request"}', {
+        status: 400,
+        statusText: 'Bad Request',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
 
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 

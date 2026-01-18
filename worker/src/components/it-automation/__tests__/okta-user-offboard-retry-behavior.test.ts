@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, mock } from 'bun:test';
 import { componentRegistry } from '@shipsec/component-sdk';
 import { createMockExecutionContext } from '../../../testing/test-utils';
+import { OktaUserOffboardInput, OktaUserOffboardOutput } from '../okta-user-offboard';
 
 // Mock the Okta SDK
 const mockUserApi = {
@@ -170,7 +171,7 @@ describe('Okta User Offboard - Retry Behavior Verification', () => {
   });
 
   it('handles dry run mode without mutating accounts', async () => {
-    const definition = componentRegistry.get('it-automation.okta.user-offboard');
+    const definition = componentRegistry.get<OktaUserOffboardInput, OktaUserOffboardOutput>('it-automation.okta.user-offboard');
     if (!definition) throw new Error('Component definition not found');
     const execute = definition.execute;
 

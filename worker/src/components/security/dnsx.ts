@@ -55,6 +55,8 @@ const inputSchema = inputs({
   ),
 });
 
+type Input = z.infer<typeof inputSchema>;
+
 const parameterSchema = parameters({
   recordTypes: param(z.array(recordTypeEnum).default(['A']), {
     label: 'Record Types',
@@ -213,6 +215,8 @@ const parameterSchema = parameters({
     ],
   }),
 });
+
+type Output = z.infer<typeof outputSchema>;
 
 
 type DnsxRecord = {
@@ -1025,7 +1029,7 @@ const definition = defineComponent({
 componentRegistry.register(definition);
 
 // Create local type aliases for backward compatibility
-type Input = typeof inputSchema['__inferred'];
-type Output = typeof outputSchema['__inferred'];
+type DnsxInput = typeof inputSchema;
+type DnsxOutput = typeof outputSchema;
 
-export type { Input as DnsxInput, Output as DnsxOutput };
+export type { DnsxInput, DnsxOutput };

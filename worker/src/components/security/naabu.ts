@@ -450,8 +450,12 @@ function parseNaabuOutput(raw: string): Finding[] {
 
 componentRegistry.register(definition);
 
-// Create local type aliases for backward compatibility
+// Create local type aliases for internal use (inferred types)
 type Input = typeof inputSchema['__inferred'];
 type Output = typeof outputSchema['__inferred'];
 
-export type { Input as NaabuInput, Output as NaabuOutput };
+// Export schema types for the registry
+export type NaabuInput = typeof inputSchema;
+export type NaabuOutput = typeof outputSchema;
+
+export type { Input as NaabuInputData, Output as NaabuOutputData };

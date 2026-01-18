@@ -58,7 +58,7 @@ const inputSchema = inputs({
   ),
 });
 
-export type GitHubRemoveOrgMembershipInput = z.infer<typeof inputSchema>;
+export type GitHubRemoveOrgMembershipInput = typeof inputSchema;
 
 const outputSchema = outputs({
   result: port(z.record(z.string(), z.unknown()), {
@@ -110,7 +110,7 @@ const outputSchema = outputs({
   }),
 });
 
-export type GitHubRemoveOrgMembershipOutput = z.infer<typeof outputSchema>;
+export type GitHubRemoveOrgMembershipOutput = typeof outputSchema;
 
 const definition = defineComponent({
   id: 'github.org.membership.remove',
@@ -245,8 +245,8 @@ const definition = defineComponent({
     if (orgResponse.status === 204) {
       context.logger.info(`[GitHub] Removed ${login} from organization ${organization}.`);
       context.emitProgress(`Removed ${login} from organization ${organization}.`);
-      const teamStatus = (teamRemovalStatus ?? 'skipped') as GitHubRemoveOrgMembershipOutput['teamRemovalStatus'];
-      const organizationStatus = 'removed' as GitHubRemoveOrgMembershipOutput['organizationRemovalStatus'];
+      const teamStatus = (teamRemovalStatus ?? 'skipped');
+      const organizationStatus = 'removed';
       const result = {
         organization,
         teamSlug,
@@ -269,8 +269,8 @@ const definition = defineComponent({
     if (orgResponse.status === 404) {
       context.logger.info(`[GitHub] ${login} is not a member of organization ${organization}.`);
       context.emitProgress(`${login} is already absent from organization ${organization}.`);
-      const teamStatus = (teamRemovalStatus ?? 'skipped') as GitHubRemoveOrgMembershipOutput['teamRemovalStatus'];
-      const organizationStatus = 'not_found' as GitHubRemoveOrgMembershipOutput['organizationRemovalStatus'];
+      const teamStatus = (teamRemovalStatus ?? 'skipped');
+      const organizationStatus = 'not_found';
       const result = {
         organization,
         teamSlug,

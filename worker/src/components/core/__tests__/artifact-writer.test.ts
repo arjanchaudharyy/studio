@@ -6,11 +6,11 @@ import type { ComponentDefinition } from '@shipsec/component-sdk';
 import type { ArtifactWriterInput, ArtifactWriterOutput } from '../artifact-writer';
 
 describe('core.artifact.writer component', () => {
-  let component: ComponentDefinition<ArtifactWriterInput, ArtifactWriterOutput> | undefined;
+  let component: ReturnType<typeof componentRegistry.get<ArtifactWriterInput, ArtifactWriterOutput>>;
 
   beforeAll(async () => {
     await import('../../index');
-    component = componentRegistry.get('core.artifact.writer');
+    component = componentRegistry.get<ArtifactWriterInput, ArtifactWriterOutput>('core.artifact.writer');
   });
 
   it('should be registered with expected metadata', () => {

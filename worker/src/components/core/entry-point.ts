@@ -148,23 +148,16 @@ const definition = defineComponent({
     }
 
     context.emitProgress(`Collected ${Object.keys(outputs).length} runtime inputs`);
-    return outputs as EntryPointOutput;
+    return outputs;
   },
-}) as ComponentDefinition<
-  Record<string, any>,
-  Record<string, any>,
-  Record<string, any>,
-  EntryPointInput,
-  EntryPointOutput,
-  EntryPointParams
->;
+});
 
 componentRegistry.register(definition);
 
 // Export types - Output is dynamic so we use a record type
-type EntryPointInput = z.infer<typeof inputSchema>;
-type EntryPointParams = z.infer<typeof parameterSchema>;
-type EntryPointOutput = Record<string, unknown>;
+type EntryPointInput = typeof inputSchema;
+type EntryPointParams = typeof parameterSchema;
+type EntryPointOutput = typeof outputSchema;
 
 export type { EntryPointInput, EntryPointParams, EntryPointOutput };
 

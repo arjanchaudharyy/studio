@@ -6,24 +6,7 @@
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { componentRegistry, createExecutionContext, type ExecutionContext } from '@shipsec/component-sdk';
 import '../../index'; // Ensure registry is populated
-
-interface AbuseIPDBOutput {
-  ipAddress: string;
-  isPublic?: boolean;
-  ipVersion?: number;
-  isWhitelisted?: boolean;
-  abuseConfidenceScore: number;
-  countryCode?: string;
-  usageType?: string;
-  isp?: string;
-  domain?: string;
-  hostnames?: string[];
-  totalReports?: number;
-  numDistinctUsers?: number;
-  lastReportedAt?: string;
-  reports?: Record<string, unknown>[];
-  full_report: Record<string, unknown>;
-}
+import { AbuseIPDBInput, AbuseIPDBOutput } from '../abuseipdb';
 
 const shouldRunIntegration =
   process.env.RUN_ABUSEDB_TESTS === '1' && !!process.env.ABUSEIPDB_API_KEY;
@@ -39,20 +22,22 @@ const shouldRunIntegration =
     });
 
     test('checks a known IP address', async () => {
-        const component = componentRegistry.get('security.abuseipdb.check');
+        const component = componentRegistry.get<AbuseIPDBInput, AbuseIPDBOutput>('security.abuseipdb.check');
         expect(component).toBeDefined();
         
         // 1.1.1.1 is Cloudflare DNS and should exist in AbuseIPDB
         const ipToCheck = '1.1.1.1'; 
         
         const result = await component!.execute({
-            inputs: { ipAddress: ipToCheck },
-            params: {
+            inputs: { 
+                ipAddress: ipToCheck,
                 apiKey: process.env.ABUSEIPDB_API_KEY!,
+            },
+            params: {
                 maxAgeInDays: 90,
                 verbose: true
             }
-        }, context) as AbuseIPDBOutput;
+        }, context);
 
         expect(result.ipAddress).toBe(ipToCheck);
         expect(typeof result.abuseConfidenceScore).toBe('number');
@@ -67,13 +52,15 @@ const shouldRunIntegration =
         const ipToCheck = '8.8.8.8'; 
         
         const result = await component!.execute({
-            inputs: { ipAddress: ipToCheck },
-            params: {
+            inputs: { 
+                ipAddress: ipToCheck,
                 apiKey: process.env.ABUSEIPDB_API_KEY!,
+            },
+            params: {
                 maxAgeInDays: 90,
                 verbose: false
             }
-        }, context) as AbuseIPDBOutput;
+        }, context);
 
         expect(result.ipAddress).toBe(ipToCheck);
         expect(typeof result.abuseConfidenceScore).toBe('number');

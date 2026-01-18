@@ -8,12 +8,12 @@ const mockContext: ExecutionContext = {
   runId: 'test-run',
   componentRef: 'test-node',
   logger: {
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-    debug: () => {},
+    info: () => { },
+    warn: () => { },
+    error: () => { },
+    debug: () => { },
   },
-  emitProgress: () => {},
+  emitProgress: () => { },
   metadata: {
     runId: 'test-run',
     componentRef: 'test-node',
@@ -24,8 +24,6 @@ const mockContext: ExecutionContext = {
   },
 };
 
-const buildRunnerOutput = (payload: unknown) =>
-  `---RESULT_START---\n${JSON.stringify(payload)}\n---RESULT_END---`;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -33,9 +31,7 @@ afterEach(() => {
 
 describe('Logic/Script Component', () => {
   it('executes simple JavaScript math', async () => {
-    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(
-      buildRunnerOutput({ sum: 3 }),
-    );
+    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue({ sum: 3 });
     const result = await definition.execute({
       inputs: {},
       params: {
@@ -49,9 +45,7 @@ describe('Logic/Script Component', () => {
   });
 
   it('transpiles and executes TypeScript', async () => {
-    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(
-      buildRunnerOutput({ msg: 'Value is 10' }),
-    );
+    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue({ msg: 'Value is 10' });
     const tsCode = `
       interface Result { msg: string; }
       export async function script(): Promise<Result> {
@@ -62,7 +56,7 @@ describe('Logic/Script Component', () => {
         return res;
       }
     `;
-    
+
     const result = await definition.execute({
       inputs: {},
       params: {
@@ -76,9 +70,7 @@ describe('Logic/Script Component', () => {
   });
 
   it('accepts input variables and returns outputs', async () => {
-    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(
-      buildRunnerOutput({ diff: 6, product: 40 }),
-    );
+    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue({ diff: 6, product: 40 });
     const result = await definition.execute({
       inputs: {
         x: 10,
@@ -108,9 +100,7 @@ describe('Logic/Script Component', () => {
   });
 
   it('can access global fetch', async () => {
-    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(
-      buildRunnerOutput({ status: 200 }),
-    );
+    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue({ status: 200 });
     const code = `
       export async function script() {
         const res = await fetch('https://www.google.com');
@@ -129,22 +119,22 @@ describe('Logic/Script Component', () => {
 
     expect(result.status).toBe(200);
   });
-  
+
   it('correctly resolves ports', () => {
     const params = {
-        code: '',
-        variables: [{ name: 'in1', type: 'string' as const }],
-        returns: [{ name: 'out1', type: 'boolean' as const }],
+      code: '',
+      variables: [{ name: 'in1', type: 'string' as const }],
+      returns: [{ name: 'out1', type: 'boolean' as const }],
     };
     const ports = definition.resolvePorts!(params)!;
-    
+
     const inputPorts = extractPorts(ports.inputs!);
     const outputPorts = extractPorts(ports.outputs!);
 
     expect(inputPorts).toHaveLength(1);
     expect(inputPorts[0].id).toBe('in1');
     expect(inputPorts[0].connectionType).toEqual({ kind: 'primitive', name: 'text' });
-    
+
     expect(outputPorts).toHaveLength(1);
     expect(outputPorts[0].id).toBe('out1');
     expect(outputPorts[0].connectionType).toEqual({ kind: 'primitive', name: 'boolean' });

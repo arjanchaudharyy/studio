@@ -44,7 +44,10 @@ describe('shuffledns-massdns component', () => {
       'www.example.com\napi.example.com\napi.example.com\n',
     );
 
-    const result = component.outputs.parse(await component.execute(executePayload, context));
+    const result = await component.execute({
+      inputs: component.inputs.parse(executePayload.inputs),
+      params: component.parameters!.parse(executePayload.params),
+    }, context);
     expect(result.domainCount).toBe(1);
     // Deduped
     expect(result.subdomains).toEqual(['www.example.com', 'api.example.com']);

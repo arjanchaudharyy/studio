@@ -91,7 +91,10 @@ describe('naabu component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue('scanme.sh:22\n');
 
-    const result = await component.execute(executePayload, context);
+    const result = await component.execute({
+      inputs: component.inputs.parse(executePayload.inputs),
+      params: component.parameters!.parse(executePayload.params),
+    }, context);
 
     expect(result.findings).toEqual([
       { host: 'scanme.sh', ip: null, port: 22, protocol: 'tcp' },

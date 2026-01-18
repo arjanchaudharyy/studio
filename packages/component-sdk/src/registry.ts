@@ -1,6 +1,8 @@
 import type {
   ComponentDefinition,
   ComponentParameterMetadata,
+  InputsSchema,
+  OutputsSchema,
 } from './types';
 import { ConfigurationError } from './errors';
 import { z } from 'zod';
@@ -10,6 +12,18 @@ import { getPortMeta } from './port-meta';
 import { validateComponentSchema, validateParameterSchema } from './schema-validation';
 
 type AnyComponentDefinition = ComponentDefinition<any, any, any, any, any, any>;
+
+/**
+ * Extract the inferred TypeScript type from a branded schema.
+ * Works with InputsSchema, OutputsSchema, and ParametersSchema.
+ */
+type InferredFromSchema<T> = T extends { __inferred: infer I } ? I : unknown;
+
+/**
+ * Extract the inner Zod shape from a branded schema.
+ * e.g., InputsSchema<{ targets: PortSchema<...> }> -> { targets: PortSchema<...> }
+ */
+type ShapeFromSchema<T> = T extends z.ZodObject<infer S> ? S : Record<string, any>;
 
 type ZodDef = { type?: string; typeName?: string;[key: string]: any };
 
@@ -109,11 +123,43 @@ export class ComponentRegistry {
     });
   }
 
-  get<I = unknown, O = unknown>(
+  /**
+   * Get a component by ID with full type safety.
+   *
+   * @example
+   * ```ts
+   * // In your component file, export the schema types:
+   * export type InputSchema = typeof inputSchema;
+   * export type OutputSchema = typeof outputSchema;
+   *
+   * // Then use them with get():
+   * const component = componentRegistry.get<InputSchema, OutputSchema>('my.component');
+   * const parsed = component.inputs.parse({ ... }); // Correctly typed!
+   * const result = await component.execute(...);    // Returns correct output type!
+   * ```
+   */
+  get<
+    ISchema extends InputsSchema<any> = InputsSchema<Record<string, any>>,
+    OSchema extends OutputsSchema<any> = OutputsSchema<Record<string, any>>
+  >(
     id: string
-  ): ComponentDefinition<any, any, any, I, O, any> | undefined {
+  ): ComponentDefinition<
+    ShapeFromSchema<ISchema>,
+    ShapeFromSchema<OSchema>,
+    any,
+    InferredFromSchema<ISchema>,
+    InferredFromSchema<OSchema>,
+    any
+  > | undefined {
     const cached = this.components.get(id);
-    return cached?.definition as ComponentDefinition<any, any, any, I, O, any> | undefined;
+    return cached?.definition as ComponentDefinition<
+      ShapeFromSchema<ISchema>,
+      ShapeFromSchema<OSchema>,
+      any,
+      InferredFromSchema<ISchema>,
+      InferredFromSchema<OSchema>,
+      any
+    > | undefined;
   }
 
   getMetadata(id: string): CachedComponentMetadata | undefined {

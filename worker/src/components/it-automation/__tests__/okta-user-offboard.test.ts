@@ -23,18 +23,13 @@ mock.module('@okta/okta-sdk-nodejs', () => ({
 // Import the component definition
 import '../okta-user-offboard';
 import { componentRegistry } from '@shipsec/component-sdk';
-import { OktaUserOffboardOutput } from '../okta-user-offboard';
+import { OktaUserOffboardInput, OktaUserOffboardOutput } from '../okta-user-offboard';
 
-const definition = componentRegistry.get('it-automation.okta.user-offboard');
+const definition = componentRegistry.get<OktaUserOffboardInput, OktaUserOffboardOutput>('it-automation.okta.user-offboard');
 
 if (!definition) {
   throw new Error('Component definition not found');
 }
-
-const execute = definition.execute as (
-  params: any,
-  context: ExecutionContext,
-) => Promise<OktaUserOffboardOutput>;
 
 describe('okta-user-offboard', () => {
   beforeEach(() => {
@@ -83,7 +78,7 @@ describe('okta-user-offboard', () => {
         dry_run: baseParams.dry_run,
       }
     };
-    const result = await execute(executePayload, context);
+    const result = await definition.execute(executePayload, context);
 
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
@@ -122,7 +117,7 @@ describe('okta-user-offboard', () => {
         dry_run: false,
       }
     };
-    const result = await execute(executePayload, context);
+    const result = await definition.execute(executePayload, context);
 
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
@@ -156,7 +151,7 @@ describe('okta-user-offboard', () => {
         action: 'delete' as const,
       }
     };
-    const result = await execute(executePayload, context);
+    const result = await definition.execute(executePayload, context);
 
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
@@ -183,7 +178,7 @@ describe('okta-user-offboard', () => {
         dry_run: baseParams.dry_run,
       }
     };
-    const result = await execute(executePayload, context);
+    const result = await definition.execute(executePayload, context);
 
     expect(result.success).toBe(false);
     expect(result.userDeactivated).toBe(false);
@@ -218,7 +213,7 @@ describe('okta-user-offboard', () => {
         dry_run: baseParams.dry_run,
       }
     };
-    const result = await execute(executePayload, context);
+    const result = await definition.execute(executePayload, context);
 
     expect(result.success).toBe(false);
     expect(result.userDeactivated).toBe(false);
@@ -252,7 +247,7 @@ describe('okta-user-offboard', () => {
         dry_run: false,
       }
     };
-    const result = await execute(executePayload, context);
+    const result = await definition.execute(executePayload, context);
 
     expect(result.success).toBe(false);
     expect(result.userDeactivated).toBe(false);
@@ -277,7 +272,7 @@ describe('okta-user-offboard', () => {
     };
 
     const context = createContext();
-    const result = await execute({ inputs: inputValues, params: {} }, context);
+    const result = await definition.execute({ inputs: inputValues, params: {} }, context);
     expect(result.success).toBe(false);
     expect(result.error).toContain('API token is required to contact Okta');
   });

@@ -50,7 +50,7 @@ import './security/supabase-scanner';
 import './security/notify';
 import './security/prowler-scan';
 import './security/shuffledns-massdns';
-import './security/atlassian-offboarding';
+import './it-automation/atlassian-offboarding';
 import './security/trufflehog';
 import './security/terminal-demo';
 import './security/virustotal';

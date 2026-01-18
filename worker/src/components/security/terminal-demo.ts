@@ -66,6 +66,10 @@ const outputSchema = outputs({
 export type TerminalDemoInput = z.infer<typeof inputSchema>;
 export type TerminalDemoOutput = z.infer<typeof outputSchema>;
 
+export type TerminalDemoInputZod = typeof inputSchema;
+export type TerminalDemoOutputZod = typeof outputSchema;
+
+
 // Simple Node.js script that shows a progress bar
 // Note: We don't read from stdin to avoid JSON input appearing in terminal
 const nodeScript = String.raw`// Close stdin immediately to prevent any input from appearing

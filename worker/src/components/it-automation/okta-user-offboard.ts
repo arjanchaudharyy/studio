@@ -88,9 +88,6 @@ type OktaUserOffboardResult = {
   message: string;
 };
 
-export type OktaUserOffboardOutput = OktaUserOffboardResult & {
-  result: OktaUserOffboardResult;
-};
 
 const auditSchema = z.object({
   timestamp: z.string(),
@@ -453,3 +450,7 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+type OktaUserOffboardInput = typeof inputSchema;
+type OktaUserOffboardOutput = typeof outputSchema;
+export { definition, OktaUserOffboardInput, OktaUserOffboardOutput };

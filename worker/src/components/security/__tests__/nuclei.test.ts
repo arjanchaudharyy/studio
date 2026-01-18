@@ -17,11 +17,11 @@ describe('Nuclei Component', () => {
       runId: 'test-run-123',
       componentRef: 'node-1',
       logger: {
-        info: mock(() => {}),
-        error: mock(() => {}),
-        warn: mock(() => {}),
+        info: mock(() => { }),
+        error: mock(() => { }),
+        warn: mock(() => { }),
       },
-      emitProgress: mock(() => {}),
+      emitProgress: mock(() => { }),
       metadata: {
         runId: 'test-run-123',
         componentRef: 'node-1',
@@ -417,12 +417,13 @@ describe('Nuclei Integration', () => {
 
   test('should have Docker runner configuration', () => {
     const component = componentRegistry.get('shipsec.nuclei.scan')!;
-      expect(component!.runner.kind).toBe('docker');
-      if (component!.runner.kind === 'docker') {
-        expect(component!.runner.image).toBe('projectdiscovery/nuclei:v3.3.6');
-        expect(component!.runner.entrypoint).toBe('sh');
+    expect(component!.runner.kind).toBe('docker');
+    if (component!.runner.kind === 'docker') {
+      expect(component!.runner.image).toBe('ghcr.io/shipsecai/nuclei:latest');
+      expect(component!.runner.entrypoint).toBe('nuclei');
 
-  }});
+    }
+  });
 
   test('should have documented inputs', () => {
     const entry = componentRegistry.getMetadata('shipsec.nuclei.scan');

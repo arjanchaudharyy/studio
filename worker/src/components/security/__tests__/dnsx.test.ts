@@ -12,7 +12,7 @@ mock.module('../../utils/isolated-volume', () => ({
       return { source: 'test-volume', target, readOnly };
     }
 
-    async cleanup() {}
+    async cleanup() { }
   },
 }));
 
@@ -76,7 +76,9 @@ describe('dnsx component', () => {
       .map((entry) => JSON.stringify(entry))
       .join('\n');
 
-    const result = component.outputs.parse(await component.execute(executePayload, context)) as DnsxOutput;
+    vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(ndjson);
+
+    const result = component.outputs.parse(await component.execute(executePayload, context));
 
     expect(result.domainCount).toBe(1);
     expect(result.recordCount).toBe(2);

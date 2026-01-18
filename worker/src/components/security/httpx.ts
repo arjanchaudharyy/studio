@@ -535,6 +535,8 @@ componentRegistry.register(definition);
 type Input = typeof inputSchema['__inferred'];
 type Output = typeof outputSchema['__inferred'];
 
+export type InputShape = typeof inputSchema;
+export type OutputShape = typeof outputSchema;
 export type { Input as HttpxInput, Output as HttpxOutput };
 
 export { parseHttpxOutput };

@@ -72,7 +72,7 @@ describe('subfinder component', () => {
 
     const result = component.outputs.parse(await component.execute(executePayload, context));
 
-    expect(result).toEqual(component.outputs.parse(payload as SubfinderOutput));
+    expect(result).toEqual(component.outputs.parse(payload));
   });
 
   it('should accept a single domain string and normalise to array', () => {

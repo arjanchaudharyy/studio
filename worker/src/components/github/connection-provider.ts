@@ -28,8 +28,8 @@ const parameterSchema = parameters({
   ),
 });
 
-export type GitHubConnectionProviderInput = z.infer<typeof inputSchema>;
-export type GitHubConnectionProviderParams = z.infer<typeof parameterSchema>;
+export type GitHubConnectionProviderInput = typeof inputSchema;
+export type GitHubConnectionProviderParams = typeof parameterSchema;
 
 const outputSchema = outputs({
   connectionId: port(z.string(), {
@@ -38,7 +38,7 @@ const outputSchema = outputs({
   }),
 });
 
-export type GitHubConnectionProviderOutput = z.infer<typeof outputSchema>;
+export type GitHubConnectionProviderOutput = typeof outputSchema;
 
 const definition = defineComponent({
   id: 'github.connection.provider',

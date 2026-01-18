@@ -86,7 +86,7 @@ if (!componentRegistry.has(definition.id)) {
 }
 
 // Create local type aliases for backward compatibility
-type Input = typeof inputSchema['__inferred'];
-type Output = typeof outputSchema['__inferred'];
+type Input = typeof inputSchema;
+type Output = typeof outputSchema;
 
 export type { Input as SleepParallelInput, Output as SleepParallelOutput };

@@ -386,12 +386,12 @@ const definition = defineComponent({
       const maybeRaw = 'rawOutput' in (resultUnknown as any) ? String((resultUnknown as any).rawOutput ?? '') : '';
       const subdomainsValue = Array.isArray((resultUnknown as any).subdomains)
         ? ((resultUnknown as any).subdomains as unknown[])
-            .map((v) => (typeof v === 'string' ? v.trim() : String(v)))
-            .filter((v) => v.length > 0)
+          .map((v) => (typeof v === 'string' ? v.trim() : String(v)))
+          .filter((v) => v.length > 0)
         : maybeRaw
-            .split(/\r?\n/g)
-            .map((line) => line.trim())
-            .filter((line) => line.length > 0);
+          .split(/\r?\n/g)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
 
       return outputSchema.parse({
         subdomains: Array.from(new Set(subdomainsValue)),
@@ -413,8 +413,11 @@ const definition = defineComponent({
 
 componentRegistry.register(definition);
 
-// Create local type aliases for backward compatibility
+// Create local type aliases for internal use (inferred types)
 type Input = typeof inputSchema['__inferred'];
 type Output = typeof outputSchema['__inferred'];
 
-export type { Input as ShufflednsMassdnsInput, Output as ShufflednsMassdnsOutput };
+export type ShufflednsMassdnsInput = typeof inputSchema;
+export type ShufflednsMassdnsOutput = typeof outputSchema;
+
+export type { Input as ShufflednsMassdnsInputData, Output as ShufflednsMassdnsOutputData };

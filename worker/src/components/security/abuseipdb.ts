@@ -184,7 +184,7 @@ const definition = defineComponent({
 
     if (response.status === 404) {
       context.logger.warn(`[AbuseIPDB] IP not found: ${ipAddress}`);
-       return {
+      return {
         ipAddress,
         abuseConfidenceScore: 0,
         full_report: { error: 'Not Found' }
@@ -192,8 +192,8 @@ const definition = defineComponent({
     }
 
     if (!response.ok) {
-       const text = await response.text();
-       throw fromHttpResponse(response, text);
+      const text = await response.text();
+      throw fromHttpResponse(response, text);
     }
 
     const data = await response.json() as Record<string, unknown>;
@@ -222,5 +222,8 @@ const definition = defineComponent({
 });
 
 componentRegistry.register(definition);
+
+export type AbuseIPDBInput = typeof inputSchema;
+export type AbuseIPDBOutput= typeof outputSchema;
 
 export { definition };

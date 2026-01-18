@@ -41,7 +41,7 @@ describe('entry-point component', () => {
       }
     };
 
-    const result = await component.execute(executePayload, context);
+    const result = await component.execute(executePayload, context) as Record<string, unknown>;
 
     expect(result).toEqual({
       user: 'alice',
@@ -145,7 +145,7 @@ describe('entry-point component', () => {
     const result = await component.execute({
       inputs: { __runtimeData },
       params: { runtimeInputs },
-    }, context);
+    }, context) as Record<string, unknown>;
 
     expect(result).toEqual({
       apiKey: 'super-secret-key',

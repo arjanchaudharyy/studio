@@ -39,6 +39,8 @@ const inputSchema = inputs({
   ),
 });
 
+type Output = z.infer<typeof outputSchema>;
+
 const parameterSchema = parameters({
   scanType: param(scanTypeSchema.default('git').describe('Type of scan to perform'), {
     label: 'Scan Type',
@@ -497,7 +499,7 @@ const definition = defineComponent({
 componentRegistry.register(definition);
 
 // Create local type aliases for backward compatibility
-type Input = typeof inputSchema['__inferred'];
-type Output = typeof outputSchema['__inferred'];
+type TruffleHogInput = typeof inputSchema;
+type TruffleHogOutput = typeof outputSchema;
 
-export type { Input as TruffleHogInput, Output as TruffleHogOutput };
+export type { TruffleHogInput, TruffleHogOutput };
