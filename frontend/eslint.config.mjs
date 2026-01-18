@@ -60,8 +60,8 @@ export default [
       // Disable no-undef since TypeScript handles this better
       "no-undef": "off",
 
-      // Disable strict checks for now - will enable gradually
-      "no-redeclare": "off",
+      // Enable stricter rules gradually
+      "no-redeclare": "error",
       "no-import-assign": "off",
       "react/display-name": "off",
       "no-unused-vars": "off",
