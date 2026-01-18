@@ -28,9 +28,9 @@ describe('executeWorkflow', () => {
         outputs: z.object({
           echoed: withPortMeta(z.string(), { label: 'Echoed' }),
         }),
-        async execute(params, context) {
-          context.emitProgress({ message: `Echoing ${params.value}`, level: 'debug' });
-          return { echoed: params.value };
+        async execute({ inputs }, context) {
+          context.emitProgress({ message: `Echoing ${inputs.value}`, level: 'debug' });
+          return { echoed: inputs.value };
         },
       };
 
@@ -82,14 +82,16 @@ describe('executeWorkflow', () => {
         {
           ref: 'node-1',
           componentId: 'test.echo',
-          params: { value: 'first' },
+          params: {},
+          inputOverrides: { value: 'first' },
           dependsOn: [],
           inputMappings: {},
         },
         {
           ref: 'node-2',
           componentId: 'core.console.log',
-          params: { data: 'second' },
+          params: {},
+          inputOverrides: { data: 'second' },
           dependsOn: ['node-1'],
           inputMappings: {
             label: {
@@ -288,7 +290,8 @@ describe('executeWorkflow', () => {
         {
           ref: 'merge',
           componentId: 'core.console.log',
-          params: { data: 'merge-complete' },
+          params: {},
+          inputOverrides: { data: 'merge-complete' },
           dependsOn: ['branchLeft', 'branchRight'],
           inputMappings: {},
         },
@@ -349,7 +352,7 @@ describe('executeWorkflow', () => {
         outputs: z.object({
           triggeredBy: withPortMeta(z.string().optional(), { label: 'Triggered By' }),
         }),
-        async execute(params, context) {
+        async execute({ inputs }, context) {
           const triggeredBy = context.metadata.triggeredBy;
           return triggeredBy ? { triggeredBy } : {};
         },
@@ -410,7 +413,8 @@ describe('executeWorkflow', () => {
         {
           ref: 'merge',
           componentId: 'test.trigger.capture',
-          params: { label: 'merge' },
+          params: {},
+          inputOverrides: { label: 'merge' },
           dependsOn: ['branchSlow', 'branchFast'],
           inputMappings: {},
         },
@@ -460,14 +464,16 @@ describe('executeWorkflow', () => {
         {
           ref: 'node-1',
           componentId: 'test.echo',
-          params: { value: 'first' },
+          params: {},
+          inputOverrides: { value: 'first' },
           dependsOn: [],
           inputMappings: {},
         },
         {
           ref: 'node-2',
           componentId: 'core.console.log',
-          params: { data: 'second' },
+          params: {},
+          inputOverrides: { data: 'second' },
           dependsOn: ['node-1'],
           inputMappings: {
             label: {
@@ -502,8 +508,8 @@ describe('executeWorkflow', () => {
           message: withPortMeta(z.string(), { label: 'Message' }),
         }),
         outputs: z.never(),
-        async execute(params) {
-          throw new Error(params.message);
+        async execute({ inputs }) {
+          throw new Error(inputs.message);
         },
       };
       componentRegistry.register(failComponent);
@@ -521,9 +527,9 @@ describe('executeWorkflow', () => {
         outputs: z.object({
           label: withPortMeta(z.string(), { label: 'Label' }),
         }),
-        async execute(params, context) {
+        async execute({ inputs }, context) {
           executionOrder.push(context.componentRef);
-          return { label: params.label };
+          return { label: inputs.label };
         },
       };
       componentRegistry.register(recordComponent);
@@ -563,14 +569,16 @@ describe('executeWorkflow', () => {
         {
           ref: 'fail',
           componentId: 'test.fail.always',
-          params: { message: 'boom' },
+          params: {},
+          inputOverrides: { message: 'boom' },
           dependsOn: ['start'],
           inputMappings: {},
         },
         {
           ref: 'errorHandler',
           componentId: 'test.record.execution',
-          params: { label: 'handled' },
+          params: {},
+          inputOverrides: { label: 'handled' },
           dependsOn: ['fail'],
           inputMappings: {},
         },
@@ -615,9 +623,9 @@ describe('executeWorkflow', () => {
         outputs: z.object({
           label: withPortMeta(z.string(), { label: 'Label' }),
         }),
-        async execute(params, context) {
+        async execute({ inputs }, context) {
           failureMetadata.push(context.metadata.failure);
-          return { label: params.label };
+          return { label: inputs.label };
         },
       };
       componentRegistry.register(captureComponent);
@@ -656,14 +664,16 @@ describe('executeWorkflow', () => {
         {
           ref: 'fail',
           componentId: 'test.fail.always',
-          params: { message: 'boom' },
+          params: {},
+          inputOverrides: { message: 'boom' },
           dependsOn: ['start'],
           inputMappings: {},
         },
         {
           ref: 'errorHandler',
           componentId: 'test.capture.failure-metadata',
-          params: { label: 'handled' },
+          params: {},
+          inputOverrides: { label: 'handled' },
           dependsOn: ['fail'],
           inputMappings: {},
         },

@@ -23,12 +23,16 @@ describe('naabu component', () => {
     const component = componentRegistry.get<NaabuInput, NaabuOutput>('shipsec.naabu.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputs.parse({
+    const inputValues = {
       targets: ['scanme.sh'],
-    });
+    };
+    const paramValues = {};
 
-    expect(params.retries).toBe(1);
-    expect(params.enablePing).toBe(false);
+    const parsedInputs = component.inputs.parse(inputValues);
+    const parsedParams = component.parameters.parse(paramValues);
+
+    expect(parsedParams.retries).toBe(1);
+    expect(parsedParams.enablePing).toBe(false);
   });
 
   it('should parse JSONL output into findings', async () => {
@@ -40,11 +44,15 @@ describe('naabu component', () => {
       componentRef: 'naabu-test',
     });
 
-    const params = component.inputs.parse({
-      targets: ['scanme.sh'],
-      ports: '80,443',
-      enablePing: true,
-    });
+    const executePayload = {
+      inputs: {
+        targets: ['scanme.sh'],
+      },
+      params: {
+        ports: '80,443',
+        enablePing: true,
+      }
+    };
 
     const rawOutput = [
       JSON.stringify({ host: 'scanme.sh', ip: '45.33.32.156', port: 80, proto: 'tcp' }),
@@ -53,7 +61,7 @@ describe('naabu component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(rawOutput);
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(result.findings).toEqual([
       { host: 'scanme.sh', ip: '45.33.32.156', port: 80, protocol: 'tcp' },
@@ -74,13 +82,16 @@ describe('naabu component', () => {
       componentRef: 'naabu-test',
     });
 
-    const params = component.inputs.parse({
-      targets: ['scanme.sh'],
-    });
+    const executePayload = {
+      inputs: {
+        targets: ['scanme.sh'],
+      },
+      params: {}
+    };
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue('scanme.sh:22\n');
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(result.findings).toEqual([
       { host: 'scanme.sh', ip: null, port: 22, protocol: 'tcp' },

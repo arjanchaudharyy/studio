@@ -48,7 +48,15 @@ Examples:
 
 ```typescript
 import { z } from 'zod';
-import { componentRegistry, ComponentDefinition } from '@shipsec/component-sdk';
+import { 
+  componentRegistry, 
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  port,
+  param
+} from '@shipsec/component-sdk';
 
 const inputSchema = z.object({
   url: z.string().url(),
@@ -122,7 +130,7 @@ const definition: ComponentDefinition<Input, Output> = {
     
     return parseOutput(rawOutput);
   }
-};
+});
 
 componentRegistry.register(definition);
 export default definition;
@@ -342,6 +350,55 @@ async execute(input, context) {
 
 ---
 
+## Inputs vs. Parameters
+
+| Feature | Inputs | Parameters |
+|---------|--------|------------|
+| **Source** | Upstream nodes or Manual Overrides | User configuration in Sidebar |
+| **Schema** | Defined via `inputs()` and `port()` | Defined via `parameters()` and `param()` |
+| **UI** | Visible in the "Inputs" section | Visible in the "Parameters" section |
+| **Mapping** | Can be connected to other nodes | Static values only |
+
+### Defining Ports
+
+Use the `port()` helper to add metadata to your Zod schemas:
+
+```typescript
+const inputSchema = inputs({
+  domain: port(z.string(), {
+    label: 'Target Domain',
+    description: 'The root domain to enumerate.',
+    connectionType: { kind: 'primitive', name: 'text' },
+  }),
+  apiKey: port(z.string(), {
+    label: 'API Key',
+    editor: 'secret', // Uses masked input in UI
+    connectionType: { kind: 'primitive', name: 'secret' },
+  })
+});
+```
+
+### Defining Parameters
+
+Use the `param()` helper for static settings:
+
+```typescript
+const parameterSchema = parameters({
+  timeout: param(z.number().default(30), {
+    label: 'Timeout (s)',
+    editor: 'number',
+    min: 1,
+    max: 300,
+  }),
+  verbose: param(z.boolean().default(false), {
+    label: 'Verbose Output',
+    editor: 'boolean',
+  })
+});
+```
+
+---
+
 ## Docker Component Requirements
 
 <Warning>
@@ -402,7 +459,7 @@ Does your Docker image have a shell (/bin/sh)?
 ## File System Access
 
 <Warning>
-  All components that require file-based input/output MUST use the `IsolatedContainerVolume` utility for Docker-in-Docker compatibility and multi-tenant security.
+  All components that require file-based input/output MUST use the `IsolatedContainerVolume` utility for multi-tenant security.
 </Warning>
 
 For detailed patterns and security guarantees, see [Isolated Volumes](/development/isolated-volumes).

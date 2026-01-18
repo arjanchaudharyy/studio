@@ -14,7 +14,10 @@ import {
 } from '@shipsec/component-sdk';
 import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
-const domainValueSchema = z.union([z.string(), z.array(z.string())]);
+const domainValueSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? [val] : val),
+  z.array(z.string().min(1)),
+);
 
 const inputSchema = inputs({
   domains: port(domainValueSchema.optional().describe('Array of target domains'), {

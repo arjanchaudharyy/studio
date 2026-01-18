@@ -27,22 +27,26 @@ describe('Slack Component Template Support', () => {
     it('should interpolate text and blocks with dynamic variables', async () => {
         const mockContext = createMockContext();
 
-        const params = {
-            authType: 'bot_token' as const,
-            slackToken: 'xoxb-test',
-            channel: 'C1',
-            text: 'Alert: {{severity}} issue on {{host}}',
-            blocks: [
-                {
-                    type: 'section',
-                    text: { type: 'mrkdwn', text: '*System:* {{host}}' }
-                }
-            ],
-            host: 'prod-db-01',
-            severity: 'CRITICAL'
+        const executePayload = {
+            inputs: {
+                host: 'prod-db-01',
+                severity: 'CRITICAL',
+                slackToken: 'xoxb-test',
+                channel: 'C1',
+                text: 'Alert: {{severity}} issue on {{host}}',
+                blocks: [
+                    {
+                        type: 'section',
+                        text: { type: 'mrkdwn', text: '*System:* {{host}}' }
+                    }
+                ]
+            },
+            params: {
+                authType: 'bot_token' as const,
+            }
         };
 
-        const result = await definition.execute(params, mockContext);
+        const result = await definition.execute(executePayload, mockContext);
 
         expect(result.ok).toBe(true);
         const body = JSON.parse(httpFetchMock.mock.calls[0][1].body);
@@ -57,15 +61,19 @@ describe('Slack Component Template Support', () => {
     it('should handle JSON string blocks template', async () => {
         const mockContext = createMockContext();
 
-        const params = {
-            authType: 'webhook' as const,
-            webhookUrl: 'https://webhook',
-            text: 'Plain text',
-            blocks: '[{"type": "section", "text": {"type": "plain_text", "text": "{{user}} joined" }}]',
-            user: 'Alice'
+        const executePayload = {
+            inputs: {
+                user: 'Alice',
+                webhookUrl: 'https://webhook',
+                text: 'Plain text',
+                blocks: '[{"type": "section", "text": {"type": "plain_text", "text": "{{user}} joined" }}]'
+            },
+            params: {
+                authType: 'webhook' as const,
+            }
         };
 
-        await definition.execute(params, mockContext);
+        await definition.execute(executePayload, mockContext);
 
         const body = JSON.parse(httpFetchMock.mock.calls[0][1].body);
         expect(body.blocks[0].text.text).toBe('Alice joined');

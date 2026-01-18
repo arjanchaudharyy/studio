@@ -91,7 +91,7 @@ export class ComponentRegistry {
     const outputPorts = extractPorts(definition.outputs);
     const parameterFields = definition.parameters
       ? extractParameters(definition.parameters)
-      : definition.ui?.parameters ?? [];
+      : [];
 
     const connectionTypes: Record<string, any> = {};
     for (const port of [...inputPorts, ...outputPorts]) {
@@ -140,10 +140,6 @@ export class ComponentRegistry {
 function validatePortMetadata(definition: AnyComponentDefinition) {
   const inputSchema = definition.inputs;
   const outputSchema = definition.outputs;
-  const useLegacyParameters = !definition.parameters;
-  const parameterIds = new Set(
-    useLegacyParameters ? definition.ui?.parameters?.map((param) => param.id) ?? [] : []
-  );
 
   const inputObject = unwrapToObject(inputSchema);
   if (inputObject) {
@@ -153,7 +149,7 @@ function validatePortMetadata(definition: AnyComponentDefinition) {
         continue;
       }
       const portMeta = getPortMeta(fieldSchema);
-      if (!portMeta && !parameterIds.has(fieldName)) {
+      if (!portMeta) {
         throw new ConfigurationError(
           `Component ${definition.id} input \"${fieldName}\" must be a port (use port() or withPortMeta).`,
           {

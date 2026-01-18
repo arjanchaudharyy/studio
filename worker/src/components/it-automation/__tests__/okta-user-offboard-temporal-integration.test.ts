@@ -85,7 +85,15 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
-      params: baseParams,
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
+      },
       metadata: {
         streamId: 'test-stream',
       },
@@ -115,9 +123,14 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
-      params: {
-        ...baseParams,
+      inputs: {
         user_email: 'missing@example.com',
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
       },
       metadata: {
         streamId: 'test-stream',
@@ -146,7 +159,15 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
-      params: baseParams,
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
+      },
       metadata: {
         streamId: 'test-stream',
       },
@@ -179,6 +200,11 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
       action: {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
+      },
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
       },
       params: {
         ...baseParams,
@@ -220,6 +246,11 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
       },
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
       params: {
         ...baseParams,
         action: 'delete',
@@ -257,6 +288,11 @@ describe('Okta User Offboard - Temporal Activity Integration', () => {
       action: {
         ref: 'okta-offboard',
         componentId: 'it-automation.okta.user-offboard',
+      },
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
       },
       params: baseParams,
       metadata: {

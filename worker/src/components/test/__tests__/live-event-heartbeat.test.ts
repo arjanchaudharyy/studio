@@ -21,10 +21,13 @@ describe('test.live.event.heartbeat component', () => {
 
     const execPromise = component!.execute(
       {
-        label: 'Diagnostics',
-        durationSeconds: 5,
-        intervalSeconds: 5,
-        annotations: { source: 'unit-test' },
+        inputs: {},
+        params: {
+          label: 'Diagnostics',
+          durationSeconds: 5,
+          intervalSeconds: 5,
+          annotations: { source: 'unit-test' },
+        },
       },
       context,
     );

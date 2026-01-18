@@ -49,7 +49,18 @@ describe('Okta User Offboard - Retry Behavior Verification', () => {
       (error as any).status = 404;
       mockUserApi.getUser.mockRejectedValueOnce(error);
 
-      const result = await execute(baseParams, createMockExecutionContext());
+      const executePayload = {
+        inputs: {
+          user_email: baseParams.user_email,
+          okta_domain: baseParams.okta_domain,
+          apiToken: baseParams.apiToken,
+        },
+        params: {
+          action: baseParams.action,
+          dry_run: baseParams.dry_run,
+        }
+      };
+      const result = await execute(executePayload, createMockExecutionContext());
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('User test@example.com not found');
@@ -63,7 +74,18 @@ describe('Okta User Offboard - Retry Behavior Verification', () => {
       (error as any).status = 401;
       mockUserApi.getUser.mockRejectedValueOnce(error);
 
-      const result = await execute(baseParams, createMockExecutionContext());
+      const executePayload = {
+        inputs: {
+          user_email: baseParams.user_email,
+          okta_domain: baseParams.okta_domain,
+          apiToken: baseParams.apiToken,
+        },
+        params: {
+          action: baseParams.action,
+          dry_run: baseParams.dry_run,
+        }
+      };
+      const result = await execute(executePayload, createMockExecutionContext());
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Failed to get user details');
@@ -85,7 +107,18 @@ describe('Okta User Offboard - Retry Behavior Verification', () => {
       mockUserApi.getUser.mockResolvedValueOnce(mockUser);
       mockUserApi.deactivateUser.mockRejectedValueOnce(new Error('network down'));
 
-      const result = await execute(baseParams, createMockExecutionContext());
+      const executePayload = {
+        inputs: {
+          user_email: baseParams.user_email,
+          okta_domain: baseParams.okta_domain,
+          apiToken: baseParams.apiToken,
+        },
+        params: {
+          action: baseParams.action,
+          dry_run: baseParams.dry_run,
+        }
+      };
+      const result = await execute(executePayload, createMockExecutionContext());
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Failed to deactivate user');
@@ -115,7 +148,18 @@ describe('Okta User Offboard - Retry Behavior Verification', () => {
     mockUserApi.getUser.mockResolvedValue(mockUser);
     mockUserApi.deactivateUser.mockResolvedValue({});
 
-    const result = await execute(baseParams, createMockExecutionContext());
+    const executePayload = {
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
+      }
+    };
+    const result = await execute(executePayload, createMockExecutionContext());
 
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
@@ -145,11 +189,20 @@ describe('Okta User Offboard - Retry Behavior Verification', () => {
 
     mockUserApi.getUser.mockResolvedValue(mockUser);
 
-    const result = await execute(
-      {
-        ...baseParams,
-        dry_run: true,
+    const executePayload = {
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
       },
+      params: {
+        dry_run: true,
+        action: baseParams.action,
+      }
+    };
+
+    const result = await execute(
+      executePayload,
       createMockExecutionContext(),
     );
 

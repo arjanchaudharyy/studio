@@ -53,16 +53,20 @@ describe('core.file.writer component', () => {
       artifacts,
     });
 
-    const params = component.inputs.parse({
-      fileName: 'output.txt',
-      content: 'Hello world',
-      destination: {
-        adapterId: 'artifact',
-        config: { destinations: ['run'] },
+    const executePayload = {
+      inputs: {
+        content: 'Hello world',
+        destination: {
+          adapterId: 'artifact',
+          config: { destinations: ['run'] },
+        },
       },
-    });
+      params: {
+        fileName: 'output.txt',
+      }
+    };
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(uploadMock).toHaveBeenCalledTimes(1);
     const payload = uploadMock.mock.calls[0][0];
@@ -106,16 +110,20 @@ describe('core.file.writer component', () => {
       artifacts,
     });
 
-    const params = component.inputs.parse({
-      fileName: 'adapter.txt',
-      content: 'Destination registry FTW',
-      destination: {
-        adapterId: 'artifact',
-        config: { destinations: ['library'] },
+    const executePayload = {
+      inputs: {
+        content: 'Destination registry FTW',
+        destination: {
+          adapterId: 'artifact',
+          config: { destinations: ['library'] },
+        },
       },
-    });
+      params: {
+        fileName: 'adapter.txt',
+      }
+    };
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
     expect(uploadMock).toHaveBeenCalledTimes(1);
     expect(result.destinations).toEqual(['library']);
     expect(result.artifactId).toBe('dest-1');
@@ -131,26 +139,30 @@ describe('core.file.writer component', () => {
       componentRef: 'node-3',
     });
 
-    const params = component.inputs.parse({
-      fileName: 'report.json',
-      mimeType: 'application/json',
-      content: { status: 'ok' },
-      contentFormat: 'json',
-      destination: {
-        adapterId: 's3',
-        config: {
-          bucket: 'shipsec-artifacts',
-          credentials: {
-            accessKeyId: 'AKIA123',
-            secretAccessKey: 'secret',
+    const executePayload = {
+      inputs: {
+        content: { status: 'ok' },
+        destination: {
+          adapterId: 's3',
+          config: {
+            bucket: 'shipsec-artifacts',
+            credentials: {
+              accessKeyId: 'AKIA123',
+              secretAccessKey: 'secret',
+            },
+            pathPrefix: 'runs/demo',
+            publicUrl: 'https://cdn.example.com/artifacts',
           },
-          pathPrefix: 'runs/demo',
-          publicUrl: 'https://cdn.example.com/artifacts',
         },
       },
-    });
+      params: {
+        fileName: 'report.json',
+        mimeType: 'application/json',
+        contentFormat: 'json' as const,
+      }
+    };
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(s3SendMock).toHaveBeenCalledTimes(1);
     const commandInput = (s3SendMock.mock.calls[0][0] as { input: Record<string, unknown> }).input;

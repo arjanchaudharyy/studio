@@ -28,13 +28,16 @@ describe('subfinder component', () => {
       componentRef: 'subfinder-test',
     });
 
-    const params = component.inputs.parse({
-      domains: ['example.com'],
-    });
+    const executePayload = {
+      inputs: {
+        domains: ['example.com'],
+      },
+      params: {}
+    };
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue('api.example.com\napp.example.com');
 
-    const result = component.outputs.parse(await component.execute(params, context));
+    const result = component.outputs.parse(await component.execute(executePayload, context));
 
     expect(result.subdomains).toEqual(['api.example.com', 'app.example.com']);
     expect(result.rawOutput).toBe('api.example.com\napp.example.com');
@@ -51,9 +54,12 @@ describe('subfinder component', () => {
       componentRef: 'subfinder-test',
     });
 
-    const params = component.inputs.parse({
-      domains: ['example.com'],
-    });
+    const executePayload = {
+      inputs: {
+        domains: ['example.com'],
+      },
+      params: {}
+    };
 
     const payload = {
       subdomains: ['api.example.com'],
@@ -64,7 +70,7 @@ describe('subfinder component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(payload);
 
-    const result = component.outputs.parse(await component.execute(params, context));
+    const result = component.outputs.parse(await component.execute(executePayload, context));
 
     expect(result).toEqual(component.outputs.parse(payload as SubfinderOutput));
   });
@@ -73,16 +79,16 @@ describe('subfinder component', () => {
     const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputs.parse({ domains: 'example.com' }) as { domains: string[] };
-    expect(params.domains).toEqual(['example.com']);
+    const inputs = component.inputs.parse({ domains: 'example.com' });
+    expect(inputs.domains).toEqual(['example.com']);
   });
 
   it('should accept legacy "domain" key from older workflows', () => {
     const component = componentRegistry.get<SubfinderInput, SubfinderOutput>('shipsec.subfinder.run');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputs.parse({ domain: 'legacy.example.com' }) as { domains: string[] };
-    expect(params.domains).toEqual(['legacy.example.com']);
+    const params = component.parameters.parse({ domain: 'legacy.example.com' });
+    expect(params.domain).toBe('legacy.example.com');
   });
 
   it('should inject provider config content into docker environment when configured', async () => {
@@ -98,10 +104,13 @@ describe('subfinder component', () => {
       componentRef: 'subfinder-secret-test',
     });
 
-    const params = component.inputs.parse({
-      domains: ['example.com'],
-      providerConfig: secretValue,
-    });
+    const executePayload = {
+      inputs: {
+        domains: ['example.com'],
+        providerConfig: secretValue,
+      },
+      params: {}
+    };
 
     const runnerSpy = vi
       .spyOn(sdk, 'runComponentWithRunner')
@@ -112,7 +121,7 @@ describe('subfinder component', () => {
         subdomainCount: 0,
       });
 
-    await component.execute(params, context);
+    await component.execute(executePayload, context);
 
     expect(runnerSpy).toHaveBeenCalled();
     const [runnerConfig] = runnerSpy.mock.calls[0];

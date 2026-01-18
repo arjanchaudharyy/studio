@@ -31,16 +31,19 @@ describe('terminal demo component', () => {
       componentRef: 'terminal-demo',
     });
 
-    const params = component.inputs.parse({
-      message: 'Test message',
-      durationSeconds: 5,
-    });
+    const executePayload = {
+      inputs: {},
+      params: {
+        message: 'Test message',
+        durationSeconds: 5,
+      }
+    };
 
     const mockOutput = 'Demo completed successfully';
 
     const spy = vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(mockOutput);
 
-    const result = component.outputs.parse(await component.execute(params, context));
+    const result = component.outputs.parse(await component.execute(executePayload, context));
 
     expect(spy).toHaveBeenCalled();
     expect(result.message).toBe('Test message');

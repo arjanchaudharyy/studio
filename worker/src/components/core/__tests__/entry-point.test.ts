@@ -24,20 +24,24 @@ describe('entry-point component', () => {
       componentRef: 'trigger-test',
     });
 
-    const params = component.inputs.parse({
-      runtimeInputs: [
-        { id: 'user', label: 'User', type: 'text', required: true },
-        { id: 'action', label: 'Action', type: 'text', required: true },
-        { id: 'metadata', label: 'Metadata', type: 'json', required: false },
-      ],
-      __runtimeData: {
-        user: 'alice',
-        action: 'start',
-        metadata: { source: 'unit-test' },
+    const executePayload = {
+      inputs: {
+        __runtimeData: {
+          user: 'alice',
+          action: 'start',
+          metadata: { source: 'unit-test' },
+        },
       },
-    });
+      params: {
+        runtimeInputs: [
+          { id: 'user', label: 'User', type: 'text', required: true },
+          { id: 'action', label: 'Action', type: 'text', required: true },
+          { id: 'metadata', label: 'Metadata', type: 'json', required: false },
+        ],
+      }
+    };
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(result).toEqual({
       user: 'alice',
@@ -55,16 +59,20 @@ describe('entry-point component', () => {
       componentRef: 'trigger-test',
     });
 
-    const params = component.inputs.parse({
-      runtimeInputs: [
-        { id: 'legacy', label: 'Legacy Text', type: 'string', required: true },
-      ],
-      __runtimeData: {
-        legacy: 'hello',
+    const executePayload = {
+      inputs: {
+        __runtimeData: {
+          legacy: 'hello',
+        },
       },
-    });
+      params: {
+        runtimeInputs: [
+          { id: 'legacy', label: 'Legacy Text', type: 'string', required: true },
+        ],
+      }
+    };
 
-    const result = await component.execute(params, context) as any;
+    const result = await component.execute(executePayload, context) as any;
 
     expect(result).toEqual({
       legacy: 'hello',
@@ -80,9 +88,12 @@ describe('entry-point component', () => {
       componentRef: 'trigger-test',
     });
 
-    const params = component.inputs.parse({});
+    const executePayload = {
+      inputs: {},
+      params: {}
+    };
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(result).toEqual({});
   });
@@ -96,14 +107,18 @@ describe('entry-point component', () => {
       componentRef: 'trigger-test',
     });
 
-    const params = component.inputs.parse({
-      runtimeInputs: [
-        { id: 'user', label: 'User', type: 'text', required: true },
-      ],
-      __runtimeData: {},
-    });
+    const executePayload = {
+      inputs: {
+        __runtimeData: {},
+      },
+      params: {
+        runtimeInputs: [
+          { id: 'user', label: 'User', type: 'text', required: true },
+        ],
+      }
+    };
 
-    await expect(component.execute(params, context)).rejects.toThrow(
+    await expect(component.execute(executePayload, context)).rejects.toThrow(
       "Required runtime input 'User' (user) was not provided",
     );
   });

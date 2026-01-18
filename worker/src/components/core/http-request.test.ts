@@ -77,12 +77,17 @@ describe("HTTP Request Component", () => {
   test("should handle basic GET request", async () => {
     const result = await definition.execute(
       {
-        url: `${baseUrl}/`,
-        method: "GET",
-        headers: {},
-        contentType: "application/json",
-        timeout: 1000,
-        failOnError: true,
+        inputs: {
+          url: `${baseUrl}/`,
+          headers: {},
+        },
+        params: {
+          method: "GET",
+          contentType: "application/json",
+          timeout: 1000,
+          failOnError: true,
+          authType: "none",
+        },
       },
       mockContext
     );
@@ -95,13 +100,18 @@ describe("HTTP Request Component", () => {
     const payload = JSON.stringify({ foo: "bar" });
     const result = await definition.execute(
       {
-        url: `${baseUrl}/json`,
-        method: "POST",
-        body: payload,
-        headers: { "X-Test": "123" },
-        contentType: "application/json",
-        timeout: 1000,
-        failOnError: true,
+        inputs: {
+          url: `${baseUrl}/json`,
+          body: payload,
+          headers: { "X-Test": "123" },
+        },
+        params: {
+          method: "POST",
+          contentType: "application/json",
+          timeout: 1000,
+          failOnError: true,
+          authType: "none",
+        },
       },
       mockContext
     );
@@ -117,11 +127,16 @@ describe("HTTP Request Component", () => {
   test("should parse text response correctly", async () => {
       const result = await definition.execute(
         {
-          url: `${baseUrl}/text`,
-          method: "GET",
-          timeout: 1000,
-          contentType: "application/json",
-          failOnError: true,
+          inputs: {
+            url: `${baseUrl}/text`,
+          },
+          params: {
+            method: "GET",
+            timeout: 1000,
+            contentType: "application/json",
+            failOnError: true,
+            authType: "none",
+          },
         },
         mockContext
       );
@@ -135,11 +150,16 @@ describe("HTTP Request Component", () => {
   test("should handle DELETE method", async () => {
       const result = await definition.execute(
         {
-          url: `${baseUrl}/delete`,
-          method: "DELETE",
-          timeout: 1000,
-          contentType: "application/json",
-          failOnError: true,
+          inputs: {
+            url: `${baseUrl}/delete`,
+          },
+          params: {
+            method: "DELETE",
+            timeout: 1000,
+            contentType: "application/json",
+            failOnError: true,
+            authType: "none",
+          },
         },
         mockContext
       );
@@ -151,11 +171,16 @@ describe("HTTP Request Component", () => {
     try {
       await definition.execute(
         {
-          url: `${baseUrl}/status/404`,
-          method: "GET",
-          failOnError: true,
-          contentType: "application/json",
-          timeout: 1000,
+          inputs: {
+            url: `${baseUrl}/status/404`,
+          },
+          params: {
+            method: "GET",
+            failOnError: true,
+            contentType: "application/json",
+            timeout: 1000,
+            authType: "none",
+          },
         },
         mockContext
       );
@@ -169,11 +194,16 @@ describe("HTTP Request Component", () => {
   test("should return status 404 if failOnError is false", async () => {
      const result = await definition.execute(
         {
-          url: `${baseUrl}/status/404`,
-          method: "GET",
-          failOnError: false, // Don't throw
-          contentType: "application/json",
-          timeout: 1000,
+          inputs: {
+            url: `${baseUrl}/status/404`,
+          },
+          params: {
+            method: "GET",
+            failOnError: false, // Don't throw
+            contentType: "application/json",
+            timeout: 1000,
+            authType: "none",
+          },
         },
         mockContext
       );
@@ -185,11 +215,16 @@ describe("HTTP Request Component", () => {
     try {
         await definition.execute(
           {
-            url: `${baseUrl}/timeout`,
-            method: "GET",
-            timeout: 50, // Server sleeps for 200ms
-            contentType: "application/json",
-            failOnError: true,
+            inputs: {
+              url: `${baseUrl}/timeout`,
+            },
+            params: {
+              method: "GET",
+              timeout: 50, // Server sleeps for 200ms
+              contentType: "application/json",
+              failOnError: true,
+              authType: "none",
+            },
           },
           mockContext
         );

@@ -209,71 +209,89 @@ exec:
 
   describe('Scan Configuration', () => {
     test('should respect rate limiting', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         rateLimit: 50, // Low rate
       };
 
-      const parsed = nucleiComponent.inputs.parse(input);
-      expect(parsed.rateLimit).toBe(50);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.rateLimit).toBe(50);
     });
 
     test('should respect concurrency settings', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         concurrency: 5,
       };
 
-      const parsed = nucleiComponent.inputs.parse(input);
-      expect(parsed.concurrency).toBe(5);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.concurrency).toBe(5);
     });
 
     test('should configure timeout and retries', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         timeout: 30,
         retries: 3,
       };
 
-      const parsed = nucleiComponent.inputs.parse(input);
-      expect(parsed.timeout).toBe(30);
-      expect(parsed.retries).toBe(3);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.timeout).toBe(30);
+      expect(parsedParams.retries).toBe(3);
     });
 
     test('should enable raw HTTP output', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         includeRaw: true,
       };
 
-      const parsed = nucleiComponent.inputs.parse(input);
-      expect(parsed.includeRaw).toBe(true);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.includeRaw).toBe(true);
     });
 
     test('should enable redirect following', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         followRedirects: true,
       };
 
-      const parsed = nucleiComponent.inputs.parse(input);
-      expect(parsed.followRedirects).toBe(true);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.followRedirects).toBe(true);
     });
 
     test('should disable template updates', async () => {
-      const input: NucleiInput = {
+      const input = {
         targets: ['https://example.com'],
         templateIds: ['CVE-2024-1234'],
+      };
+      const params = {
         updateTemplates: false,
       };
 
-      const parsed = nucleiComponent.inputs.parse(input);
-      expect(parsed.updateTemplates).toBe(false);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+      expect(parsedParams.updateTemplates).toBe(false);
     });
   });
 

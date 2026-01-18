@@ -72,7 +72,18 @@ describe('okta-user-offboard', () => {
     mockUserApi.deactivateUser.mockResolvedValue({});
 
     const context = createContext();
-    const result = await execute(baseParams, context);
+    const executePayload = {
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
+      }
+    };
+    const result = await execute(executePayload, context);
 
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
@@ -100,13 +111,18 @@ describe('okta-user-offboard', () => {
     mockUserApi.deleteUser.mockResolvedValue({});
 
     const context = createContext();
-    const result = await execute(
-      {
-        ...baseParams,
-        action: 'delete',
+    const executePayload = {
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
       },
-      context,
-    );
+      params: {
+        action: 'delete' as const,
+        dry_run: false,
+      }
+    };
+    const result = await execute(executePayload, context);
 
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
@@ -129,14 +145,18 @@ describe('okta-user-offboard', () => {
     mockUserApi.getUser.mockResolvedValue(mockUser);
 
     const context = createContext();
-    const result = await execute(
-      {
-        ...baseParams,
-        dry_run: true,
-        action: 'delete',
+    const executePayload = {
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
       },
-      context,
-    );
+      params: {
+        dry_run: true,
+        action: 'delete' as const,
+      }
+    };
+    const result = await execute(executePayload, context);
 
     expect(result.success).toBe(true);
     expect(result.userDeactivated).toBe(true);
@@ -152,7 +172,18 @@ describe('okta-user-offboard', () => {
     mockUserApi.getUser.mockRejectedValue(error);
 
     const context = createContext();
-    const result = await execute(baseParams, context);
+    const executePayload = {
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
+      }
+    };
+    const result = await execute(executePayload, context);
 
     expect(result.success).toBe(false);
     expect(result.userDeactivated).toBe(false);
@@ -176,7 +207,18 @@ describe('okta-user-offboard', () => {
     mockUserApi.deactivateUser.mockRejectedValue(new Error('network down'));
 
     const context = createContext();
-    const result = await execute(baseParams, context);
+    const executePayload = {
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
+      },
+      params: {
+        action: baseParams.action,
+        dry_run: baseParams.dry_run,
+      }
+    };
+    const result = await execute(executePayload, context);
 
     expect(result.success).toBe(false);
     expect(result.userDeactivated).toBe(false);
@@ -199,13 +241,18 @@ describe('okta-user-offboard', () => {
     mockUserApi.deleteUser.mockRejectedValue(new Error('timeout'));
 
     const context = createContext();
-    const result = await execute(
-      {
-        ...baseParams,
-        action: 'delete',
+    const executePayload = {
+      inputs: {
+        user_email: baseParams.user_email,
+        okta_domain: baseParams.okta_domain,
+        apiToken: baseParams.apiToken,
       },
-      context,
-    );
+      params: {
+        action: 'delete' as const,
+        dry_run: false,
+      }
+    };
+    const result = await execute(executePayload, context);
 
     expect(result.success).toBe(false);
     expect(result.userDeactivated).toBe(false);
@@ -223,13 +270,14 @@ describe('okta-user-offboard', () => {
   });
 
   it('throws when provided API token trims to an empty string', async () => {
-    const params = definition.inputs.parse({
-      ...baseParams,
+    const inputValues = {
+      user_email: baseParams.user_email,
+      okta_domain: baseParams.okta_domain,
       apiToken: '   ',
-    });
+    };
 
     const context = createContext();
-    const result = await execute(params, context);
+    const result = await execute({ inputs: inputValues, params: {} }, context);
     expect(result.success).toBe(false);
     expect(result.error).toContain('API token is required to contact Okta');
   });

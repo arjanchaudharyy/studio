@@ -39,10 +39,10 @@ describe('abuseipdb component', () => {
   });
 
   it('should have parameters defined in metadata', () => {
-    const component = componentRegistry.get('security.abuseipdb.check');
-    expect(component).toBeDefined();
-    expect(component!.ui?.parameters).toBeDefined();
-    expect(component!.ui?.parameters).toHaveLength(2);
+    const metadata = componentRegistry.getMetadata('security.abuseipdb.check');
+    expect(metadata).toBeDefined();
+    expect(metadata!.parameters).toBeDefined();
+    expect(metadata!.parameters).toHaveLength(2);
   });
 
   it('should execute successfully with valid input', async () => {
@@ -54,11 +54,15 @@ describe('abuseipdb component', () => {
         componentRef: 'abuseipdb-test',
      });
 
-     const params = {
-         ipAddress: '127.0.0.1',
-         apiKey: 'test-key',
-         maxAgeInDays: 90,
-         verbose: false
+     const executePayload = {
+         inputs: {
+             ipAddress: '127.0.0.1',
+             apiKey: 'test-key',
+         },
+         params: {
+             maxAgeInDays: 90,
+             verbose: false
+         }
      };
 
      const mockResponse = {
@@ -83,7 +87,7 @@ describe('abuseipdb component', () => {
          headers: { 'Content-Type': 'application/json' }
      }));
 
-     const result = await component.execute(params, context) as AbuseIPDBOutput;
+     const result = await component.execute(executePayload, context) as AbuseIPDBOutput;
 
      expect(fetchSpy).toHaveBeenCalled();
      const callArgs = fetchSpy.mock.calls[0];
@@ -105,18 +109,22 @@ describe('abuseipdb component', () => {
          componentRef: 'abuseipdb-test',
       });
  
-      const params = {
-          ipAddress: '0.0.0.0',
-          apiKey: 'test-key',
-          maxAgeInDays: 90,
-          verbose: false
+      const executePayload = {
+          inputs: {
+              ipAddress: '0.0.0.0',
+              apiKey: 'test-key',
+          },
+          params: {
+              maxAgeInDays: 90,
+              verbose: false
+          }
       };
  
       vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, {
           status: 404,
       }));
  
-      const result = await component.execute(params, context) as AbuseIPDBOutput;
+      const result = await component.execute(executePayload, context) as AbuseIPDBOutput;
       expect(result.abuseConfidenceScore).toBe(0);
       expect(result.full_report.error).toBe('Not Found');
   });
@@ -130,11 +138,15 @@ describe('abuseipdb component', () => {
        componentRef: 'abuseipdb-test',
     });
 
-    const params = {
-        ipAddress: '1.1.1.1',
-        apiKey: 'test-key',
-        maxAgeInDays: 90,
-        verbose: false
+    const executePayload = {
+        inputs: {
+            ipAddress: '1.1.1.1',
+            apiKey: 'test-key',
+        },
+        params: {
+            maxAgeInDays: 90,
+            verbose: false
+        }
     };
 
     vi.spyOn(global, 'fetch').mockResolvedValue(new Response('Unauthorized', {
@@ -142,7 +154,7 @@ describe('abuseipdb component', () => {
         statusText: 'Unauthorized'
     }));
 
-    await expect(component.execute(params, context)).rejects.toThrow();
+    await expect(component.execute(executePayload, context)).rejects.toThrow();
   });
 
   it('should throw ValidationError when ipAddress is missing', async () => {
@@ -154,14 +166,18 @@ describe('abuseipdb component', () => {
        componentRef: 'abuseipdb-test',
     });
 
-    const params = {
-        ipAddress: '',
-        apiKey: 'test-key',
-        maxAgeInDays: 90,
-        verbose: false
+    const executePayload = {
+        inputs: {
+            ipAddress: '',
+            apiKey: 'test-key',
+        },
+        params: {
+            maxAgeInDays: 90,
+            verbose: false
+        }
     };
 
-    await expect(component.execute(params, context)).rejects.toThrow('IP Address is required');
+    await expect(component.execute(executePayload, context)).rejects.toThrow('IP Address is required');
   });
 
   it('should throw ConfigurationError when apiKey is missing', async () => {
@@ -173,14 +189,18 @@ describe('abuseipdb component', () => {
        componentRef: 'abuseipdb-test',
     });
 
-    const params = {
-        ipAddress: '1.1.1.1',
-        apiKey: '',
-        maxAgeInDays: 90,
-        verbose: false
+    const executePayload = {
+        inputs: {
+            ipAddress: '1.1.1.1',
+            apiKey: '',
+        },
+        params: {
+            maxAgeInDays: 90,
+            verbose: false
+        }
     };
 
-    await expect(component.execute(params, context)).rejects.toThrow('AbuseIPDB API Key is required');
+    await expect(component.execute(executePayload, context)).rejects.toThrow('AbuseIPDB API Key is required');
   });
 
   it('should include verbose parameter in request when enabled', async () => {
@@ -192,11 +212,15 @@ describe('abuseipdb component', () => {
        componentRef: 'abuseipdb-test',
     });
 
-    const params = {
-        ipAddress: '8.8.8.8',
-        apiKey: 'test-key',
-        maxAgeInDays: 30,
-        verbose: true
+    const executePayload = {
+        inputs: {
+            ipAddress: '8.8.8.8',
+            apiKey: 'test-key',
+        },
+        params: {
+            maxAgeInDays: 30,
+            verbose: true
+        }
     };
 
     const mockResponse = {
@@ -212,7 +236,7 @@ describe('abuseipdb component', () => {
         headers: { 'Content-Type': 'application/json' }
     }));
 
-    await component.execute(params, context);
+    await component.execute(executePayload, context);
 
     const callUrl = fetchSpy.mock.calls[0][0] as string;
     expect(callUrl).toContain('verbose=true');

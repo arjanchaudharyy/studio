@@ -18,12 +18,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Trigger',
             config: {
-              params: {},
-              inputOverrides: {
+              params: {
                 runtimeInputs: [
                   { id: 'fileId', label: 'File ID', type: 'file', required: true },
                 ],
               },
+              inputOverrides: {},
             },
           },
         },
@@ -50,10 +50,10 @@ describe('compileWorkflowGraph', () => {
             config: {
               params: {
                 method: 'POST',
-                body: JSON.stringify({ from: 'loader' }),
               },
               inputOverrides: {
                 url: 'https://example.com/webhook',
+                body: JSON.stringify({ from: 'loader' }),
               },
             },
           },
@@ -61,7 +61,7 @@ describe('compileWorkflowGraph', () => {
       ],
       edges: [
         { id: 'e1', source: 'trigger', target: 'loader', sourceHandle: 'fileId', targetHandle: 'fileId' },
-        { id: 'e2', source: 'loader', target: 'webhook' },
+        { id: 'e2', source: 'loader', target: 'webhook', sourceHandle: 'textContent', targetHandle: 'body' },
       ],
       viewport: { x: 0, y: 0, zoom: 1 },
     };
@@ -98,8 +98,8 @@ describe('compileWorkflowGraph', () => {
         id: 'e2',
         sourceRef: 'loader',
         targetRef: 'webhook',
-        sourceHandle: undefined,
-        targetHandle: undefined,
+        sourceHandle: 'textContent',
+        targetHandle: 'body',
         kind: 'success',
       },
     ]);
@@ -147,12 +147,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'A',
             config: {
-              params: {},
-              inputOverrides: {
+              params: {
                 runtimeInputs: [
                   { id: 'inputA', label: 'Input A', type: 'text', required: false },
                 ],
               },
+              inputOverrides: {},
             },
           },
         },
@@ -163,12 +163,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'B',
             config: {
-              params: {},
-              inputOverrides: {
+              params: {
                 runtimeInputs: [
                   { id: 'inputB', label: 'Input B', type: 'text', required: false },
                 ],
               },
+              inputOverrides: {},
             },
           },
         },
@@ -196,11 +196,9 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Console',
             config: {
-              params: {
-                label: 'Log',
-                level: 'info',
-              },
+              params: {},
               inputOverrides: {
+                label: 'Log',
                 data: 'hello',
               },
             },
@@ -213,12 +211,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Entry Point',
             config: {
-              params: {},
-              inputOverrides: {
+              params: {
                 runtimeInputs: [
                   { id: 'inputA', label: 'Input A', type: 'text', required: true },
                 ],
               },
+              inputOverrides: {},
             },
           },
         },
@@ -243,12 +241,12 @@ describe('compileWorkflowGraph', () => {
           data: {
             label: 'Start',
             config: {
-              params: {},
-              inputOverrides: {
+              params: {
                 runtimeInputs: [
                   { id: 'branchSeed', label: 'Seed', type: 'text', required: false },
                 ],
               },
+              inputOverrides: {},
             },
           },
         },

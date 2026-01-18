@@ -30,17 +30,21 @@ describe('shuffledns-massdns component', () => {
 
     const context = sdk.createExecutionContext({ runId: 'run-1', componentRef: 'shuffledns-test' });
 
-    const params = component.inputs.parse({
-      domains: ['example.com'],
-      mode: 'bruteforce',
-      words: ['www', 'api', 'dev'],
-    });
+    const executePayload = {
+      inputs: {
+        domains: ['example.com'],
+        words: ['www', 'api', 'dev'],
+      },
+      params: {
+        mode: 'bruteforce' as const,
+      }
+    };
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(
       'www.example.com\napi.example.com\napi.example.com\n',
     );
 
-    const result = component.outputs.parse(await component.execute(params, context));
+    const result = component.outputs.parse(await component.execute(executePayload, context));
     expect(result.domainCount).toBe(1);
     // Deduped
     expect(result.subdomains).toEqual(['www.example.com', 'api.example.com']);

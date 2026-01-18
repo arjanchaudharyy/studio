@@ -227,10 +227,8 @@ describe('core.ai.agent component', () => {
       secrets: secretsService,
     });
 
-    const params = aiAgent.inputs.parse({
+    const inputValues = aiAgent.inputs.parse({
       userInput: 'Summarise the latest findings.',
-      systemPrompt: 'You are a concise security analyst.',
-      memorySize: 5,
       chatModel: {
         provider: 'openai',
         modelId: 'gpt-4o-mini',
@@ -247,7 +245,12 @@ describe('core.ai.agent component', () => {
       },
     });
 
-    const result = await aiAgent.execute(params, runContext, {
+    const paramValues = aiAgent.parameters.parse({
+      systemPrompt: 'You are a concise security analyst.',
+      memorySize: 5,
+    });
+
+    const result = await aiAgent.execute({ inputs: inputValues, params: paramValues }, runContext, {
       ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
       stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
       createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,
@@ -370,7 +373,7 @@ describe('core.ai.agent component', () => {
         secrets: secretsService,
       });
 
-      const params = aiAgent.inputs.parse({
+      const inputValues = aiAgent.inputs.parse({
         userInput: 'Check DNS for example.com',
         mcpTools: [
           {
@@ -387,7 +390,7 @@ describe('core.ai.agent component', () => {
         modelApiKey: 'sk-legacy-openai-test-key',
       });
 
-      const result = await aiAgent.execute(params, runContext, {
+      const result = await aiAgent.execute({ inputs: inputValues, params: {} }, runContext, {
         ToolLoopAgent: MockToolLoopAgent as unknown as ToolLoopAgentClass,
         stepCountIs: stepCountIsMock as unknown as StepCountIsFn,
         createOpenAI: openAiFactoryMock as unknown as CreateOpenAIFn,

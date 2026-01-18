@@ -33,15 +33,20 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputs.parse({
+    const inputValues = {
       scanTarget: 'https://github.com/test/repo',
-      scanType: 'git',
-    });
+    };
+    const paramValues = {
+      scanType: 'git' as const,
+    };
 
-    expect(params.scanTarget).toBe('https://github.com/test/repo');
-    expect(params.scanType).toBe('git');
-    expect(params.onlyVerified).toBe(true);
-    expect(params.jsonOutput).toBe(true);
+    const parsedInputs = component.inputs.parse(inputValues);
+    const parsedParams = component.parameters.parse(paramValues);
+
+    expect(parsedInputs.scanTarget).toBe('https://github.com/test/repo');
+    expect(parsedParams.scanType).toBe('git');
+    expect(parsedParams.onlyVerified).toBe(true);
+    expect(parsedParams.jsonOutput).toBe(true);
   });
 
   it('should handle JSON output with secrets', async () => {
@@ -53,10 +58,14 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputs.parse({
-      scanTarget: 'https://github.com/test/repo',
-      scanType: 'git',
-    });
+    const executePayload = {
+      inputs: {
+        scanTarget: 'https://github.com/test/repo',
+      },
+      params: {
+        scanType: 'git' as const,
+      }
+    };
 
     const mockOutput = {
       secrets: [
@@ -84,7 +93,7 @@ describe('trufflehog component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(JSON.stringify(mockOutput));
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(result.secretCount).toBe(1);
     expect(result.verifiedCount).toBe(1);
@@ -101,10 +110,14 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputs.parse({
-      scanTarget: 'https://github.com/test/clean-repo',
-      scanType: 'git',
-    });
+    const executePayload = {
+      inputs: {
+        scanTarget: 'https://github.com/test/clean-repo',
+      },
+      params: {
+        scanType: 'git' as const,
+      }
+    };
 
     const mockOutput = {
       secrets: [],
@@ -116,7 +129,7 @@ describe('trufflehog component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(JSON.stringify(mockOutput));
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(result.secretCount).toBe(0);
     expect(result.verifiedCount).toBe(0);
@@ -128,28 +141,16 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const gitParams = component.inputs.parse({
-      scanTarget: 'https://github.com/test/repo',
-      scanType: 'git',
-    });
+    const gitParams = component.parameters.parse({ scanType: 'git' });
     expect(gitParams.scanType).toBe('git');
 
-    const filesystemParams = component.inputs.parse({
-      scanTarget: '/path/to/files',
-      scanType: 'filesystem',
-    });
+    const filesystemParams = component.parameters.parse({ scanType: 'filesystem' });
     expect(filesystemParams.scanType).toBe('filesystem');
 
-    const s3Params = component.inputs.parse({
-      scanTarget: 'my-bucket',
-      scanType: 's3',
-    });
+    const s3Params = component.parameters.parse({ scanType: 's3' });
     expect(s3Params.scanType).toBe('s3');
 
-    const dockerParams = component.inputs.parse({
-      scanTarget: 'myimage:latest',
-      scanType: 'docker',
-    });
+    const dockerParams = component.parameters.parse({ scanType: 'docker' });
     expect(dockerParams.scanType).toBe('docker');
   });
 
@@ -157,8 +158,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputs.parse({
-      scanTarget: 'https://github.com/test/repo',
+    const params = component.parameters.parse({
       scanType: 'git',
       branch: 'main',
       sinceCommit: 'HEAD~10',
@@ -172,8 +172,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputs.parse({
-      scanTarget: 'https://github.com/test/repo',
+    const params = component.parameters.parse({
       scanType: 'git',
       customFlags: '--fail --concurrency=8',
     });
@@ -190,11 +189,15 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputs.parse({
-      scanTarget: 'https://github.com/test/repo',
-      scanType: 'git',
-      onlyVerified: false,
-    });
+    const executePayload = {
+      inputs: {
+        scanTarget: 'https://github.com/test/repo',
+      },
+      params: {
+        scanType: 'git' as const,
+        onlyVerified: false,
+      }
+    };
 
     const mockOutput = {
       secrets: [
@@ -217,7 +220,7 @@ describe('trufflehog component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(JSON.stringify(mockOutput));
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(result.secretCount).toBe(2);
     expect(result.verifiedCount).toBe(1);
@@ -233,14 +236,18 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputs.parse({
-      scanTarget: 'https://github.com/test/repo',
-      scanType: 'git',
-    });
+    const executePayload = {
+      inputs: {
+        scanTarget: 'https://github.com/test/repo',
+      },
+      params: {
+        scanType: 'git' as const,
+      }
+    };
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue('invalid json output');
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(result.secretCount).toBe(0);
     expect(result.verifiedCount).toBe(0);
@@ -252,8 +259,7 @@ describe('trufflehog component', () => {
     const component = componentRegistry.get<TruffleHogInput, TruffleHogOutput>('shipsec.trufflehog.scan');
     if (!component) throw new Error('Component not registered');
 
-    const params = component.inputs.parse({
-      scanTarget: '/scan',
+    const params = component.parameters.parse({
       scanType: 'filesystem',
       filesystemContent: {
         'config.yaml': 'api_key: AKIAIOSFODNN7EXAMPLE',
@@ -275,15 +281,19 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputs.parse({
-      scanTarget: 'https://github.com/test/repo',
-      scanType: 'git',
-      filesystemContent: {
-        'file.txt': 'content',
+    const executePayload = {
+      inputs: {
+        scanTarget: 'https://github.com/test/repo',
       },
-    });
+      params: {
+        scanType: 'git' as const,
+        filesystemContent: {
+          'file.txt': 'content',
+        },
+      }
+    };
 
-    await expect(component.execute(params, context)).rejects.toThrow(
+    await expect(component.execute(executePayload, context)).rejects.toThrow(
       'filesystemContent can only be used with scanType=filesystem'
     );
   });
@@ -297,16 +307,20 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputs.parse({
-      scanTarget: 'https://github.com/test/repo',
-      scanType: 'git',
-      customFlags: '--fail',
-    });
+    const executePayload = {
+      inputs: {
+        scanTarget: 'https://github.com/test/repo',
+      },
+      params: {
+        scanType: 'git' as const,
+        customFlags: '--fail',
+      }
+    };
 
     const error = new Error('Container exited with code 183');
     vi.spyOn(sdk, 'runComponentWithRunner').mockRejectedValue(error);
 
-    await expect(component.execute(params, context)).rejects.toThrow('Container exited with code 183');
+    await expect(component.execute(executePayload, context)).rejects.toThrow('Container exited with code 183');
   });
 
   it('should propagate other error exit codes', async () => {
@@ -318,14 +332,18 @@ describe('trufflehog component', () => {
       componentRef: 'trufflehog-test',
     });
 
-    const params = component.inputs.parse({
-      scanTarget: 'https://github.com/test/repo',
-      scanType: 'git',
-    });
+    const executePayload = {
+      inputs: {
+        scanTarget: 'https://github.com/test/repo',
+      },
+      params: {
+        scanType: 'git' as const,
+      }
+    };
 
     const error = new Error('Container exited with code 1: auth failed');
     vi.spyOn(sdk, 'runComponentWithRunner').mockRejectedValue(error);
 
-    await expect(component.execute(params, context)).rejects.toThrow('auth failed');
+    await expect(component.execute(executePayload, context)).rejects.toThrow('auth failed');
   });
 });

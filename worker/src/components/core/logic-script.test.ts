@@ -37,9 +37,12 @@ describe('Logic/Script Component', () => {
       buildRunnerOutput({ sum: 3 }),
     );
     const result = await definition.execute({
-      code: 'export async function script() { return { sum: 1 + 2 }; }',
-      variables: [],
-      returns: [{ name: 'sum', type: 'number' }],
+      inputs: {},
+      params: {
+        code: 'export async function script() { return { sum: 1 + 2 }; }',
+        variables: [],
+        returns: [{ name: 'sum', type: 'number' }],
+      },
     }, mockContext);
 
     expect(result).toEqual({ sum: 3 });
@@ -61,9 +64,12 @@ describe('Logic/Script Component', () => {
     `;
     
     const result = await definition.execute({
-      code: tsCode,
-      variables: [],
-      returns: [{ name: 'msg', type: 'string' }],
+      inputs: {},
+      params: {
+        code: tsCode,
+        variables: [],
+        returns: [{ name: 'msg', type: 'string' }],
+      },
     }, mockContext);
 
     expect(result).toEqual({ msg: 'Value is 10' });
@@ -74,24 +80,28 @@ describe('Logic/Script Component', () => {
       buildRunnerOutput({ diff: 6, product: 40 }),
     );
     const result = await definition.execute({
-      code: `
-        export async function script(input) {
-          return {
-            diff: input.x - input.y,
-            product: input.x * input.y
-          };
-        }
-      `,
-      variables: [
-        { name: 'x', type: 'number' },
-        { name: 'y', type: 'number' },
-      ],
-      returns: [
-        { name: 'diff', type: 'number' },
-        { name: 'product', type: 'number' },
-      ],
-      x: 10,
-      y: 4,
+      inputs: {
+        x: 10,
+        y: 4,
+      },
+      params: {
+        code: `
+          export async function script(input) {
+            return {
+              diff: input.x - input.y,
+              product: input.x * input.y
+            };
+          }
+        `,
+        variables: [
+          { name: 'x', type: 'number' },
+          { name: 'y', type: 'number' },
+        ],
+        returns: [
+          { name: 'diff', type: 'number' },
+          { name: 'product', type: 'number' },
+        ],
+      },
     } as any, mockContext);
 
     expect(result).toEqual({ diff: 6, product: 40 });
@@ -109,9 +119,12 @@ describe('Logic/Script Component', () => {
     `;
 
     const result = await definition.execute({
-      code,
-      variables: [],
-      returns: [{ name: 'status', type: 'number' }],
+      inputs: {},
+      params: {
+        code,
+        variables: [],
+        returns: [{ name: 'status', type: 'number' }],
+      },
     }, mockContext);
 
     expect(result.status).toBe(200);

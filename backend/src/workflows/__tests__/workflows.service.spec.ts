@@ -33,9 +33,12 @@ const sampleGraph = WorkflowGraphSchema.parse({
       data: {
         label: 'Trigger',
         config: {
-          runtimeInputs: [
-            { id: 'fileId', label: 'File ID', type: 'file', required: true },
-          ],
+          params: {
+            runtimeInputs: [
+              { id: 'fileId', label: 'File ID', type: 'file', required: true },
+            ],
+          },
+          inputOverrides: {},
         },
       },
     },
@@ -46,7 +49,10 @@ const sampleGraph = WorkflowGraphSchema.parse({
       data: {
         label: 'Loader',
         config: {
-          fileId: '11111111-1111-4111-8111-111111111111',
+          params: {},
+          inputOverrides: {
+            fileId: '11111111-1111-4111-8111-111111111111',
+          },
         },
       },
     },

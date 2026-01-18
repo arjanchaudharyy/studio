@@ -34,19 +34,19 @@ describe('Nuclei Component', () => {
     test('should require at least one target', () => {
       const input = {
         targets: [],
-        templateIds: ['CVE-2024-1234'],
       };
 
       expect(() => nucleiComponent.inputs.parse(input)).toThrow();
     });
 
-    test('should require at least one template source', () => {
-      const input = {
+    test('should require at least one template source', async () => {
+      const inputs = {
         targets: ['https://example.com'],
-        // No template source provided
       };
+      const params = {};
 
-      expect(() => nucleiComponent.inputs.parse(input)).toThrow(
+      // The validation for at least one template source is in execute, not in parse
+      await expect(nucleiComponent.execute({ inputs, params }, mockContext)).rejects.toThrow(
         /at least one template source/i,
       );
     });
@@ -98,40 +98,38 @@ describe('Nuclei Component', () => {
     test('should apply default values for scan configuration', () => {
       const input = {
         targets: ['https://example.com'],
-        templateIds: ['CVE-2024-1234'],
       };
+      const params = {};
 
-      const parsed = nucleiComponent.inputs.parse(input);
-      expect(parsed.rateLimit).toBe(150);
-      expect(parsed.concurrency).toBe(25);
-      expect(parsed.timeout).toBe(10);
-      expect(parsed.retries).toBe(1);
-      expect(parsed.includeRaw).toBe(false);
-      expect(parsed.followRedirects).toBe(false);
-      expect(parsed.updateTemplates).toBe(false);
-      expect(parsed.disableHttpx).toBe(true);
+      const parsedInputs = nucleiComponent.inputs.parse(input);
+      const parsedParams = nucleiComponent.parameters.parse(params);
+
+      expect(parsedParams.rateLimit).toBe(150);
+      expect(parsedParams.concurrency).toBe(25);
+      expect(parsedParams.timeout).toBe(10);
+      expect(parsedParams.retries).toBe(1);
+      expect(parsedParams.includeRaw).toBe(false);
+      expect(parsedParams.followRedirects).toBe(false);
+      expect(parsedParams.updateTemplates).toBe(false);
+      expect(parsedParams.disableHttpx).toBe(true);
     });
 
     // Severity parameter removed - use specific template IDs instead
 
     test('should enforce rateLimit max value', () => {
-      const input = {
-        targets: ['https://example.com'],
-        templateIds: ['CVE-2024-1234'],
+      const params = {
         rateLimit: 2000, // exceeds max of 1000
       };
 
-      expect(() => nucleiComponent.inputs.parse(input)).toThrow();
+      expect(() => nucleiComponent.parameters.parse(params)).toThrow();
     });
 
     test('should enforce concurrency max value', () => {
-      const input = {
-        targets: ['https://example.com'],
-        templateIds: ['CVE-2024-1234'],
+      const params = {
         concurrency: 150, // exceeds max of 100
       };
 
-      expect(() => nucleiComponent.inputs.parse(input)).toThrow();
+      expect(() => nucleiComponent.parameters.parse(params)).toThrow();
     });
   });
 
@@ -457,8 +455,8 @@ describe('Nuclei Integration', () => {
   });
 
   test('should have configuration parameters', () => {
-    const component = componentRegistry.get('shipsec.nuclei.scan');
-    const params = component.ui?.parameters || [];
+    const metadata = componentRegistry.getMetadata('shipsec.nuclei.scan');
+    const params = metadata?.parameters || [];
 
     const rateLimitParam = params.find((p) => p.id === 'rateLimit');
     expect(rateLimitParam).toBeDefined();

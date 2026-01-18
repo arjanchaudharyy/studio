@@ -17,6 +17,10 @@ const inputSchema = inputs({
     allowAny: true,
     reason: 'Console log accepts arbitrary payloads for debugging.',
   }),
+  label: port(z.string().optional().describe('Optional label for the log entry'), {
+    label: 'Label',
+    description: 'Optional label to identify this log entry.',
+  }),
 });
 
 const outputSchema = outputs({
@@ -34,15 +38,7 @@ const outputSchema = outputs({
   }),
 });
 
-const parameterSchema = parameters({
-  label: param(z.string().optional().describe('Optional label for the log entry'), {
-    label: 'Label',
-    editor: 'text',
-    placeholder: 'My Log',
-    description: 'Optional label to identify this log entry.',
-    helpText: 'Helps identify logs when multiple console log components are used.',
-  }),
-});
+const parameterSchema = parameters({});
 
 const definition = defineComponent({
   id: 'core.console.log',
@@ -72,7 +68,7 @@ const definition = defineComponent({
     ],
   },
   async execute({ inputs, params }, context) {
-    const label = params.label || 'Console Log';
+    const label = inputs.label || 'Console Log';
     
     context.logger.info(`[${label}] ========================================`);
 

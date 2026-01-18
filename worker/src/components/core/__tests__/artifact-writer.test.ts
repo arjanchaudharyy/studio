@@ -40,15 +40,19 @@ describe('core.artifact.writer component', () => {
       artifacts: mockArtifacts,
     });
 
-    const params = component.inputs.parse({
-      fileName: 'run-log.txt',
-      content: 'Hello artifacts!',
-      mimeType: 'text/plain',
-      saveToRunArtifacts: true,
-      publishToArtifactLibrary: true,
-    });
+    const executePayload = {
+      inputs: {
+        content: 'Hello artifacts!',
+      },
+      params: {
+        fileName: 'run-log.txt',
+        mimeType: 'text/plain',
+        saveToRunArtifacts: true,
+        publishToArtifactLibrary: true,
+      }
+    };
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(uploadMock).toHaveBeenCalledTimes(1);
     const payload = uploadMock.mock.calls[0][0];
@@ -75,14 +79,18 @@ describe('core.artifact.writer component', () => {
       },
     });
 
-    const params = component.inputs.parse({
-      fileName: 'noop.txt',
-      content: 'No destinations',
-      saveToRunArtifacts: false,
-      publishToArtifactLibrary: false,
-    });
+    const executePayload = {
+      inputs: {
+        content: 'No destinations',
+      },
+      params: {
+        fileName: 'noop.txt',
+        saveToRunArtifacts: false,
+        publishToArtifactLibrary: false,
+      }
+    };
 
-    const result = await component.execute(params, context);
+    const result = await component.execute(executePayload, context);
 
     expect(uploadMock).not.toHaveBeenCalled();
     expect(result.saved).toBe(false);
@@ -98,13 +106,17 @@ describe('core.artifact.writer component', () => {
       componentRef: 'artifact-writer-3',
     });
 
-    const params = component.inputs.parse({
-      content: 'Need artifacts',
-      saveToRunArtifacts: true,
-      publishToArtifactLibrary: false,
-    });
+    const executePayload = {
+      inputs: {
+        content: 'Need artifacts',
+      },
+      params: {
+        saveToRunArtifacts: true,
+        publishToArtifactLibrary: false,
+      }
+    };
 
-    await expect(component.execute(params, context)).rejects.toThrow(
+    await expect(component.execute(executePayload, context)).rejects.toThrow(
       'Artifact service is not available',
     );
   });
