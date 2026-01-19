@@ -1,6 +1,5 @@
 import {
   bigserial,
-  index,
   integer,
   jsonb,
   pgTable,

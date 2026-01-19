@@ -1,10 +1,7 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DRIZZLE_TOKEN } from '../database/database.module';
 import * as schema from '../database/schema';
-import {
-  humanInputRequests,
-  humanInputRequests as humanInputRequestsTable,
-} from '../database/schema';
+import { humanInputRequests as humanInputRequestsTable } from '../database/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {

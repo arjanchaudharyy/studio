@@ -254,7 +254,7 @@ function validateInputMappings(
   compiledDefinition: WorkflowDefinition,
   actionPorts: Map<string, ActionPortSnapshot>,
   errors: ValidationError[],
-  warnings: ValidationError[],
+  _warnings: ValidationError[],
 ) {
   const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
 
@@ -279,7 +279,7 @@ function validateInputMappings(
     }
 
     // Validate edge mappings point to valid nodes
-    for (const [targetHandle, mapping] of Object.entries(action.inputMappings ?? {})) {
+    for (const [_targetHandle, mapping] of Object.entries(action.inputMappings ?? {})) {
       const sourceNode = nodes.get(mapping.sourceRef);
       if (!sourceNode) {
         errors.push({

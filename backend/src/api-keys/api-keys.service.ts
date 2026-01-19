@@ -8,7 +8,7 @@ import {
 import { DRIZZLE_TOKEN } from '../database/database.module';
 import { type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../database/schema';
-import { apiKeys, type ApiKey, type ApiKeyPermissions } from '../database/schema/api-keys';
+import { apiKeys, type ApiKey } from '../database/schema/api-keys';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
@@ -136,7 +136,7 @@ export class ApiKeysService {
     // Expected format: sk_live_<8-char-id>_<secret>
     if (parts.length !== 4) return null;
 
-    const [sk, env, id, secret] = parts;
+    const [sk, env, id, _secret] = parts;
     if (sk !== 'sk' || env !== 'live') return null;
 
     // Look up by keyHint (which stores the ID part of the key)

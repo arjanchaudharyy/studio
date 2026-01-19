@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { HumanInputsController } from './human-inputs.controller';
 import { HumanInputsService } from './human-inputs.service';
 import { DatabaseModule } from '../database/database.module';

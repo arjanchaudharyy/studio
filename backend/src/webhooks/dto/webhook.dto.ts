@@ -7,12 +7,9 @@ import {
   UpdateWebhookSchema,
   TestWebhookScriptSchema,
   TestWebhookScriptResponseSchema,
-  type WebhookConfiguration,
-  type WebhookDelivery,
   type CreateWebhook,
   type UpdateWebhook,
   type TestWebhookScript,
-  type TestWebhookScriptResponse,
 } from '@shipsec/shared';
 
 // Existing DTO for backward compatibility

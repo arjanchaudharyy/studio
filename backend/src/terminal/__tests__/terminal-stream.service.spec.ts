@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import type Redis from 'ioredis';
-import { TerminalStreamService, TERMINAL_REDIS } from '../terminal-stream.service';
+import { TerminalStreamService } from '../terminal-stream.service';
 
 class MockRedis {
   constructor(private readonly entries: Record<string, [string, string][]>) {}

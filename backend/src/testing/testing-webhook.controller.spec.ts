@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import { Test } from '@nestjs/testing';
 
 import { TestingWebhookController } from './testing-webhook.controller';
-import { TestingWebhookService, TestingWebhookRecord } from './testing-webhook.service';
+import { TestingWebhookService } from './testing-webhook.service';
 import { TestingSupportModule } from './testing.module';
 import { AcceptWebhookQuerySchema } from './dto/testing-webhook.dto';
 

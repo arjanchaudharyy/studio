@@ -7,9 +7,8 @@ import {
   Post,
   UseGuards,
   ForbiddenException,
-  NotFoundException,
 } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 
 import { CurrentAuth } from '../auth/auth-context.decorator';
