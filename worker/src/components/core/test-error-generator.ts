@@ -76,11 +76,6 @@ const parameterSchema = parameters({
   ),
 });
 
-interface Output {
-  success: boolean;
-  attempt: number;
-}
-
 const outputSchema = outputs({
   result: port(z.unknown(), {
     label: 'Result',
