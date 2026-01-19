@@ -114,9 +114,9 @@ async function main() {
   const kafkaBrokerEnv = process.env.LOG_KAFKA_BROKERS;
   const kafkaBrokers = kafkaBrokerEnv
     ? kafkaBrokerEnv
-      .split(',')
-      .map((broker) => broker.trim())
-      .filter(Boolean)
+        .split(',')
+        .map((broker) => broker.trim())
+        .filter(Boolean)
     : [];
 
   if (kafkaBrokers.length === 0) {
@@ -217,12 +217,13 @@ async function main() {
   console.log(`🔍 Worker Configuration Details:`);
   console.log(`   - Workflows Path: ${workflowsPath}`);
   console.log(
-    `   - Activities Count: ${Object.keys({
-      runComponentActivity,
-      setRunMetadataActivity,
-      finalizeRunActivity,
-      prepareRunPayloadActivity,
-    }).length
+    `   - Activities Count: ${
+      Object.keys({
+        runComponentActivity,
+        setRunMetadataActivity,
+        finalizeRunActivity,
+        prepareRunPayloadActivity,
+      }).length
     }`,
   );
   console.log(`   - Task Queue: ${taskQueue}`);

@@ -34,7 +34,7 @@ if (!definition) {
   throw new Error('Component definition not found');
 }
 
-const execute = (definition.execute as unknown) as (
+const execute = definition.execute as unknown as (
   params: any,
   context: ExecutionContext,
 ) => Promise<GoogleWorkspaceUserDeleteOutput>;

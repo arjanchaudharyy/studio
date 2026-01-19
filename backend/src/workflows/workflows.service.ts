@@ -135,7 +135,7 @@ export class WorkflowsService {
     private readonly traceRepository: TraceRepository,
     private readonly temporalService: TemporalService,
     private readonly analyticsService: AnalyticsService,
-  ) { }
+  ) {}
 
   private resolveOrganizationId(auth?: AuthContext | null): string | null {
     return auth?.organizationId ?? null;
@@ -688,7 +688,8 @@ export class WorkflowsService {
     } catch (error) {
       if (temporalRunId) {
         this.logger.warn(
-          `Temporal workflow ${prepared.runId} reported error after start: ${error instanceof Error ? error.message : String(error)
+          `Temporal workflow ${prepared.runId} reported error after start: ${
+            error instanceof Error ? error.message : String(error)
           }`,
         );
       }
@@ -1121,8 +1122,8 @@ export class WorkflowsService {
     const version = run.workflowVersionId
       ? await this.versionRepository.findById(run.workflowVersionId, { organizationId })
       : await this.versionRepository.findLatestByWorkflowId(run.workflowId, {
-        organizationId,
-      });
+          organizationId,
+        });
     if (!version) {
       throw new NotFoundException(
         `Workflow version not found for run ${runId} (workflow=${run.workflowId})`,
@@ -1417,9 +1418,9 @@ export class WorkflowsService {
     const progress =
       totalActions > 0
         ? {
-          completedActions: Math.min(completedActions, totalActions),
-          totalActions,
-        }
+            completedActions: Math.min(completedActions, totalActions),
+            totalActions,
+          }
         : undefined;
 
     return {
