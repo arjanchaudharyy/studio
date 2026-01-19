@@ -39,7 +39,7 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-import { SidebarContext } from './sidebar-context';
+import { SidebarContext, type SidebarContextValue } from './sidebar-context';
 
 // Custom hook to detect mobile viewport
 function useIsMobile(breakpoint = 768) {

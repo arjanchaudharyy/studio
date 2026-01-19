@@ -1,6 +1,6 @@
 import React from 'react';
 
-interface SidebarContextValue {
+export interface SidebarContextValue {
   isOpen: boolean;
   isMobile: boolean;
   toggle: () => void;
