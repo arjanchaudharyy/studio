@@ -30,7 +30,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { openSignIn, isOpen, close } = useAuthModal();
   const adminUsername = useAuthStore((state) => state.adminUsername);
   const adminPassword = useAuthStore((state) => state.adminPassword);
-  
+
   // Track whether we've attempted to open the sign-in dialog
   const [signInAttempted, setSignInAttempted] = useState(false);
 
@@ -44,11 +44,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Automatically trigger sign-in for Clerk when not authenticated (only once on mount)
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && requireAuth && authProvider.name === 'clerk' && !signInAttempted) {
+    if (
+      !isLoading &&
+      !isAuthenticated &&
+      requireAuth &&
+      authProvider.name === 'clerk' &&
+      !signInAttempted
+    ) {
       triggerSignIn();
     }
   }, [isLoading, isAuthenticated, requireAuth, authProvider, signInAttempted, triggerSignIn]);
-  
+
   // Reset signInAttempted when user becomes authenticated (for future sign-outs)
   useEffect(() => {
     if (isAuthenticated) {
@@ -95,9 +101,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                 <Lock className="h-6 w-6" />
               </div>
               <CardTitle>Authentication Required</CardTitle>
-              <CardDescription>
-                Please sign in to continue
-              </CardDescription>
+              <CardDescription>Please sign in to continue</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {!signInAttempted ? (
@@ -134,9 +138,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                 <Lock className="h-6 w-6" />
               </div>
               <CardTitle>Authentication Required</CardTitle>
-              <CardDescription>
-                Please sign in to access this content
-              </CardDescription>
+              <CardDescription>Please sign in to access this content</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Button onClick={openSignIn} className="w-full">
@@ -184,9 +186,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Check role requirements
   if (roles.length > 0 && isAuthenticated && user) {
     const userRole = user.organizationRole?.toUpperCase();
-    const hasRequiredRole = roles.some(role =>
-      userRole === role.toUpperCase() || role === '*'
-    );
+    const hasRequiredRole = roles.some((role) => userRole === role.toUpperCase() || role === '*');
 
     if (!hasRequiredRole) {
       return (
@@ -219,7 +219,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 // Higher-order component for protecting routes
 export function withAuth<P extends object>(
   Component: React.ComponentType<P>,
-  options: Omit<ProtectedRouteProps, 'children'> = {}
+  options: Omit<ProtectedRouteProps, 'children'> = {},
 ) {
   const WrappedComponent = (props: P) => (
     <ProtectedRoute {...options}>
@@ -239,20 +239,20 @@ export function usePermissions() {
     if (!isAuthenticated || !user) return false;
 
     const userRole = user.organizationRole?.toUpperCase();
-    return requiredRoles.some(role =>
-      userRole === role.toUpperCase() || role === '*'
-    );
+    return requiredRoles.some((role) => userRole === role.toUpperCase() || role === '*');
   };
 
   const hasOrg = () => {
     return isAuthenticated && user && !!user.organizationId;
   };
 
-  const canAccess = (options: {
-    requireAuth?: boolean;
-    requireOrg?: boolean;
-    roles?: string[];
-  } = {}) => {
+  const canAccess = (
+    options: {
+      requireAuth?: boolean;
+      requireOrg?: boolean;
+      roles?: string[];
+    } = {},
+  ) => {
     const { requireAuth = true, requireOrg = false, roles = [] } = options;
 
     if (requireAuth && !isAuthenticated) return false;

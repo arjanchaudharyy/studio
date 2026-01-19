@@ -17,9 +17,19 @@ describe('runWorkflowWithScheduler', () => {
       },
       edges: [
         { id: 'start->branchFail', sourceRef: 'start', targetRef: 'branchFail', kind: 'success' },
-        { id: 'start->branchSuccess', sourceRef: 'start', targetRef: 'branchSuccess', kind: 'success' },
+        {
+          id: 'start->branchSuccess',
+          sourceRef: 'start',
+          targetRef: 'branchSuccess',
+          kind: 'success',
+        },
         { id: 'branchFail->merge', sourceRef: 'branchFail', targetRef: 'merge', kind: 'success' },
-        { id: 'branchSuccess->merge', sourceRef: 'branchSuccess', targetRef: 'merge', kind: 'success' },
+        {
+          id: 'branchSuccess->merge',
+          sourceRef: 'branchSuccess',
+          targetRef: 'merge',
+          kind: 'success',
+        },
       ],
       dependencyCounts: {
         start: 0,
@@ -28,7 +38,14 @@ describe('runWorkflowWithScheduler', () => {
         merge: 2,
       },
       actions: [
-        { ref: 'start', componentId: 'noop', params: {}, inputOverrides: {}, dependsOn: [], inputMappings: {} },
+        {
+          ref: 'start',
+          componentId: 'noop',
+          params: {},
+          inputOverrides: {},
+          dependsOn: [],
+          inputMappings: {},
+        },
         {
           ref: 'branchFail',
           componentId: 'noop',
@@ -109,7 +126,14 @@ describe('runWorkflowWithScheduler', () => {
         errorHandler: 1,
       },
       actions: [
-        { ref: 'start', componentId: 'noop', params: {}, inputOverrides: {}, dependsOn: [], inputMappings: {} },
+        {
+          ref: 'start',
+          componentId: 'noop',
+          params: {},
+          inputOverrides: {},
+          dependsOn: [],
+          inputMappings: {},
+        },
         {
           ref: 'fail',
           componentId: 'noop',

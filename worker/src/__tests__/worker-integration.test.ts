@@ -28,7 +28,6 @@ workerDescribe('Worker Integration Tests', () => {
   let minioClient: MinioClient;
   let pool: Pool;
   let fileStorageAdapter: FileStorageAdapter;
-  let traceAdapter: TraceAdapter;
   let db: NodePgDatabase<typeof schema>;
 
   // Use the test task queue - tests submit workflows to the test worker (pm2: shipsec-test-worker)
@@ -67,7 +66,6 @@ workerDescribe('Worker Integration Tests', () => {
     // Initialize adapters
     const bucketName = process.env.MINIO_BUCKET_NAME || 'shipsec-files';
     fileStorageAdapter = new FileStorageAdapter(minioClient, db, bucketName);
-    traceAdapter = new TraceAdapter(db);
 
     // Ensure bucket exists
     const bucketExists = await minioClient.bucketExists(bucketName);
@@ -251,10 +249,7 @@ workerDescribe('Worker Integration Tests', () => {
       expect(loader.textContent).toBe(content);
 
       // Cleanup
-      await minioClient.removeObject(
-        process.env.MINIO_BUCKET_NAME || 'shipsec-files',
-        fileId,
-      );
+      await minioClient.removeObject(process.env.MINIO_BUCKET_NAME || 'shipsec-files', fileId);
     }, 60000);
 
     it('should handle workflow failures gracefully', async () => {
@@ -322,7 +317,7 @@ workerDescribe('Worker Integration Tests', () => {
       expect(
         result.error?.includes('not found') ||
         result.error?.includes('does not exist') ||
-        result.error?.includes('NotFound')
+        result.error?.includes('NotFound'),
       ).toBe(true);
     }, 60000);
 
@@ -588,7 +583,8 @@ workerDescribe('Worker Integration Tests', () => {
             inputOverrides: {},
             dependsOn: ['trigger'],
             inputMappings: {},
-          }, {
+          },
+          {
             ref: 'branchB',
             componentId: 'core.console.log',
             params: { data: 'branchB' },

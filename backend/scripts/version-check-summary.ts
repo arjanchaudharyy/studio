@@ -67,7 +67,9 @@ async function main() {
       ];
       if (result.response.upgrade_url) {
         lines.push('');
-        lines.push(`${colors.cyan}${colors.bold}Upgrade:${colors.reset} ${result.response.upgrade_url}`);
+        lines.push(
+          `${colors.cyan}${colors.bold}Upgrade:${colors.reset} ${result.response.upgrade_url}`,
+        );
       }
       printBox(lines, colors.red);
       return;
@@ -84,7 +86,9 @@ async function main() {
       ];
       if (result.response.upgrade_url) {
         lines.push('');
-        lines.push(`${colors.cyan}${colors.bold}Upgrade:${colors.reset} ${result.response.upgrade_url}`);
+        lines.push(
+          `${colors.cyan}${colors.bold}Upgrade:${colors.reset} ${result.response.upgrade_url}`,
+        );
       }
       printBox(lines, colors.yellow);
       return;

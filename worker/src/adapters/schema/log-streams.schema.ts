@@ -16,9 +16,7 @@ export const workflowLogStreams = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     runId: text('run_id').notNull(),
     nodeRef: text('node_ref').notNull(),
-    stream: text('stream')
-      .$type<'stdout' | 'stderr' | 'console'>()
-      .notNull(),
+    stream: text('stream').$type<'stdout' | 'stderr' | 'console'>().notNull(),
     organizationId: varchar('organization_id', { length: 191 }),
     labels: jsonb('labels').notNull(),
     firstTimestamp: timestamp('first_timestamp', { withTimezone: true }).notNull(),

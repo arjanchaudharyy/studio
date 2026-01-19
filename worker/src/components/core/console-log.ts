@@ -69,7 +69,7 @@ const definition = defineComponent({
   },
   async execute({ inputs, params }, context) {
     const label = inputs.label || 'Console Log';
-    
+
     context.logger.info(`[${label}] ========================================`);
 
     // Format the data for logging
@@ -78,7 +78,7 @@ const definition = defineComponent({
 
     if (typeof inputs.data === 'object' && inputs.data !== null) {
       formattedData = JSON.stringify(inputs.data, null, 2);
-      
+
       // Create a preview (first 200 chars)
       if (Array.isArray(inputs.data)) {
         preview = `Array with ${inputs.data.length} items`;
@@ -88,7 +88,8 @@ const definition = defineComponent({
       }
     } else {
       formattedData = String(inputs.data);
-      preview = formattedData.length > 100 ? formattedData.substring(0, 100) + '...' : formattedData;
+      preview =
+        formattedData.length > 100 ? formattedData.substring(0, 100) + '...' : formattedData;
     }
 
     // Log to workflow execution logs

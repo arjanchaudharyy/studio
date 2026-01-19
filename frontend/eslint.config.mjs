@@ -1,97 +1,92 @@
-import js from "@eslint/js";
-import tseslint from "@typescript-eslint/eslint-plugin";
-import tsparser from "@typescript-eslint/parser";
-import react from "eslint-plugin-react";
-import reactHooks from "eslint-plugin-react-hooks";
-import reactRefresh from "eslint-plugin-react-refresh";
+import js from '@eslint/js';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+import react from 'eslint-plugin-react';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import prettier from 'eslint-plugin-prettier';
+import configPrettier from 'eslint-config-prettier';
 
-// Browser globals for frontend code
-const browserGlobals = {
-  window: "readonly",
-  document: "readonly",
-  console: "readonly",
-  setTimeout: "readonly",
-  setInterval: "readonly",
-  clearTimeout: "readonly",
-  clearInterval: "readonly",
-  navigator: "readonly",
-  fetch: "readonly",
-  btoa: "readonly",
-  atob: "readonly",
-  React: "readonly",
-  process: "readonly",
-  NodeJS: "readonly",
-  TouchEvent: "readonly",
-};
-
-export default [
+export default tseslint.config(
   {
-    ignores: ["dist", "build", "node_modules"],
+    ignores: [
+      'dist',
+      'build',
+      'node_modules',
+      'coverage',
+      'vite.config.ts',
+      '**/*.js',
+      '**/*.mjs',
+      '**/*.cjs',
+    ],
   },
   js.configs.recommended,
-  // Config for TypeScript/TSX files
+  ...tseslint.configs.strict,
+  ...tseslint.configs.stylistic,
   {
-    files: ["**/*.{ts,tsx}"],
+    files: ['**/*.{ts,tsx}'],
     languageOptions: {
-      parser: tsparser,
-      parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
-        ecmaFeatures: {
-          jsx: true,
-        },
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.es2024,
       },
-      globals: browserGlobals,
     },
     plugins: {
-      "@typescript-eslint": tseslint,
       react,
-      "react-hooks": reactHooks,
-      "react-refresh": reactRefresh,
-    },
-    rules: {
-      ...tseslint.configs.recommended.rules,
-      ...react.configs.recommended.rules,
-      ...reactHooks.configs.recommended.rules,
-
-      // Enable react-refresh to catch fast refresh issues
-      "react-refresh/only-export-components": "warn",
-
-      // Disable no-undef since TypeScript handles this better
-      "no-undef": "off",
-
-      // Enable stricter rules gradually
-      "no-redeclare": "off", // Use TypeScript version instead
-      "@typescript-eslint/no-redeclare": "error",
-      "no-import-assign": "error",
-      "react/display-name": "warn",
-      "no-unused-vars": "off",
-      "no-empty": "warn",
-      "no-control-regex": "off",
-      "no-case-declarations": "warn",
-      "no-useless-catch": "off",
-      "no-console": "off",
-
-      // Loose rules for now - gradually make stricter
-      "@typescript-eslint/no-unused-vars": "off",
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/ban-ts-comment": "warn",
-      "@typescript-eslint/no-empty-object-type": "off",
-      "react/prop-types": "off",
-      "react/react-in-jsx-scope": "off",
-      "react/no-unescaped-entities": "off",
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+      prettier,
     },
     settings: {
       react: {
-        version: "detect",
+        version: 'detect',
       },
     },
-  },
-  // Config for JS files
-  {
-    files: ["**/*.js"],
     rules: {
-      "no-unused-vars": "off",
+      ...react.configs.recommended.rules,
+      ...reactHooks.configs.recommended.rules,
+
+      // Prettier integration
+      'prettier/prettier': 'error',
+
+      // React rules
+      'react/react-in-jsx-scope': 'off',
+      'react/prop-types': 'off',
+      'react/display-name': 'off',
+      'react/no-unescaped-entities': 'error',
+
+      // Refresh
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+
+      // TypeScript strict overrides/customizations
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
+      '@typescript-eslint/no-explicit-any': 'off', // Relaxed as requested
+      '@typescript-eslint/no-empty-object-type': 'error',
+      '@typescript-eslint/no-empty-function': 'off',
+      '@typescript-eslint/no-namespace': 'error',
+      '@typescript-eslint/ban-ts-comment': 'warn',
+      '@typescript-eslint/no-non-null-assertion': 'warn',
+      '@typescript-eslint/no-extraneous-class': 'off',
+
+      // General strict rules
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-empty': 'error',
+      'no-undef': 'off',
+      'no-case-declarations': 'error',
+      'no-constant-condition': 'error',
+      'no-useless-catch': 'error',
+      'no-prototype-builtins': 'error',
     },
   },
-];
+  configPrettier,
+);

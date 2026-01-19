@@ -3,7 +3,7 @@ import type Redis from 'ioredis';
 import { TerminalStreamService, TERMINAL_REDIS } from '../terminal-stream.service';
 
 class MockRedis {
-  constructor(private readonly entries: Record<string, Array<[string, string]>>) {}
+  constructor(private readonly entries: Record<string, [string, string][]>) {}
   private scanCalled = false;
 
   async scan(cursor: string, _matchLabel: string, pattern: string) {
@@ -48,8 +48,15 @@ class MockRedis {
 
 describe('TerminalStreamService', () => {
   it('returns chunks and encodes cursor', async () => {
-    const payload = JSON.stringify({ chunkIndex: 1, payload: 'a', recordedAt: '2025-01-01T00:00:00Z', deltaMs: 0 });
-    const redis = new MockRedis({ 'terminal:run-1:node.a:stdout': [['1-0', payload]] }) as unknown as Redis;
+    const payload = JSON.stringify({
+      chunkIndex: 1,
+      payload: 'a',
+      recordedAt: '2025-01-01T00:00:00Z',
+      deltaMs: 0,
+    });
+    const redis = new MockRedis({
+      'terminal:run-1:node.a:stdout': [['1-0', payload]],
+    }) as unknown as Redis;
     const service = new TerminalStreamService(redis);
 
     const result = await service.fetchChunks('run-1');

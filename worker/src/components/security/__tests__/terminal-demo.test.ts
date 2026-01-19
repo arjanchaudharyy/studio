@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'bun:test';
 import * as sdk from '@shipsec/component-sdk';
 import { componentRegistry } from '../../index';
-import type { TerminalDemoInput, TerminalDemoInputZod, TerminalDemoOutput, TerminalDemoOutputZod } from '../terminal-demo';
+import type {
+  TerminalDemoInput,
+  TerminalDemoInputZod,
+  TerminalDemoOutput,
+  TerminalDemoOutputZod,
+} from '../terminal-demo';
 
 describe('terminal demo component', () => {
   beforeAll(async () => {
@@ -36,7 +41,7 @@ describe('terminal demo component', () => {
       params: {
         message: 'Test message',
         durationSeconds: 5,
-      }
+      },
     };
 
     const mockOutput = 'Demo completed successfully';

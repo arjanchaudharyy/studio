@@ -122,7 +122,10 @@ describeHttpx('httpx component', () => {
 
     vi.spyOn(sdk, 'runComponentWithRunner').mockResolvedValue(payload);
 
-    const result = (await component.execute({ inputs: params, params: {} }, context)) as HttpxOutput;
+    const result = (await component.execute(
+      { inputs: params, params: {} },
+      context,
+    )) as HttpxOutput;
 
     expect(result.results).toHaveLength(1);
     expect(result.resultCount).toBe(1);
@@ -171,7 +174,6 @@ describeHttpx('httpx component', () => {
       targets: [],
     });
 
-
     const spy = vi.spyOn(sdk, 'runComponentWithRunner');
     const result = await component.execute({ inputs: params, params: {} }, context);
 
@@ -202,6 +204,8 @@ describeHttpx('httpx component', () => {
       exitCode: 2,
     });
 
-    await expect(component.execute({ inputs: params, params: {} }, context)).rejects.toThrow(/httpx exited with code 2/);
+    await expect(component.execute({ inputs: params, params: {} }, context)).rejects.toThrow(
+      /httpx exited with code 2/,
+    );
   });
 });

@@ -17,11 +17,11 @@ describe('Nuclei Component', () => {
       runId: 'test-run-123',
       componentRef: 'node-1',
       logger: {
-        info: mock(() => { }),
-        error: mock(() => { }),
-        warn: mock(() => { }),
+        info: mock(() => {}),
+        error: mock(() => {}),
+        warn: mock(() => {}),
       },
-      emitProgress: mock(() => { }),
+      emitProgress: mock(() => {}),
       metadata: {
         runId: 'test-run-123',
         componentRef: 'node-1',
@@ -421,7 +421,6 @@ describe('Nuclei Integration', () => {
     if (component!.runner.kind === 'docker') {
       expect(component!.runner.image).toBe('ghcr.io/shipsecai/nuclei:latest');
       expect(component!.runner.entrypoint).toBe('nuclei');
-
     }
   });
 

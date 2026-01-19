@@ -1,11 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useMemo,
-  useCallback,
-} from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { ClerkAuthProvider } from './providers/clerk-provider';
 import type { FrontendAuthProvider, FrontendAuthProviderComponent } from './types';
 import { useAuthStore } from '../store/authStore';
@@ -32,7 +25,9 @@ function getAuthProviderName(): string {
   // If explicitly set to clerk, use it (if key is available)
   if (envProvider === 'clerk') {
     if (!hasClerkKey) {
-      console.warn('Auth provider set to Clerk, but no publishable key configured. Falling back to local auth.');
+      console.warn(
+        'Auth provider set to Clerk, but no publishable key configured. Falling back to local auth.',
+      );
       return 'local';
     }
     return 'clerk';
@@ -66,7 +61,10 @@ type ProviderComponentProps = React.PropsWithChildren<{
 }>;
 
 // Local auth provider for development
-const LocalAuthProvider: FrontendAuthProviderComponent = ({ children, onProviderChange }: ProviderComponentProps) => {
+const LocalAuthProvider: FrontendAuthProviderComponent = ({
+  children,
+  onProviderChange,
+}: ProviderComponentProps) => {
   // Access auth store state
   const adminUsername = useAuthStore((state) => state.adminUsername);
   const adminPassword = useAuthStore((state) => state.adminPassword);
@@ -82,16 +80,16 @@ const LocalAuthProvider: FrontendAuthProviderComponent = ({ children, onProvider
       context: {
         user: hasCredentials
           ? {
-            id: userId || 'admin',
-            organizationId: organizationId || 'local-dev',
-            organizationRole: 'ADMIN',
-          }
+              id: userId || 'admin',
+              organizationId: organizationId || 'local-dev',
+              organizationRole: 'ADMIN',
+            }
           : null,
         token: hasCredentials
           ? {
-            token: `basic-${btoa(`${adminUsername}:${adminPassword}`)}`,
-            expiresAt: undefined,
-          }
+              token: `basic-${btoa(`${adminUsername}:${adminPassword}`)}`,
+              expiresAt: undefined,
+            }
           : null,
         isLoading: false,
         isAuthenticated: hasCredentials,
@@ -145,15 +143,11 @@ const authProviders: Record<string, FrontendAuthProviderComponent> = {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const providerName = getAuthProviderName();
   const [currentProvider, setCurrentProvider] = useState<FrontendAuthProvider | null>(null);
-  const ProviderComponent =
-    authProviders[providerName] ?? LocalAuthProvider;
+  const ProviderComponent = authProviders[providerName] ?? LocalAuthProvider;
 
-  const handleProviderChange = useCallback(
-    (provider: FrontendAuthProvider | null) => {
-      setCurrentProvider(provider);
-    },
-    [],
-  );
+  const handleProviderChange = useCallback((provider: FrontendAuthProvider | null) => {
+    setCurrentProvider(provider);
+  }, []);
 
   const contextValue = useMemo(
     () => ({
@@ -165,9 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <GlobalAuthContext.Provider value={contextValue}>
-      <ProviderComponent onProviderChange={handleProviderChange}>
-        {children}
-      </ProviderComponent>
+      <ProviderComponent onProviderChange={handleProviderChange}>{children}</ProviderComponent>
     </GlobalAuthContext.Provider>
   );
 };
@@ -204,8 +196,8 @@ const FALLBACK_AUTH_PROVIDER: FrontendAuthProvider = {
   SignUpComponent: () => <div>No auth provider available</div>,
   UserButtonComponent: () => <div>No auth provider available</div>,
   OrganizationSwitcherComponent: undefined,
-  initialize: () => { },
-  cleanup: () => { },
+  initialize: () => {},
+  cleanup: () => {},
 };
 
 // Export provider names for type safety

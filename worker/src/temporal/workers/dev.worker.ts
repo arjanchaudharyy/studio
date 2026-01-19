@@ -24,15 +24,20 @@ import {
   expireHumanInputRequestActivity,
 } from '../activities/human-input.activity';
 import { prepareRunPayloadActivity } from '../activities/run-dispatcher.activity';
-import {
-  recordTraceEventActivity,
-  initializeTraceActivity,
-} from '../activities/trace.activity';
+import { recordTraceEventActivity, initializeTraceActivity } from '../activities/trace.activity';
 
 // ... (existing imports)
 
-
-import { ArtifactAdapter, FileStorageAdapter, SecretsAdapter, RedisTerminalStreamAdapter, KafkaLogAdapter, KafkaTraceAdapter, KafkaAgentTracePublisher, KafkaNodeIOAdapter } from '../../adapters';
+import {
+  ArtifactAdapter,
+  FileStorageAdapter,
+  SecretsAdapter,
+  RedisTerminalStreamAdapter,
+  KafkaLogAdapter,
+  KafkaTraceAdapter,
+  KafkaAgentTracePublisher,
+  KafkaNodeIOAdapter,
+} from '../../adapters';
 import { ConfigurationError } from '@shipsec/component-sdk';
 import * as schema from '../../adapters/schema';
 
@@ -108,7 +113,10 @@ async function main() {
 
   const kafkaBrokerEnv = process.env.LOG_KAFKA_BROKERS;
   const kafkaBrokers = kafkaBrokerEnv
-    ? kafkaBrokerEnv.split(',').map((broker) => broker.trim()).filter(Boolean)
+    ? kafkaBrokerEnv
+      .split(',')
+      .map((broker) => broker.trim())
+      .filter(Boolean)
     : [];
 
   if (kafkaBrokers.length === 0) {
@@ -129,11 +137,14 @@ async function main() {
     clientId: process.env.AGENT_TRACE_KAFKA_CLIENT_ID ?? 'shipsec-worker-agent-trace',
   });
 
-  const nodeIOAdapter = new KafkaNodeIOAdapter({
-    brokers: kafkaBrokers,
-    topic: process.env.NODE_IO_KAFKA_TOPIC ?? 'telemetry.node-io',
-    clientId: process.env.NODE_IO_KAFKA_CLIENT_ID ?? 'shipsec-worker-node-io',
-  }, storageAdapter);
+  const nodeIOAdapter = new KafkaNodeIOAdapter(
+    {
+      brokers: kafkaBrokers,
+      topic: process.env.NODE_IO_KAFKA_TOPIC ?? 'telemetry.node-io',
+      clientId: process.env.NODE_IO_KAFKA_CLIENT_ID ?? 'shipsec-worker-node-io',
+    },
+    storageAdapter,
+  );
 
   let logAdapter: KafkaLogAdapter;
   try {
@@ -206,13 +217,12 @@ async function main() {
   console.log(`🔍 Worker Configuration Details:`);
   console.log(`   - Workflows Path: ${workflowsPath}`);
   console.log(
-    `   - Activities Count: ${
-      Object.keys({
-        runComponentActivity,
-        setRunMetadataActivity,
-        finalizeRunActivity,
-        prepareRunPayloadActivity,
-      }).length
+    `   - Activities Count: ${Object.keys({
+      runComponentActivity,
+      setRunMetadataActivity,
+      finalizeRunActivity,
+      prepareRunPayloadActivity,
+    }).length
     }`,
   );
   console.log(`   - Task Queue: ${taskQueue}`);
@@ -257,7 +267,9 @@ async function main() {
           if (config?.module?.rules && Array.isArray(config.module.rules)) {
             config.module.rules = config.module.rules.map((rule: any) => {
               const usesSwc =
-                typeof rule?.use === 'object' && rule.use?.loader && /swc-loader/.test(String(rule.use.loader));
+                typeof rule?.use === 'object' &&
+                rule.use?.loader &&
+                /swc-loader/.test(String(rule.use.loader));
               const isTsRule = rule && rule.test && rule.test.toString() === /\.ts$/.toString();
               if (usesSwc || isTsRule) {
                 return {
@@ -276,8 +288,11 @@ async function main() {
               return rule;
             });
           }
-        } catch (err) {
-          console.warn('Failed to apply webpackConfigHook override; falling back to default SWC loader', err);
+        } catch (_err) {
+          console.warn(
+            'Failed to apply webpackConfigHook override; falling back to default SWC loader',
+            _err,
+          );
         }
         return config;
       },
@@ -309,14 +324,16 @@ async function main() {
 
   // Set up periodic status logging
   setInterval(() => {
-    console.log(`💓 Worker heartbeat - Still polling on queue: ${taskQueue} (${new Date().toISOString()})`);
+    console.log(
+      `💓 Worker heartbeat - Still polling on queue: ${taskQueue} (${new Date().toISOString()})`,
+    );
 
     // Log worker stats to see if we're receiving any tasks
     console.log(`📊 Worker stats check:`, {
       taskQueue,
       namespace,
       timestamp: new Date().toISOString(),
-      workerBuildId: worker.options.buildId || 'default'
+      workerBuildId: worker.options.buildId || 'default',
     });
   }, 15000); // Log every 15 seconds for better debugging
 
@@ -329,7 +346,7 @@ main().catch((error) => {
     error: error.message,
     stack: error.stack,
     code: error.code,
-    details: error.details
+    details: error.details,
   });
   process.exit(1);
 });

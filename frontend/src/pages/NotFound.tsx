@@ -1,9 +1,9 @@
-import { useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { Home, ArrowLeft } from 'lucide-react'
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Home, ArrowLeft } from 'lucide-react';
 
 export function NotFound() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   return (
     <div className="flex-1 bg-background">
@@ -18,18 +18,11 @@ export function NotFound() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button
-              onClick={() => navigate('/')}
-              className="gap-2"
-            >
+            <Button onClick={() => navigate('/')} className="gap-2">
               <Home className="h-4 w-4" />
               Go to Homepage
             </Button>
-            <Button
-              onClick={() => navigate(-1)}
-              variant="outline"
-              className="gap-2"
-            >
+            <Button onClick={() => navigate(-1)} variant="outline" className="gap-2">
               <ArrowLeft className="h-4 w-4" />
               Go Back
             </Button>
@@ -37,6 +30,5 @@ export function NotFound() {
         </div>
       </div>
     </div>
-  )
+  );
 }
-

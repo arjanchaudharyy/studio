@@ -60,7 +60,7 @@ describe('amass component', () => {
       },
       params: {
         active: true,
-      }
+      },
     };
 
     const payload = JSON.stringify({
@@ -108,7 +108,7 @@ describe('amass component', () => {
         bruteForce: true,
         includeIps: true,
         timeoutMinutes: 2,
-      }
+      },
     };
 
     const payload = component.outputs.parse({

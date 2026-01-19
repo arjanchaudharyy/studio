@@ -8,12 +8,13 @@ import { TestingWebhookService, TestingWebhookRecord } from './testing-webhook.s
 import { TestingSupportModule } from './testing.module';
 import { AcceptWebhookQuerySchema } from './dto/testing-webhook.dto';
 
-const createMockRequest = (overrides: Partial<Record<string, unknown>> = {}) => ({
-  method: overrides.method ?? 'POST',
-  path: overrides.path ?? '/testing/webhooks',
-  query: overrides.query ?? {},
-  headers: overrides.headers ?? {},
-} as any);
+const createMockRequest = (overrides: Partial<Record<string, unknown>> = {}) =>
+  ({
+    method: overrides.method ?? 'POST',
+    path: overrides.path ?? '/testing/webhooks',
+    query: overrides.query ?? {},
+    headers: overrides.headers ?? {},
+  }) as any;
 
 const createMockResponse = () => {
   const res: any = {

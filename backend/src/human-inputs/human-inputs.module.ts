@@ -8,12 +8,7 @@ import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [
-    DatabaseModule, 
-    TemporalModule,
-    ApiKeysModule,
-    AuthModule,
-  ],
+  imports: [DatabaseModule, TemporalModule, ApiKeysModule, AuthModule],
   controllers: [HumanInputsController],
   providers: [HumanInputsService],
   exports: [HumanInputsService],

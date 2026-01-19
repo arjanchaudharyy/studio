@@ -87,7 +87,7 @@ const longLivedDefinition: WorkflowDefinition = {
   ],
 };
 
-type TraceRow = {
+interface TraceRow {
   sequence: number;
   node_ref: string;
   type: string;
@@ -95,7 +95,7 @@ type TraceRow = {
   level: string;
   message?: string | null;
   error?: string | null;
-};
+}
 
 async function ensureOutputDir() {
   await fs.mkdir(OUTPUT_DIR, { recursive: true });

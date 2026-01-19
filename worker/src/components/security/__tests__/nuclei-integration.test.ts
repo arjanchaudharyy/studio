@@ -13,7 +13,7 @@ const mockRunComponentWithRunner = mock(async () => ({
 }));
 
 // Mock IsolatedContainerVolume
-const mockVolumeCleanup = mock(async () => { });
+const mockVolumeCleanup = mock(async () => {});
 const mockVolumeInitialize = mock(async () => 'test-volume-123');
 const mockVolumeGetVolumeConfig = mock(() => ({
   source: 'test-volume',
@@ -25,7 +25,7 @@ class MockIsolatedContainerVolume {
   constructor(
     public tenantId: string,
     public runId: string,
-  ) { }
+  ) {}
 
   async initialize(files: Record<string, string | Buffer>) {
     return mockVolumeInitialize();
@@ -55,11 +55,11 @@ describe('Nuclei Integration Tests', () => {
       runId: 'test-run-123',
       componentRef: 'node-nuclei-1',
       logger: {
-        info: mock(() => { }),
-        error: mock(() => { }),
-        warn: mock(() => { }),
+        info: mock(() => {}),
+        error: mock(() => {}),
+        warn: mock(() => {}),
       },
-      emitProgress: mock((msg: any) => { }),
+      emitProgress: mock((msg: any) => {}),
       metadata: {
         runId: 'test-run-123',
         componentRef: 'node-nuclei-1',
@@ -163,7 +163,8 @@ exec:
   describe('Custom Archive (Zip)', () => {
     test('should extract and mount zip archive', async () => {
       // Create a minimal zip file (base64 encoded)
-      const zipBase64 = 'UEsDBAoAAAAAAKBveFkAAAAAAAAAAAAAAAAKAAAAdGVtcGxhdGVzL1BLAwQKAAAAAACgb3hZAAAAAAAAAAAAAAAAFwAAAHRlbXBsYXRlcy90ZXN0LnlhbWxpZDogdGVzdApQSwECPwAKAAAAAACgb3hZAAAAAAAAAAAAAAAACgAkAAAAAAAAAAAgAAAAAAAAAHRlbXBsYXRlcy8KACAAAAAAAAEAGAAA';
+      const zipBase64 =
+        'UEsDBAoAAAAAAKBveFkAAAAAAAAAAAAAAAAKAAAAdGVtcGxhdGVzL1BLAwQKAAAAAACgb3hZAAAAAAAAAAAAAAAAFwAAAHRlbXBsYXRlcy90ZXN0LnlhbWxpZDogdGVzdApQSwECPwAKAAAAAACgb3hZAAAAAAAAAAAAAAAACgAkAAAAAAAAAAAgAAAAAAAAAHRlbXBsYXRlcy8KACAAAAAAAAEAGAAA';
 
       const input: NucleiInput = {
         targets: ['https://example.com'],
@@ -369,11 +370,7 @@ this is not json
   describe('Multi-Target Scanning', () => {
     test('should scan multiple targets', async () => {
       const input: NucleiInput = {
-        targets: [
-          'https://example.com',
-          'https://test.com',
-          'https://demo.com',
-        ],
+        targets: ['https://example.com', 'https://test.com', 'https://demo.com'],
         templateIds: ['CVE-2024-1234'],
       };
 

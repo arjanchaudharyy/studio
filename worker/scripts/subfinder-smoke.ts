@@ -1,4 +1,8 @@
-import { componentRegistry, createExecutionContext, runComponentWithRunner } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  createExecutionContext,
+  runComponentWithRunner,
+} from '@shipsec/component-sdk';
 
 import '../src/components/security/subfinder';
 

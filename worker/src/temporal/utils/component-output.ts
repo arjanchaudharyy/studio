@@ -1,14 +1,16 @@
-import { componentRegistry, extractPorts, type ComponentPortMetadata, type ComponentParameterMetadata } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  extractPorts,
+  type ComponentPortMetadata,
+  type ComponentParameterMetadata,
+} from '@shipsec/component-sdk';
 
 type RegisteredComponent = NonNullable<ReturnType<typeof componentRegistry.get>>;
 
 /**
  * Masks values based on a list of secret port definitions.
  */
-function maskSecretPorts(
-  secretPorts: Array<{ id: string }>,
-  data: unknown
-): unknown {
+function maskSecretPorts(secretPorts: { id: string }[], data: unknown): unknown {
   if (secretPorts.length === 0) {
     return data;
   }
@@ -33,9 +35,7 @@ function maskSecretPorts(
 /**
  * Identifies secret ports from a list of port definitions.
  */
-function getSecretPorts(
-  ports: ComponentPortMetadata[]
-): Array<{ id: string }> {
+function getSecretPorts(ports: ComponentPortMetadata[]): { id: string }[] {
   return ports.filter((port) => {
     const connType = port.connectionType;
     if (!connType) {
@@ -98,9 +98,7 @@ export function maskSecretParameters(component: RegisteredComponent, params: unk
     // Fallback if metadata extraction fails
   }
 
-  const secretParamKeys = paramMetadata
-    .filter(p => p.type === 'secret')
-    .map(p => p.id);
+  const secretParamKeys = paramMetadata.filter((p) => p.type === 'secret').map((p) => p.id);
 
   if (secretParamKeys.length === 0) {
     return params;
@@ -148,7 +146,10 @@ export function maskSecretOutputs(component: RegisteredComponent, output: unknow
  * Creates a lightweight summary of component output for trace events.
  * This avoids sending huge payloads over Kafka.
  */
-export function createLightweightSummary(component: RegisteredComponent, output: unknown): Record<string, unknown> {
+export function createLightweightSummary(
+  component: RegisteredComponent,
+  output: unknown,
+): Record<string, unknown> {
   const summary: Record<string, unknown> = {};
 
   if (output && typeof output === 'object' && !Array.isArray(output)) {

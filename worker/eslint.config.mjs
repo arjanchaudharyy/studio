@@ -1,70 +1,55 @@
-import js from "@eslint/js";
-import tseslint from "@typescript-eslint/eslint-plugin";
-import tsparser from "@typescript-eslint/parser";
+import js from '@eslint/js';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+import prettier from 'eslint-plugin-prettier';
+import configPrettier from 'eslint-config-prettier';
 
-// Node.js globals for worker code
-const nodeGlobals = {
-  console: "readonly",
-  process: "readonly",
-  Buffer: "readonly",
-  __dirname: "readonly",
-  __filename: "readonly",
-  module: "writable",
-  require: "readonly",
-  exports: "writable",
-  global: "readonly",
-};
-
-export default [
+export default tseslint.config(
   {
-    ignores: ["dist", "build", "node_modules"],
+    ignores: ['dist', 'build', 'node_modules', 'coverage', '**/*.js', '**/*.mjs', '**/*.cjs'],
   },
   js.configs.recommended,
+  ...tseslint.configs.strict,
+  ...tseslint.configs.stylistic,
   {
-    files: ["**/*.ts"],
+    files: ['**/*.ts'],
     languageOptions: {
-      parser: tsparser,
-      parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+        ...globals.es2024,
       },
-      globals: nodeGlobals,
     },
     plugins: {
-      "@typescript-eslint": tseslint,
+      prettier,
     },
     rules: {
-      ...tseslint.configs.recommended.rules,
+      'prettier/prettier': 'error',
 
-      // Disable no-undef since TypeScript handles this better
-      "no-undef": "off",
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
+      '@typescript-eslint/no-explicit-any': 'off', // Relaxed
+      '@typescript-eslint/no-empty-object-type': 'error',
+      '@typescript-eslint/no-empty-function': 'off',
+      '@typescript-eslint/no-namespace': 'error',
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/ban-ts-comment': 'warn',
+      '@typescript-eslint/no-non-null-assertion': 'warn',
+      '@typescript-eslint/no-extraneous-class': 'off',
 
-      // Enable stricter rules gradually
-      "no-redeclare": "off", // Use TypeScript version instead
-      "@typescript-eslint/no-redeclare": "error",
-      "no-import-assign": "error",
-      "no-unused-vars": "off",
-      "no-empty": "warn",
-      "no-control-regex": "off",
-      "no-case-declarations": "off",
-      "no-useless-catch": "off",
-      "no-console": "off",
-      "no-prototype-builtins": "warn",
-      "no-useless-escape": "warn",
-
-      // Loose rules for now - gradually make stricter
-      "@typescript-eslint/no-unused-vars": "off",
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/ban-ts-comment": "warn",
-      "@typescript-eslint/no-empty-object-type": "off",
-      "@typescript-eslint/no-require-imports": "off",
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-undef': 'off',
+      'no-case-declarations': 'error',
+      'no-empty': 'error',
     },
   },
-  // Config for JS files
-  {
-    files: ["**/*.js"],
-    rules: {
-      "no-unused-vars": "off",
-    },
-  },
-];
+  configPrettier,
+);

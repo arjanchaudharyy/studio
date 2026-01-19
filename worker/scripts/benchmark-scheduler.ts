@@ -57,10 +57,34 @@ const serialDefinition: WorkflowDefinition = {
     stepC: 1,
   },
   actions: [
-    { ref: 'start', componentId: 'core.workflow.entrypoint', params: {}, dependsOn: [], inputMappings: {} },
-    { ref: 'stepA', componentId: 'test.sleep.parallel', params: { delay: 150, label: 'A' }, dependsOn: ['start'], inputMappings: {} },
-    { ref: 'stepB', componentId: 'test.sleep.parallel', params: { delay: 150, label: 'B' }, dependsOn: ['stepA'], inputMappings: {} },
-    { ref: 'stepC', componentId: 'test.sleep.parallel', params: { delay: 150, label: 'C' }, dependsOn: ['stepB'], inputMappings: {} },
+    {
+      ref: 'start',
+      componentId: 'core.workflow.entrypoint',
+      params: {},
+      dependsOn: [],
+      inputMappings: {},
+    },
+    {
+      ref: 'stepA',
+      componentId: 'test.sleep.parallel',
+      params: { delay: 150, label: 'A' },
+      dependsOn: ['start'],
+      inputMappings: {},
+    },
+    {
+      ref: 'stepB',
+      componentId: 'test.sleep.parallel',
+      params: { delay: 150, label: 'B' },
+      dependsOn: ['stepA'],
+      inputMappings: {},
+    },
+    {
+      ref: 'stepC',
+      componentId: 'test.sleep.parallel',
+      params: { delay: 150, label: 'C' },
+      dependsOn: ['stepB'],
+      inputMappings: {},
+    },
   ],
 };
 
@@ -92,10 +116,34 @@ const parallelDefinition: WorkflowDefinition = {
     merge: 2,
   },
   actions: [
-    { ref: 'start', componentId: 'core.workflow.entrypoint', params: {}, dependsOn: [], inputMappings: {} },
-    { ref: 'branch1', componentId: 'test.sleep.parallel', params: { delay: 150, label: 'branch-1' }, dependsOn: ['start'], inputMappings: {} },
-    { ref: 'branch2', componentId: 'test.sleep.parallel', params: { delay: 150, label: 'branch-2' }, dependsOn: ['start'], inputMappings: {} },
-    { ref: 'merge', componentId: 'core.console.log', params: { data: 'merge complete' }, dependsOn: ['branch1', 'branch2'], inputMappings: {} },
+    {
+      ref: 'start',
+      componentId: 'core.workflow.entrypoint',
+      params: {},
+      dependsOn: [],
+      inputMappings: {},
+    },
+    {
+      ref: 'branch1',
+      componentId: 'test.sleep.parallel',
+      params: { delay: 150, label: 'branch-1' },
+      dependsOn: ['start'],
+      inputMappings: {},
+    },
+    {
+      ref: 'branch2',
+      componentId: 'test.sleep.parallel',
+      params: { delay: 150, label: 'branch-2' },
+      dependsOn: ['start'],
+      inputMappings: {},
+    },
+    {
+      ref: 'merge',
+      componentId: 'core.console.log',
+      params: { data: 'merge complete' },
+      dependsOn: ['branch1', 'branch2'],
+      inputMappings: {},
+    },
   ],
 };
 
@@ -184,7 +232,12 @@ async function main() {
 
     const inlineSerial = await runInlineBenchmark(serialDefinition, iterations, 'serial');
     const inlineParallel = await runInlineBenchmark(parallelDefinition, iterations, 'parallel');
-    const temporalSerial = await runTemporalBenchmark(client, serialDefinition, iterations, 'serial');
+    const temporalSerial = await runTemporalBenchmark(
+      client,
+      serialDefinition,
+      iterations,
+      'serial',
+    );
     const temporalParallel = await runTemporalBenchmark(
       client,
       parallelDefinition,
@@ -204,10 +257,7 @@ async function main() {
     console.table(summaryRows);
 
     await ensureOutputDir();
-    const snapshotPath = join(
-      OUTPUT_DIR,
-      `scheduler-benchmark-${Date.now()}.json`,
-    );
+    const snapshotPath = join(OUTPUT_DIR, `scheduler-benchmark-${Date.now()}.json`);
     await fs.writeFile(
       snapshotPath,
       JSON.stringify(
