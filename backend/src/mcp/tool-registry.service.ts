@@ -115,7 +115,7 @@ export class ToolRegistryService implements OnModuleDestroy {
   constructor(
     @Inject(TOOL_REGISTRY_REDIS) private readonly redis: Redis | null,
     private readonly encryption: SecretsEncryptionService,
-  ) { }
+  ) {}
 
   async onModuleDestroy() {
     await this.redis?.quit();

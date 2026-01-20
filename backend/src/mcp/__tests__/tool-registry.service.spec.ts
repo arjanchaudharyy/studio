@@ -33,7 +33,7 @@ class MockRedis {
     return 1;
   }
 
-  async quit(): Promise<void> { }
+  async quit(): Promise<void> {}
 }
 
 // Mock encryption service
