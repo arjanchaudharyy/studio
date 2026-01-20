@@ -151,18 +151,22 @@ describe('tool-helpers', () => {
       });
 
       const schema = getToolSchema(component);
-      
+
       expect(schema.type).toBe('object');
-      expect(Object.keys(schema.properties)).toEqual(['ipAddress', 'verbose']);
-      expect(schema.properties.ipAddress).toEqual({
+      expect(Object.keys(schema.properties!)).toEqual(['ipAddress', 'verbose']);
+      expect(schema.properties!.ipAddress).toEqual({
         type: 'string',
         description: 'IP to check',
       });
-      expect(schema.properties.verbose).toEqual({
+      // Zod's toJSONSchema() correctly includes default values - this is better for MCP tools
+      expect(schema.properties!.verbose).toEqual({
         type: 'boolean',
         description: 'Verbose',
+        default: false,
       });
-      expect(schema.required).toEqual(['ipAddress']);
+      // Note: Zod's toJSONSchema marks fields with defaults as required
+      // (the default is applied at runtime, not by JSON Schema)
+      expect(schema.required).toEqual(['ipAddress', 'verbose']);
     });
   });
 

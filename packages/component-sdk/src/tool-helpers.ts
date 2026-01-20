@@ -1,7 +1,11 @@
 /**
  * Helper functions for working with agent-callable components (tool mode).
+ *
+ * Uses Zod's built-in toJSONSchema() for accurate type conversion.
+ * This correctly handles z.any(), z.union(), z.enum(), etc.
  */
 
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type {
   ComponentDefinition,
   ComponentPortMetadata,
@@ -10,21 +14,14 @@ import type {
 import { extractPorts } from './zod-ports';
 
 /**
- * JSON Schema type for MCP tool input schema
+ * Tool input schema - matches the MCP SDK's Tool.inputSchema type.
+ * This is a JSON Schema object with type: 'object'.
  */
-export interface ToolInputSchema {
-  type: 'object';
-  properties: Record<string, {
-    type: string;
-    description?: string;
-    enum?: unknown[];
-    items?: unknown;
-  }>;
-  required: string[];
-}
+export type ToolInputSchema = Tool['inputSchema'];
 
 /**
- * Metadata for an agent-callable tool, suitable for MCP tools/list response
+ * Metadata for an agent-callable tool, suitable for MCP tools/list response.
+ * This is compatible with the MCP SDK's Tool type.
  */
 export interface ToolMetadata {
   name: string;
@@ -48,6 +45,11 @@ export function inferBindingType(port: ComponentPortMetadata): PortBindingType {
   // Explicit binding type takes precedence
   if (port.bindingType) {
     return port.bindingType;
+  }
+
+  // Check editor type
+  if (port.editor === 'secret') {
+    return 'credential';
   }
 
   const connectionType = port.connectionType;
@@ -88,72 +90,78 @@ export function getActionInputIds(component: ComponentDefinition): string[] {
     .map(input => input.id);
 }
 
-/**
- * Convert a port connection type to a JSON Schema type string.
- */
-function portTypeToJsonSchemaType(port: ComponentPortMetadata): string {
-  const connectionType = port.connectionType;
+// ============================================================================
+// Schema Generation Helpers
+// ============================================================================
 
-  if (connectionType.kind === 'primitive') {
-    switch (connectionType.name) {
-      case 'text':
-      case 'secret':
-        return 'string';
-      case 'number':
-        return 'number';
-      case 'boolean':
-        return 'boolean';
-      case 'json':
-      case 'any':
-        return 'object';
-      case 'file':
-        return 'string'; // File path or URL
-      default:
-        return 'string';
+/**
+ * Pick specific keys from an object.
+ */
+function pick<T extends Record<string, unknown>, K extends string>(
+  obj: T,
+  keys: K[]
+): Pick<T, K> {
+  const result = {} as Pick<T, K>;
+  for (const key of keys) {
+    if (key in obj) {
+      (result as Record<string, unknown>)[key] = obj[key];
     }
   }
-
-  if (connectionType.kind === 'list') {
-    return 'array';
-  }
-
-  if (connectionType.kind === 'map') {
-    return 'object';
-  }
-
-  if (connectionType.kind === 'contract') {
-    return 'object';
-  }
-
-  return 'string';
+  return result;
 }
 
 /**
  * Get the JSON Schema for the action inputs only (inputs exposed to the agent).
  * This is used for the MCP tools/list inputSchema field.
+ *
+ * Uses Zod's built-in toJSONSchema() for accurate type conversion.
+ * This correctly handles:
+ * - z.any() → {} (empty schema = any JSON value)
+ * - z.union([...]) → { anyOf: [...] }
+ * - z.enum([...]) → { type: 'string', enum: [...] }
+ * - z.literal('X') → { type: 'string', const: 'X' }
+ * - z.record(...) → { type: 'object', additionalProperties: {...} }
  */
 export function getToolSchema(component: ComponentDefinition): ToolInputSchema {
+  const inputsSchema = component.inputs;
+
+  // 1. Generate full JSON Schema using Zod's built-in
+  const fullSchema = (
+    inputsSchema as { toJSONSchema(): Record<string, unknown> }
+  ).toJSONSchema() as {
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
+
+  // 2. Get action input IDs (credentials excluded) - reuse existing function!
+  const actionInputIds = getActionInputIds(component);
+
+  // 3. Filter properties to only include action inputs
+  const filteredProperties = pick(
+    (fullSchema.properties ?? {}) as Record<string, unknown>,
+    actionInputIds
+  );
+
+  // 4. Filter required array
+  const filteredRequired = (fullSchema.required ?? []).filter((id: string) =>
+    actionInputIds.includes(id)
+  );
+
+  // 5. Add descriptions from port metadata
   const inputs = extractPorts(component.inputs);
-  const actionInputs = inputs.filter(input => inferBindingType(input) === 'action');
-
-  const properties: ToolInputSchema['properties'] = {};
-  const required: string[] = [];
-
-  for (const input of actionInputs) {
-    properties[input.id] = {
-      type: portTypeToJsonSchemaType(input),
-      description: input.description ?? input.label,
-    };
-
-    if (input.required) {
-      required.push(input.id);
+  for (const input of inputs) {
+    if (actionInputIds.includes(input.id)) {
+      const prop = filteredProperties[input.id] as Record<string, unknown> | undefined;
+      if (prop && !prop.description && (input.description ?? input.label)) {
+        prop.description = input.description ?? input.label;
+      }
     }
   }
 
   return {
-    type: 'object',
-    properties,
-    required,
+    type: 'object' as const,
+    properties: filteredProperties as Record<string, object>,
+    required: filteredRequired,
   };
 }
 
