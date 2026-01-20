@@ -766,6 +766,17 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
       console.error('Failed to parse runtimeInputs:', error);
     }
   }
+
+  // Update ReactFlow's internal handle positions when dynamic ports change.
+  // This is critical for Entry Point nodes with runtime inputs - without this,
+  // dragging from Input 2 would incorrectly connect from Input 1's stale cached position.
+  const outputIds = effectiveOutputs.map((o) => o.id).join(',');
+  const inputIds = componentInputs.map((i) => i.id).join(',');
+  useEffect(() => {
+    // Tell ReactFlow to recalculate handle positions for this node
+    updateNodeInternals(id);
+  }, [id, outputIds, inputIds, updateNodeInternals]);
+
   const manualOverridesPort = (input: InputPort) => input.valuePriority === 'manual-first';
 
   const manualValueProvidedForInput = (input: InputPort, hasConnection: boolean) => {
