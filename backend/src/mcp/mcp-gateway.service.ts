@@ -1,11 +1,8 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import {
-  ErrorCode,
-  McpError,
-} from '@modelcontextprotocol/sdk/types.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { componentRegistry } from '@shipsec/component-sdk';
 
 import { ToolRegistryService, RegisteredTool } from './tool-registry.service';
@@ -14,7 +11,7 @@ import { TemporalService } from '../temporal/temporal.service';
 @Injectable()
 export class McpGatewayService {
   private readonly logger = new Logger(McpGatewayService.name);
-  
+
   // Cache of servers per runId
   private readonly servers = new Map<string, McpServer>();
 
@@ -32,16 +29,14 @@ export class McpGatewayService {
       return existing;
     }
 
-    const server = new McpServer(
-      {
-        name: 'shipsec-studio-gateway',
-        version: '1.0.0',
-      }
-    );
+    const server = new McpServer({
+      name: 'shipsec-studio-gateway',
+      version: '1.0.0',
+    });
 
     await this.registerTools(server, runId);
     this.servers.set(runId, server);
-    
+
     return server;
   }
 
@@ -50,7 +45,7 @@ export class McpGatewayService {
    */
   private async registerTools(server: McpServer, runId: string) {
     const allRegistered = await this.toolRegistry.getToolsForRun(runId);
-    
+
     // 1. Register Internal Tools
     const internalTools = allRegistered.filter((t) => t.type === 'component');
     for (const tool of internalTools) {
@@ -63,7 +58,7 @@ export class McpGatewayService {
         async (args: any) => {
           try {
             const result = await this.callComponentTool(tool, runId, args ?? {});
-            
+
             // Signal Temporal that the tool call is completed
             await this.temporalService.signalWorkflow({
               workflowId: runId,
@@ -86,7 +81,7 @@ export class McpGatewayService {
             };
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            
+
             // Signal Temporal that the tool call failed
             await this.temporalService.signalWorkflow({
               workflowId: runId,
@@ -110,7 +105,7 @@ export class McpGatewayService {
               isError: true,
             };
           }
-        }
+        },
       );
     }
 
@@ -120,7 +115,7 @@ export class McpGatewayService {
       try {
         const tools = await this.fetchExternalTools(source);
         const prefix = source.toolName;
-        
+
         for (const t of tools) {
           const proxiedName = `${prefix}__${t.name}`;
           server.registerTool(
@@ -131,7 +126,7 @@ export class McpGatewayService {
             },
             async (args: any) => {
               return this.proxyCallToExternal(source, t.name, args);
-            }
+            },
           );
         }
       } catch (error) {
@@ -146,10 +141,10 @@ export class McpGatewayService {
   private async fetchExternalTools(source: RegisteredTool): Promise<any[]> {
     if (!source.endpoint) return [];
 
-    const transport = new SSEClientTransport(new URL(source.endpoint));
+    const transport = new StreamableHTTPClientTransport(new URL(source.endpoint));
     const client = new Client(
       { name: 'shipsec-gateway-client', version: '1.0.0' },
-      { capabilities: {} }
+      { capabilities: {} },
     );
 
     await client.connect(transport);
@@ -167,16 +162,19 @@ export class McpGatewayService {
   private async proxyCallToExternal(
     source: RegisteredTool,
     toolName: string,
-    args: any
+    args: any,
   ): Promise<any> {
     if (!source.endpoint) {
-      throw new McpError(ErrorCode.InternalError, `Missing endpoint for external source ${source.toolName}`);
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Missing endpoint for external source ${source.toolName}`,
+      );
     }
 
-    const transport = new SSEClientTransport(new URL(source.endpoint));
+    const transport = new StreamableHTTPClientTransport(new URL(source.endpoint));
     const client = new Client(
       { name: 'shipsec-gateway-client', version: '1.0.0' },
-      { capabilities: {} }
+      { capabilities: {} },
     );
 
     await client.connect(transport);

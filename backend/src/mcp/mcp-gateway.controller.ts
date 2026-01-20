@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Query,
-  UseGuards,
-  Req,
-  Res,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Get, Post, Query, UseGuards, Req, Res, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -19,7 +10,7 @@ import { McpGatewayService } from './mcp-gateway.service';
 @Controller('mcp')
 export class McpGatewayController {
   private readonly logger = new Logger(McpGatewayController.name);
-  
+
   // Mapping of runId to its current Streamable HTTP transport
   private readonly transports = new Map<string, StreamableHTTPServerTransport>();
 
@@ -28,11 +19,7 @@ export class McpGatewayController {
   @Get('sse')
   @ApiOperation({ summary: 'Establish an MCP SSE connection' })
   @UseGuards(AuthGuard)
-  async establishSse(
-    @Query('runId') runId: string,
-    @Req() req: Request,
-    @Res() res: Response,
-  ) {
+  async establishSse(@Query('runId') runId: string, @Req() req: Request, @Res() res: Response) {
     if (!runId) {
       return res.status(400).send('runId is required');
     }
@@ -44,7 +31,7 @@ export class McpGatewayController {
     this.transports.set(runId, transport);
 
     const server = await this.mcpGateway.getServerForRun(runId);
-    
+
     // Connect the server to this transport.
     await server.connect(transport);
 
@@ -61,11 +48,7 @@ export class McpGatewayController {
 
   @Post('messages')
   @ApiOperation({ summary: 'Send an MCP message to an established connection' })
-  async handleMessage(
-    @Query('runId') runId: string,
-    @Req() req: Request,
-    @Res() res: Response,
-  ) {
+  async handleMessage(@Query('runId') runId: string, @Req() req: Request, @Res() res: Response) {
     const transport = this.transports.get(runId);
     if (!transport) {
       this.logger.warn(`Received MCP message for unknown or closed run: ${runId}`);
