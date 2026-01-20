@@ -115,7 +115,7 @@ export class ToolRegistryService implements OnModuleDestroy {
   constructor(
     @Inject(TOOL_REGISTRY_REDIS) private readonly redis: Redis | null,
     private readonly encryption: SecretsEncryptionService,
-  ) {}
+  ) { }
 
   async onModuleDestroy() {
     await this.redis?.quit();
@@ -171,10 +171,11 @@ export class ToolRegistryService implements OnModuleDestroy {
 
     const { runId, nodeId, toolName, description, inputSchema, endpoint, authToken } = input;
 
-    // Encrypt auth token if provided
+    // Encrypt auth token if provided - store as JSON object for consistency
     let encryptedCredentials: string | undefined;
     if (authToken) {
-      const encryptionMaterial = await this.encryption.encrypt(authToken);
+      const credentials = { authToken };
+      const encryptionMaterial = await this.encryption.encrypt(JSON.stringify(credentials));
       encryptedCredentials = JSON.stringify(encryptionMaterial);
     }
 
@@ -281,7 +282,15 @@ export class ToolRegistryService implements OnModuleDestroy {
     try {
       const encryptionMaterial = JSON.parse(tool.encryptedCredentials);
       const decrypted = await this.encryption.decrypt(encryptionMaterial);
-      return JSON.parse(decrypted);
+      try {
+        return JSON.parse(decrypted);
+      } catch (e) {
+        // Fallback for tools that might have stored raw strings (e.g. older remote-mcp implementations)
+        if (tool.type === 'remote-mcp') {
+          return { authToken: decrypted };
+        }
+        throw e;
+      }
     } catch (error) {
       this.logger.error(`Failed to decrypt credentials for tool ${nodeId}:`, error);
       return null;

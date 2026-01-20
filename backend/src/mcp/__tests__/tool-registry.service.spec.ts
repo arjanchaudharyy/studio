@@ -33,7 +33,7 @@ class MockRedis {
     return 1;
   }
 
-  async quit(): Promise<void> {}
+  async quit(): Promise<void> { }
 }
 
 // Mock encryption service
@@ -151,6 +151,21 @@ describe('ToolRegistryService', () => {
 
       const creds = await service.getToolCredentials('run-1', 'node-a');
       expect(creds).toEqual({ apiKey: 'secret-value', token: 'another-secret' });
+    });
+
+    it('decrypts and returns remote MCP auth token as credentials object', async () => {
+      await service.registerRemoteMcp({
+        runId: 'run-1',
+        nodeId: 'node-remote',
+        toolName: 'remote_tool',
+        description: 'Remote Tool',
+        inputSchema: { type: 'object', properties: {}, required: [] },
+        endpoint: 'http://example.com',
+        authToken: 'my-plain-token',
+      });
+
+      const creds = await service.getToolCredentials('run-1', 'node-remote');
+      expect(creds).toEqual({ authToken: 'my-plain-token' });
     });
   });
 
