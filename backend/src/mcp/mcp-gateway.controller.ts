@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Query, UseGuards, Req, Res, Logger } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards, Req, Res, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
-import { AuthGuard, type RequestWithAuthContext } from '../auth/auth.guard';
+import { McpAuthGuard, type McpGatewayRequest } from './mcp-auth.guard';
 import { McpGatewayService } from './mcp-gateway.service';
 
 @ApiTags('mcp')
@@ -18,29 +18,29 @@ export class McpGatewayController {
 
   @Get('sse')
   @ApiOperation({ summary: 'Establish an MCP SSE connection' })
-  @UseGuards(AuthGuard)
-  async establishSse(
-    @Query('runId') queryRunId: string,
-    @Req() req: RequestWithAuthContext,
-    @Res() res: Response,
-  ) {
-    const runId = queryRunId || (req.headers['x-run-id'] as string);
+  @UseGuards(McpAuthGuard)
+  async establishSse(@Req() req: McpGatewayRequest, @Res() res: Response) {
+    // Extract info from validated AuthInfo (provided by McpAuthGuard)
+    const auth = req.auth;
+    if (!auth || !auth.extra) {
+      return res.status(401).send('Authentication missing');
+    }
+
+    const runId = auth.extra.runId as string;
+    const organizationId = auth.extra.organizationId as string | null;
 
     if (!runId) {
-      return res.status(400).send('runId is required (via query or X-Run-Id header)');
+      return res.status(400).send('runId missing in session token');
     }
 
     // Validate MCP Protocol Version if provided
     const protocolVersion = req.headers['mcp-protocol-version'];
     if (protocolVersion && protocolVersion !== '2025-06-18') {
       this.logger.warn(`Unsupported MCP protocol version: ${protocolVersion}`);
-      // We don't necessarily want to block, but we should log it.
-      // Some clients might use different dates.
     }
 
     this.logger.log(`Establishing MCP Streamable HTTP connection for run: ${runId}`);
 
-    const organizationId = req.auth?.organizationId;
     const allowedToolsHeader = req.headers['x-allowed-tools'];
     const allowedTools =
       typeof allowedToolsHeader === 'string'
@@ -58,7 +58,7 @@ export class McpGatewayController {
       await server.connect(transport);
 
       // Handle the initial GET request to start the SSE stream
-      await transport.handleRequest(req as any, res);
+      await transport.handleRequest(req, res);
 
       // Clean up when the client disconnects
       res.on('close', async () => {
@@ -78,14 +78,22 @@ export class McpGatewayController {
 
   @Post('messages')
   @ApiOperation({ summary: 'Send an MCP message to an established connection' })
-  async handleMessage(@Query('runId') runId: string, @Req() req: Request, @Res() res: Response) {
+  @UseGuards(McpAuthGuard)
+  async handleMessage(@Req() req: McpGatewayRequest, @Res() res: Response) {
+    const auth = req.auth;
+    if (!auth || !auth.extra) {
+      return res.status(401).send('Authentication missing');
+    }
+
+    const runId = auth.extra.runId as string;
     const transport = this.transports.get(runId);
+
     if (!transport) {
       this.logger.warn(`Received MCP message for unknown or closed run: ${runId}`);
       return res.status(404).send('No active MCP connection for this runId');
     }
 
     // Process the POST message via the transport
-    await transport.handleRequest(req as any, res);
+    await transport.handleRequest(req, res);
   }
 }

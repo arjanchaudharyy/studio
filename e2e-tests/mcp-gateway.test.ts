@@ -98,7 +98,7 @@ e2eDescribe('MCP Gateway E2E', () => {
         // 'core.logic.script' is good for testing logic.
         const toolName = 'test_script';
         const componentId = 'core.logic.script';
-        
+
         await fetch(`${API_BASE}/mcp/internal/register-component`, {
             method: 'POST',
             headers: HEADERS,
@@ -120,17 +120,27 @@ e2eDescribe('MCP Gateway E2E', () => {
 
         console.log(`[Test] Registered tool ${toolName}`);
 
-        // 3. Connect via MCP Client
-        const transport = new SSEClientTransport(new URL(`${API_BASE}/mcp/sse?runId=${runId}`), {
-            // Passing headers to EventSource is tricky in Node.
-            // But SSEClientTransport supports custom EventSource init? 
-            // In Node, we might need 'event-source-polyfill' or similar if Headers are required.
-            // But internal token is required for auth.
-            // Wait, SSE endpoint uses AuthGuard. 
-            // We can pass `x-internal-token` in headers.
+        // 2.5 Generate a session-specific MCP token
+        const tokenRes = await fetch(`${API_BASE}/mcp/internal/generate-token`, {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify({
+                runId,
+                organizationId: 'test-org',
+                agentId: 'test-agent'
+            }),
+        });
+        const { token } = await tokenRes.json();
+        console.log(`[Test] Generated session token: ${token.substring(0, 10)}...`);
+
+        // 3. Connect via MCP Client using the Session Token
+        const transport = new SSEClientTransport(new URL(`${API_BASE}/mcp/sse`), {
             eventSourceInit: {
-                headers: HEADERS,
-            }
+                headers: {
+                    ...HEADERS,
+                    'Authorization': `Bearer ${token}`
+                },
+            } as any
         });
 
         const client = new Client(
@@ -144,7 +154,7 @@ e2eDescribe('MCP Gateway E2E', () => {
         // 4. List Tools
         const tools = await client.listTools();
         console.log(`[Test] Tools listed:`, tools.tools.map(t => t.name));
-        
+
         expect(tools.tools).toBeDefined();
         const found = tools.tools.find(t => t.name === toolName);
         expect(found).toBeDefined();
@@ -165,13 +175,13 @@ e2eDescribe('MCP Gateway E2E', () => {
         expect(result.content).toBeDefined();
         // content is array of TextContent | ImageContent
         // core.logic.script returns output object. McpGateway wraps it in JSON string.
-        const contentText = (result.content[0] as any).text;
+        const contentText = (result.content as any)[0].text;
         const output = JSON.parse(contentText);
         expect(output.result.msg).toBe('Hello from Tool');
 
         // Cleanup
         await client.close();
-        
+
         // Terminate workflow (optional, but good)
         // API to cancel?
         await fetch(`${API_BASE}/workflows/runs/${runId}/cancel`, { method: 'POST', headers: HEADERS });
