@@ -335,18 +335,18 @@ export function Canvas({
         nextNodes = nodes.map((node) =>
           node.id === params.target
             ? {
-                ...node,
-                data: {
-                  ...node.data,
-                  inputs: {
-                    ...(node.data.inputs as Record<string, unknown>),
-                    [targetHandle]: {
-                      source: params.source,
-                      output: params.sourceHandle,
-                    },
-                  } as Record<string, unknown>,
-                },
-              }
+              ...node,
+              data: {
+                ...node.data,
+                inputs: {
+                  ...(node.data.inputs as Record<string, unknown>),
+                  [targetHandle]: {
+                    source: params.source,
+                    output: params.sourceHandle,
+                  },
+                } as Record<string, unknown>,
+              },
+            }
             : node,
         );
         setNodes(nextNodes);
@@ -699,11 +699,78 @@ export function Canvas({
   // Handle node data update from config panel
   const handleUpdateNode = useCallback(
     (nodeId: string, data: Partial<NodeData>) => {
-      const newNodes = nodes.map((node) =>
+      let updatedNodes = nodes.map((node) =>
         node.id === nodeId ? { ...node, data: { ...node.data, ...data } } : node,
       );
 
-      setNodes(newNodes);
+      let updatedEdges = edges;
+      const edgesToRemove: Edge[] = [];
+
+      // Check for dynamic outputs change (e.g. Entry Point inputs renamed)
+      // We cast to any because dynamicOutputs is on FrontendNodeData, not NodeData
+      const dynamicOutputs = (data as any).dynamicOutputs;
+      if (dynamicOutputs && Array.isArray(dynamicOutputs)) {
+        const validOutputIds = new Set(dynamicOutputs.map((p: any) => p.id));
+        updatedEdges.forEach((edge) => {
+          if (
+            edge.source === nodeId &&
+            edge.sourceHandle &&
+            !validOutputIds.has(edge.sourceHandle)
+          ) {
+            edgesToRemove.push(edge);
+          }
+        });
+      }
+
+      // Check for dynamic inputs change
+      const dynamicInputs = (data as any).dynamicInputs;
+      if (dynamicInputs && Array.isArray(dynamicInputs)) {
+        const validInputIds = new Set(dynamicInputs.map((p: any) => p.id));
+        updatedEdges.forEach((edge) => {
+          if (
+            edge.target === nodeId &&
+            edge.targetHandle &&
+            !validInputIds.has(edge.targetHandle)
+          ) {
+            edgesToRemove.push(edge);
+          }
+        });
+      }
+
+      // Perform cleanup if edges were invalidated
+      if (edgesToRemove.length > 0) {
+        updatedEdges = updatedEdges.filter((e) => !edgesToRemove.includes(e));
+
+        // Cleanup input mappings on target nodes of removed edges
+        updatedNodes = updatedNodes.map((node) => {
+          const incomingRemovedEdges = edgesToRemove.filter((e) => e.target === node.id);
+          if (incomingRemovedEdges.length === 0) return node;
+
+          const inputs = { ...((node.data.inputs as Record<string, unknown>) || {}) };
+          let changed = false;
+
+          incomingRemovedEdges.forEach((e) => {
+            if (e.targetHandle && inputs[e.targetHandle]) {
+              // Remove the input mapping because the source port no longer exists
+              delete inputs[e.targetHandle];
+              changed = true;
+            }
+          });
+
+          if (!changed) return node;
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              inputs,
+            },
+          };
+        });
+      }
+
+      setNodes(updatedNodes);
+      setEdges(updatedEdges);
 
       // Debounce history snapshot to avoid creating history entries for every keystroke
       if (snapshotDebounceRef.current) {
@@ -711,14 +778,14 @@ export function Canvas({
       }
 
       snapshotDebounceRef.current = setTimeout(() => {
-        onSnapshot?.(newNodes, edges);
+        onSnapshot?.(updatedNodes, updatedEdges);
         snapshotDebounceRef.current = null;
       }, 500);
 
       // Mark workflow as dirty immediately so Save button enables
       markDirty();
     },
-    [nodes, edges, setNodes, markDirty, onSnapshot],
+    [nodes, edges, setNodes, setEdges, markDirty, onSnapshot],
   );
 
   // Sync selectedNode with the latest node data from nodes array
@@ -1037,7 +1104,7 @@ export function Canvas({
                     onScheduleAction={resolvedOnScheduleAction}
                     onScheduleDelete={resolvedOnScheduleDelete}
                     onViewSchedules={resolvedOnViewSchedules}
-                    onWidthChange={() => {}} // Not resizable on mobile
+                    onWidthChange={() => { }} // Not resizable on mobile
                   />
                 </div>,
                 document.getElementById('mobile-bottom-sheet-portal') || document.body,
