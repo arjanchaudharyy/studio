@@ -75,7 +75,7 @@ export const ExecutionErrorView: React.FC<ExecutionErrorViewProps> = ({ error, c
   return (
     <div
       className={cn(
-        'rounded-md border p-2 text-[11px] leading-tight flex flex-col gap-1.5',
+        'rounded-md border p-2 text-[11px] leading-tight flex flex-col gap-1.5 max-h-[300px] overflow-y-auto',
         config.bg,
         config.border,
         className,
