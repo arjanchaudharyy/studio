@@ -88,6 +88,8 @@ export interface RunComponentActivityInput {
     triggeredBy?: string;
     failure?: WorkflowFailureMetadata;
   };
+  inputOverrides?: Record<string, unknown>;
+  rawParams?: Record<string, unknown>;
 }
 
 export interface RunComponentActivityOutput {
