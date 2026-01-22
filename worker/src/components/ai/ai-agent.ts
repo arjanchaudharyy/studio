@@ -167,6 +167,13 @@ const inputSchema = inputs({
       description: 'Connect outputs from MCP tool providers or mergers.',
     },
   ),
+  tools: port(
+    z.array(z.any()).optional().describe('Direct tool connections from tool-mode nodes.'),
+    {
+      label: 'Connected Tools',
+      description: 'Connect tool-mode nodes directly to this agent.',
+    },
+  ),
 });
 
 const parameterSchema = parameters({
