@@ -609,6 +609,7 @@ export async function shipsecWorkflowRun(
             groupId: nodeMetadata?.groupId,
             triggeredBy,
             failure,
+            connectedToolNodeIds: nodeMetadata?.connectedToolNodeIds,
           },
         };
 
