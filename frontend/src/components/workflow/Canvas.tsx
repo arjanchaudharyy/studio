@@ -338,18 +338,18 @@ export function Canvas({
         nextNodes = nodes.map((node) =>
           node.id === params.target
             ? {
-              ...node,
-              data: {
-                ...node.data,
-                inputs: {
-                  ...(node.data.inputs as Record<string, unknown>),
-                  [targetHandle]: {
-                    source: params.source,
-                    output: params.sourceHandle,
-                  },
-                } as Record<string, unknown>,
-              },
-            }
+                ...node,
+                data: {
+                  ...node.data,
+                  inputs: {
+                    ...(node.data.inputs as Record<string, unknown>),
+                    [targetHandle]: {
+                      source: params.source,
+                      output: params.sourceHandle,
+                    },
+                  } as Record<string, unknown>,
+                },
+              }
             : node,
         );
         setNodes(nextNodes);
@@ -1042,7 +1042,7 @@ export function Canvas({
                     onScheduleAction={resolvedOnScheduleAction}
                     onScheduleDelete={resolvedOnScheduleDelete}
                     onViewSchedules={resolvedOnViewSchedules}
-                    onWidthChange={() => { }} // Not resizable on mobile
+                    onWidthChange={() => {}} // Not resizable on mobile
                   />
                 </div>,
                 document.getElementById('mobile-bottom-sheet-portal') || document.body,
