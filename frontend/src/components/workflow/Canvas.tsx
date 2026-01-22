@@ -209,7 +209,10 @@ export function Canvas({
     (changes: EdgeChange[]) => {
       // Handle edge removals by cleaning up input mappings
       if (mode !== 'design') {
-        applyEdgesChange(changes);
+        const allowedChanges = changes.filter((change) => change.type !== 'remove');
+        if (allowedChanges.length > 0) {
+          applyEdgesChange(allowedChanges);
+        }
         return;
       }
 
@@ -984,8 +987,10 @@ export function Canvas({
               }}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
-              nodesDraggable
+              nodesDraggable={mode === 'design'}
               nodesConnectable={mode === 'design'}
+              edgesUpdatable={mode === 'design'}
+              deleteKeyCode={mode === 'design' ? ['Backspace', 'Delete'] : []}
               elementsSelectable
             >
               <Background
