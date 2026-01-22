@@ -29,6 +29,7 @@ export class McpGatewayController {
 
     const runId = auth.extra.runId as string;
     const organizationId = auth.extra.organizationId as string | null;
+    const allowedNodeIds = auth.extra.allowedNodeIds as string[] | undefined;
 
     if (!runId) {
       return res.status(400).send('runId missing in session token');
@@ -52,7 +53,12 @@ export class McpGatewayController {
       this.transports.set(runId, transport);
 
       try {
-        const server = await this.mcpGateway.getServerForRun(runId, organizationId, allowedTools);
+        const server = await this.mcpGateway.getServerForRun(
+          runId,
+          organizationId,
+          allowedTools,
+          allowedNodeIds,
+        );
         await server.connect(transport);
       } catch (error) {
         this.logger.error(`Failed to initialize MCP server for run ${runId}: ${error}`);

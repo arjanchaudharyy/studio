@@ -37,6 +37,7 @@ export class McpGatewayService {
     runId: string,
     organizationId?: string | null,
     allowedTools?: string[],
+    allowedNodeIds?: string[],
   ): Promise<McpServer> {
     // 1. Validate Access
     await this.validateRunAccess(runId, organizationId);
@@ -51,7 +52,7 @@ export class McpGatewayService {
       version: '1.0.0',
     });
 
-    await this.registerTools(server, runId, allowedTools);
+    await this.registerTools(server, runId, allowedTools, allowedNodeIds);
     this.servers.set(runId, server);
 
     return server;
@@ -105,8 +106,13 @@ export class McpGatewayService {
   /**
    * Register all available tools (internal and external) for this run
    */
-  private async registerTools(server: McpServer, runId: string, allowedTools?: string[]) {
-    const allRegistered = await this.toolRegistry.getToolsForRun(runId);
+  private async registerTools(
+    server: McpServer,
+    runId: string,
+    allowedTools?: string[],
+    allowedNodeIds?: string[],
+  ) {
+    const allRegistered = await this.toolRegistry.getToolsForRun(runId, allowedNodeIds);
 
     // Filter by allowed tools if specified
     if (allowedTools && allowedTools.length > 0) {
