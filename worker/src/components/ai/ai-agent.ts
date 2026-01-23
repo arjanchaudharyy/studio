@@ -11,6 +11,7 @@ import {
 } from 'ai';
 import { createOpenAI as createOpenAIImpl } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI as createGoogleGenerativeAIImpl } from '@ai-sdk/google';
+import { createMCPClient } from '@ai-sdk/mcp';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {
@@ -53,7 +54,7 @@ const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrout
 
 const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
-const DEFAULT_OPENROUTER_MODEL = 'openrouter/auto';
+const DEFAULT_OPENROUTER_MODEL = 'openai/gpt-4o-mini';
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 1024;
 const DEFAULT_MEMORY_SIZE = 8;
@@ -65,7 +66,7 @@ const DEFAULT_API_BASE_URL =
   process.env.API_BASE_URL ??
   'http://localhost:3211';
 
-const DEFAULT_GATEWAY_URL = `${DEFAULT_API_BASE_URL}/api/v1/mcp/gateway`;
+const DEFAULT_GATEWAY_URL = `${DEFAULT_API_BASE_URL}/mcp/gateway`;
 
 const agentMessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant', 'tool']),
@@ -73,11 +74,6 @@ const agentMessageSchema = z.object({
 });
 
 type AgentMessage = z.infer<typeof agentMessageSchema>;
-
-interface _CoreMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
-}
 
 const toolInvocationMetadataSchema = z.object({
   toolId: z.string().optional(),
@@ -329,9 +325,7 @@ const parameterSchema = parameters({
 
 type ConversationState = z.infer<typeof conversationStateSchema>;
 type ToolInvocationEntry = z.infer<typeof toolInvocationSchema>;
-
 type McpToolArgument = z.infer<typeof McpToolArgumentSchema>;
-
 type ReasoningStep = z.infer<typeof reasoningStepSchema>;
 
 const outputSchema = outputs({
@@ -383,18 +377,18 @@ const outputSchema = outputs({
 
 type AgentStreamPart =
   | {
-      type: 'message-start';
-      messageId: string;
-      role: 'assistant' | 'user';
-      metadata?: Record<string, unknown>;
-    }
+    type: 'message-start';
+    messageId: string;
+    role: 'assistant' | 'user';
+    metadata?: Record<string, unknown>;
+  }
   | { type: 'text-delta'; textDelta: string }
   | {
-      type: 'tool-input-available';
-      toolCallId: string;
-      toolName: string;
-      input: Record<string, unknown>;
-    }
+    type: 'tool-input-available';
+    toolCallId: string;
+    toolName: string;
+    input: Record<string, unknown>;
+  }
   | { type: 'tool-output-available'; toolCallId: string; toolName: string; output: unknown }
   | { type: 'finish'; finishReason: string; responseText: string }
   | { type: `data-${string}`; data: unknown };
@@ -406,7 +400,7 @@ class AgentStreamRecorder {
   constructor(
     private readonly context: ExecutionContext,
     private readonly agentRunId: string,
-  ) {}
+  ) { }
 
   emitMessageStart(role: 'assistant' | 'user' = 'assistant'): void {
     this.emitPart({
@@ -670,97 +664,126 @@ async function getGatewaySessionToken(
   organizationId: string | null,
   connectedToolNodeIds?: string[],
 ): Promise<string> {
+  console.log(`[AIAgent::getGatewaySessionToken] START - runId=${runId}, orgId=${organizationId}, nodeIds=${JSON.stringify(connectedToolNodeIds)}`);
+
   const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
+  console.log(`[AIAgent::getGatewaySessionToken] INTERNAL_SERVICE_TOKEN present: ${!!internalToken}`);
+
   if (!internalToken) {
+    console.error(`[AIAgent::getGatewaySessionToken] ERROR - Missing INTERNAL_SERVICE_TOKEN`);
     throw new ConfigurationError(
       'INTERNAL_SERVICE_TOKEN env var must be set for agent tool discovery',
       { configKey: 'INTERNAL_SERVICE_TOKEN' },
     );
   }
 
-  const response = await fetch(`${DEFAULT_API_BASE_URL}/internal/mcp/generate-token`, {
+  const url = `${DEFAULT_API_BASE_URL}/internal/mcp/generate-token`;
+  const body = { runId, organizationId, allowedNodeIds: connectedToolNodeIds };
+  console.log(`[AIAgent::getGatewaySessionToken] Calling ${url} with body:`, JSON.stringify(body));
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Internal-Token': internalToken,
     },
-    body: JSON.stringify({
-      runId,
-      organizationId,
-      allowedNodeIds: connectedToolNodeIds,
-    }),
+    body: JSON.stringify(body),
   });
 
+  console.log(`[AIAgent::getGatewaySessionToken] Response status: ${response.status}`);
+
   if (!response.ok) {
-    throw new Error(`Failed to generate gateway session token: ${await response.text()}`);
+    const errorText = await response.text();
+    console.error(`[AIAgent::getGatewaySessionToken] ERROR - ${errorText}`);
+    throw new Error(`Failed to generate gateway session token: ${errorText}`);
   }
 
-  const { token } = (await response.json()) as { token: string };
-  return token;
+  const result = (await response.json()) as { token: string };
+  console.log(`[AIAgent::getGatewaySessionToken] SUCCESS - Token received (length=${result.token?.length || 0})`);
+  return result.token;
 }
 
 interface RegisterGatewayToolsParams {
   gatewayUrl: string;
   sessionToken: string;
-  toolFactory: ToolFn;
-  agentStream: AgentStreamRecorder;
 }
 
 async function registerGatewayTools({
   gatewayUrl,
   sessionToken,
-  toolFactory,
-  agentStream,
-}: RegisterGatewayToolsParams): Promise<RegisteredMcpTool[]> {
-  const transport = new StreamableHTTPClientTransport(new URL(gatewayUrl), {
-    requestInit: {
-      headers: { Authorization: `Bearer ${sessionToken}` },
-    },
-  });
-  const client = new Client({ name: 'shipsec-agent', version: '1.0.0' }, { capabilities: {} });
-  await client.connect(transport);
+}: RegisterGatewayToolsParams): Promise<{ tools: RegisteredMcpTool[]; close: () => Promise<void> }> {
+  console.log(`[AIAgent::registerGatewayTools] START - gatewayUrl=${gatewayUrl}`);
+  console.log(`[AIAgent::registerGatewayTools] Session token length: ${sessionToken?.length || 0}`);
 
-  const { tools } = await client.listTools();
-  const registered: RegisteredMcpTool[] = [];
-
-  for (const tool of tools) {
-    const toolName = tool.name;
-
-    const registeredTool = toolFactory<Record<string, unknown>, unknown>({
-      type: 'dynamic',
-      description: tool.description ?? `Invoke ${tool.name}`,
-      inputSchema: tool.inputSchema as any,
-      execute: async (args: Record<string, unknown>) => {
-        const invocationId = `${tool.name}-${randomUUID()}`;
-        agentStream.emitToolInput(invocationId, toolName, args);
-        try {
-          const result = await client.callTool({ name: tool.name, arguments: args });
-          agentStream.emitToolOutput(invocationId, toolName, result.content);
-          return result.content;
-        } catch (error) {
-          agentStream.emitToolError(
-            invocationId,
-            toolName,
-            error instanceof Error ? error.message : String(error),
-          );
-          throw error;
-        }
+  try {
+    console.log(`[AIAgent::registerGatewayTools] Creating MCP client with StreamableHTTPClientTransport...`);
+    const transport = new StreamableHTTPClientTransport(new URL(gatewayUrl), {
+      requestInit: {
+        headers: { Authorization: `Bearer ${sessionToken}` },
       },
     });
+    const client = new Client({ name: 'shipsec-agent', version: '1.0.0' }, { capabilities: {} });
+    await client.connect(transport);
+    console.log(`[AIAgent::registerGatewayTools] MCP client connected successfully`);
 
-    registered.push({
-      name: toolName,
-      tool: registeredTool,
-      metadata: {
-        toolId: tool.name,
-        title: tool.name,
-        description: tool.description,
-        endpoint: gatewayUrl,
+    console.log(`[AIAgent::registerGatewayTools] Fetching tools from gateway...`);
+    const { tools } = await client.listTools();
+    console.log(`[AIAgent::registerGatewayTools] Discovered ${tools.length} tool(s): ${tools.map(t => t.name).join(', ')}`);
+
+    const registered: RegisteredMcpTool[] = [];
+
+    for (const tool of tools) {
+      const toolName = tool.name;
+      console.log(`[AIAgent::registerGatewayTools] Registering tool: ${toolName}`);
+
+      const registeredTool = toolImpl<Record<string, unknown>, unknown>({
+        type: 'dynamic',
+        description: tool.description ?? `Invoke ${tool.name}`,
+        inputSchema: buildMcpToolSchema(tool.inputSchema),
+        execute: async (args: Record<string, unknown>) => {
+          const invocationId = `${tool.name}-${randomUUID()}`;
+          try {
+            const result = await client.callTool({ name: tool.name, arguments: args });
+            // MCP returns content as an array, extract text content
+            if (Array.isArray(result.content)) {
+              return result.content
+                .map(c => {
+                  if (typeof c === 'string') return c;
+                  if (c && typeof c === 'object' && 'text' in c) return (c as any).text;
+                  return JSON.stringify(c);
+                })
+                .join('\n');
+            }
+            return result.content;
+          } catch (error) {
+            throw error;
+          }
+        },
+      });
+
+      registered.push({
+        name: toolName,
+        tool: registeredTool,
+        metadata: {
+          toolId: tool.name,
+          title: tool.name,
+          description: tool.description,
+          endpoint: gatewayUrl,
+        },
+      });
+    }
+
+    console.log(`[AIAgent::registerGatewayTools] SUCCESS - Registered ${registered.length} tools`);
+    return { 
+      tools: registered, 
+      close: async () => {
+        await client.close();
       },
-    });
+    };
+  } catch (error) {
+    console.error(`[AIAgent::registerGatewayTools] ERROR:`, error);
+    throw error;
   }
-
-  return registered;
 }
 
 function registerMcpTools({
@@ -880,6 +903,73 @@ function sanitizeToolKey(value: string): string {
     .toLowerCase();
 }
 
+/**
+ * Convert MCP JSON Schema to Zod schema for tool validation
+ */
+function buildMcpToolSchema(jsonSchema?: Record<string, any>): ZodTypeAny {
+  // If no schema provided, accept any object
+  if (!jsonSchema || typeof jsonSchema !== 'object') {
+    return z.object({}).passthrough();
+  }
+
+  // If the schema is already a Zod schema or function, return it
+  if (typeof jsonSchema === 'function' || jsonSchema instanceof z.ZodType) {
+    return jsonSchema;
+  }
+
+  // Handle JSON Schema format from MCP
+  if (jsonSchema.type === 'object' || !jsonSchema.type) {
+    const properties = jsonSchema.properties as Record<string, any> || {};
+    const required = Array.isArray(jsonSchema.required) ? new Set(jsonSchema.required) : new Set<string>();
+
+    const shape = Object.entries(properties).reduce<Record<string, ZodTypeAny>>((acc, [key, prop]) => {
+      let field: ZodTypeAny = z.any();
+
+      if (prop && typeof prop === 'object') {
+        // Convert JSON Schema type to Zod
+        switch (prop.type) {
+          case 'string':
+            field = z.string();
+            break;
+          case 'number':
+          case 'integer':
+            field = z.number();
+            break;
+          case 'boolean':
+            field = z.boolean();
+            break;
+          case 'array':
+            field = z.array(z.any());
+            break;
+          case 'object':
+            field = z.object({}).passthrough();
+            break;
+          default:
+            field = z.any();
+        }
+
+        // Add description if available
+        if (prop.description) {
+          field = field.describe(prop.description);
+        }
+      }
+
+      // Make optional if not in required list
+      if (!required.has(key)) {
+        field = field.optional();
+      }
+
+      acc[key] = field;
+      return acc;
+    }, {});
+
+    return z.object(shape).passthrough();
+  }
+
+  // Fallback
+  return z.object({}).passthrough();
+}
+
 function buildToolArgumentSchema(args?: McpToolArgument[]) {
   if (!Array.isArray(args) || args.length === 0) {
     return z.object({}).passthrough();
@@ -943,26 +1033,22 @@ function mapStepToReasoning(step: any, index: number, sessionId: string): Reason
     finishReason: typeof step?.finishReason === 'string' ? step.finishReason : 'other',
     actions: Array.isArray(step?.toolCalls)
       ? step.toolCalls.map((toolCall: any) => ({
-          toolCallId: toolCall?.toolCallId ?? `${sessionId}-tool-${index + 1}`,
-          toolName: toolCall?.toolName ?? 'tool',
-          args: getArgs(toolCall),
-        }))
+        toolCallId: toolCall?.toolCallId ?? `${sessionId}-tool-${index + 1}`,
+        toolName: toolCall?.toolName ?? 'tool',
+        args: getArgs(toolCall),
+      }))
       : [],
     observations: Array.isArray(step?.toolResults)
       ? step.toolResults.map((toolResult: any) => ({
-          toolCallId: toolResult?.toolCallId ?? `${sessionId}-tool-${index + 1}`,
-          toolName: toolResult?.toolName ?? 'tool',
-          args: getArgs(toolResult),
-          result: getOutput(toolResult),
-        }))
+        toolCallId: toolResult?.toolCallId ?? `${sessionId}-tool-${index + 1}`,
+        toolName: toolResult?.toolName ?? 'tool',
+        args: getArgs(toolResult),
+        result: getOutput(toolResult),
+      }))
       : [],
   };
 }
 
-/**
- * Converts a JSON example object to a JSON Schema.
- * All properties are treated as required (matching n8n behavior).
- */
 function jsonExampleToJsonSchema(example: unknown): object {
   if (example === null) {
     return { type: 'null' };
@@ -999,10 +1085,6 @@ function jsonExampleToJsonSchema(example: unknown): object {
   return {};
 }
 
-/**
- * Resolves the structured output schema from user input.
- * Returns null if structured output is disabled or no valid schema provided.
- */
 function resolveStructuredOutputSchema(params: {
   structuredOutputEnabled?: boolean;
   schemaType?: 'json-example' | 'json-schema';
@@ -1039,10 +1121,6 @@ function resolveStructuredOutputSchema(params: {
   return null;
 }
 
-/**
- * Attempts to fix malformed JSON by extracting valid JSON from text.
- * Handles common issues like markdown code blocks, extra text before/after JSON.
- */
 function attemptJsonFix(text: string): unknown | null {
   try {
     return JSON.parse(text);
@@ -1145,367 +1223,417 @@ Loop the Conversation State output back into the next agent invocation to keep m
       autoFixFormat,
     } = params;
 
-    const debugLog = (...args: unknown[]) =>
-      context.logger.debug(`[AIAgent Debug] ${args.join(' ')}`);
+    console.log(`[AIAgent::execute] ========== AGENT EXECUTION START ==========`);
+    console.log(`[AIAgent::execute] runId=${context.runId}, componentRef=${context.componentRef}`);
+    console.log(`[AIAgent::execute] metadata:`, JSON.stringify(context.metadata, null, 2));
+    console.log(`[AIAgent::execute] inputs.userInput: "${inputs.userInput?.substring(0, 100)}..."`);
+    console.log(`[AIAgent::execute] inputs.chatModel:`, JSON.stringify(inputs.chatModel));
+    console.log(`[AIAgent::execute] inputs.mcpTools count: ${inputs.mcpTools?.length || 0}`);
+    console.log(`[AIAgent::execute] inputs.tools (graph): ${JSON.stringify(inputs.tools)}`);
+
+    const debugLog = (...args: unknown[]) => {
+      const msg = `[AIAgent Debug] ${args.join(' ')}`;
+      console.log(msg);
+      context.logger.debug(msg);
+    };
     const agentRunId = `${context.runId}:${context.componentRef}:${randomUUID()}`;
+    console.log(`[AIAgent::execute] Generated agentRunId: ${agentRunId}`);
+
     const agentStream = new AgentStreamRecorder(context as ExecutionContext, agentRunId);
 
+    const toolFn = dependencies?.tool ?? toolImpl;
+
     const connectedToolNodeIds = (context.metadata as any).connectedToolNodeIds as string[] | undefined;
+    console.log(`[AIAgent::execute] connectedToolNodeIds from metadata: ${JSON.stringify(connectedToolNodeIds)}`);
+    console.log(`[AIAgent::execute] Full metadata keys: ${Object.keys(context.metadata as any).join(', ')}`);
+
     let discoveredTools: RegisteredMcpTool[] = [];
+    let closeDiscovery: (() => Promise<void>) | undefined;
+
     if (connectedToolNodeIds && connectedToolNodeIds.length > 0) {
+      console.log(`[AIAgent::execute] Starting tool discovery for ${connectedToolNodeIds.length} connected node(s)...`);
       context.logger.info(`Discovering tools from gateway for nodes: ${connectedToolNodeIds.join(', ')}`);
       try {
+        console.log(`[AIAgent::execute] Calling getGatewaySessionToken...`);
         const sessionToken = await getGatewaySessionToken(
           context.runId,
           (context.metadata as any).organizationId ?? null,
           connectedToolNodeIds,
         );
-        discoveredTools = await registerGatewayTools({
+        console.log(`[AIAgent::execute] Got session token, now calling registerGatewayTools...`);
+        const discoveryResult = await registerGatewayTools({
           gatewayUrl: DEFAULT_GATEWAY_URL,
           sessionToken,
-          toolFactory: dependencies?.tool ?? toolImpl,
-          agentStream,
         });
+        discoveredTools = discoveryResult.tools;
+        closeDiscovery = discoveryResult.close;
+        console.log(`[AIAgent::execute] Tool discovery SUCCESS - found ${discoveredTools.length} tools`);
       } catch (error) {
+        console.error(`[AIAgent::execute] Tool discovery FAILED:`, error);
         context.logger.error(`Failed to discover tools from gateway: ${error}`);
       }
+    } else {
+      console.log(`[AIAgent::execute] No connectedToolNodeIds - skipping gateway tool discovery`);
     }
 
-    agentStream.emitMessageStart();
-    context.emitProgress({
-      level: 'info',
-      message: 'AI agent session started',
-      data: {
-        agentRunId,
-        agentStatus: 'started',
-      },
-    });
-
-    debugLog('Incoming params', {
-      userInput,
-      conversationState,
-      chatModel,
-      mcpTools,
-      systemPrompt,
-      temperature,
-      maxTokens,
-      memorySize,
-      stepLimit,
-    });
-
-    const trimmedInput = userInput.trim();
-    debugLog('Trimmed input', trimmedInput);
-
-    if (!trimmedInput) {
-      throw new ValidationError('AI Agent requires a non-empty user input.', {
-        fieldErrors: { userInput: ['Input cannot be empty'] },
-      });
-    }
-
-    const effectiveProvider = (chatModel?.provider ?? 'openai') as ModelProvider;
-    const effectiveModel = ensureModelName(effectiveProvider, chatModel?.modelId ?? null);
-
-    let overrideApiKey = chatModel?.apiKey ?? null;
-    if (modelApiKey && modelApiKey.trim().length > 0) {
-      overrideApiKey = modelApiKey.trim();
-    }
-
-    const effectiveApiKey = resolveApiKey(effectiveProvider, overrideApiKey);
-    debugLog('Resolved model configuration', {
-      effectiveProvider,
-      effectiveModel,
-      hasExplicitApiKey: Boolean(chatModel?.apiKey) || Boolean(modelApiKey),
-      apiKeyProvided: Boolean(effectiveApiKey),
-    });
-
-    const explicitBaseUrl = chatModel?.baseUrl?.trim();
-    const baseUrl =
-      explicitBaseUrl && explicitBaseUrl.length > 0
-        ? explicitBaseUrl
-        : effectiveProvider === 'gemini'
-          ? GEMINI_BASE_URL
-          : effectiveProvider === 'openrouter'
-            ? OPENROUTER_BASE_URL
-            : OPENAI_BASE_URL;
-
-    debugLog('Resolved base URL', { explicitBaseUrl, baseUrl });
-
-    const sanitizedHeaders =
-      chatModel && (chatModel.provider === 'openai' || chatModel.provider === 'openrouter')
-        ? sanitizeHeaders(chatModel.headers)
-        : undefined;
-    debugLog('Sanitized headers', sanitizedHeaders);
-
-    const incomingState = conversationState;
-    debugLog('Incoming conversation state', incomingState);
-
-    const sessionId = incomingState?.sessionId ?? randomUUID();
-    const existingMessages = Array.isArray(incomingState?.messages) ? incomingState.messages : [];
-    const existingToolHistory = Array.isArray(incomingState?.toolInvocations)
-      ? incomingState.toolInvocations
-      : [];
-    debugLog('Session details', {
-      sessionId,
-      existingMessagesCount: existingMessages.length,
-      existingToolHistoryCount: existingToolHistory.length,
-    });
-
-    let history: AgentMessage[] = ensureSystemMessage([...existingMessages], systemPrompt ?? '');
-    history = trimConversation(history, memorySize);
-    debugLog('History after ensuring system message and trimming', history);
-
-    const userMessage: AgentMessage = { role: 'user', content: trimmedInput };
-    const historyWithUser = trimConversation([...history, userMessage], memorySize);
-    debugLog('History with user message', historyWithUser);
-
-    const toolFn = dependencies?.tool ?? toolImpl;
-    const toolMetadataByName = new Map<string, RegisteredToolMetadata>();
-    const registeredTools: Record<string, Tool<any, any>> = {};
-
-    for (const entry of discoveredTools) {
-      registeredTools[entry.name] = entry.tool;
-      toolMetadataByName.set(entry.name, entry.metadata);
-    }
-
-    const manualMcpTools = registerMcpTools({
-      tools: mcpTools,
-      sessionId,
-      toolFactory: toolFn,
-      agentStream,
-      fetcher: context.http.fetch,
-      logger: context.logger,
-    });
-    for (const entry of manualMcpTools) {
-      let finalName = entry.name;
-      if (registeredTools[finalName]) {
-        finalName = `${finalName}_manual`;
-      }
-      registeredTools[finalName] = entry.tool;
-      toolMetadataByName.set(finalName, entry.metadata);
-    }
-
-    const availableToolsCount = Object.keys(registeredTools).length;
-    const toolsConfig = availableToolsCount > 0 ? registeredTools : undefined;
-    debugLog('Tools configuration', {
-      availableToolsCount,
-      toolsConfigKeys: toolsConfig ? Object.keys(toolsConfig) : [],
-    });
-
-    const systemMessageEntry = historyWithUser.find((message) => message.role === 'system');
-    const resolvedSystemPrompt = systemPrompt?.trim()?.length
-      ? systemPrompt.trim()
-      : systemMessageEntry && typeof systemMessageEntry.content === 'string'
-        ? systemMessageEntry.content
-        : systemMessageEntry && systemMessageEntry.content !== undefined
-          ? JSON.stringify(systemMessageEntry.content)
-          : '';
-    debugLog('Resolved system prompt', resolvedSystemPrompt);
-
-    const messagesForModel = historyWithUser
-      .filter((message) => message.role !== 'system')
-      .map((message) => ({
-        role: message.role,
-        content:
-          typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
-      }));
-    debugLog('Messages for model', messagesForModel);
-
-    const createGoogleGenerativeAI =
-      dependencies?.createGoogleGenerativeAI ?? createGoogleGenerativeAIImpl;
-    const createOpenAI = dependencies?.createOpenAI ?? createOpenAIImpl;
-    const openAIOptions = {
-      apiKey: effectiveApiKey,
-      ...(baseUrl ? { baseURL: baseUrl } : {}),
-      ...(sanitizedHeaders && Object.keys(sanitizedHeaders).length > 0
-        ? { headers: sanitizedHeaders }
-        : {}),
-    };
-    const model =
-      effectiveProvider === 'gemini'
-        ? createGoogleGenerativeAI({
-            apiKey: effectiveApiKey,
-            ...(baseUrl ? { baseURL: baseUrl } : {}),
-          })(effectiveModel)
-        : createOpenAI(openAIOptions)(effectiveModel);
-    debugLog('Model factory created', {
-      provider: effectiveProvider,
-      modelId: effectiveModel,
-      baseUrl,
-      headers: sanitizedHeaders,
-      temperature,
-      maxTokens,
-      stepLimit,
-    });
-
-    // Resolve structured output schema if enabled
-    const structuredSchema = resolveStructuredOutputSchema({
-      structuredOutputEnabled,
-      schemaType,
-      jsonExample,
-      jsonSchema,
-    });
-
-    let responseText: string;
-    let structuredOutput: unknown = null;
-    let generationResult: any;
-
-    if (structuredSchema) {
-      // Use generateObject for structured output mode
-      context.logger.info('[AIAgent] Using structured output mode with JSON Schema.');
+    try {
+      agentStream.emitMessageStart();
       context.emitProgress({
         level: 'info',
-        message: 'AI agent generating structured output...',
+        message: 'AI agent session started',
         data: {
           agentRunId,
-          agentStatus: 'running',
+          agentStatus: 'started',
         },
       });
 
-      const generateObject = dependencies?.generateObject ?? generateObjectImpl;
-      const generateText = dependencies?.generateText ?? generateTextImpl;
+      debugLog('Incoming params', {
+        userInput,
+        conversationState,
+        chatModel,
+        mcpTools,
+        systemPrompt,
+        temperature,
+        maxTokens,
+        memorySize,
+        stepLimit,
+      });
 
-      try {
-        const objectResult = await generateObject({
-          model,
-          schema: createJsonSchema(structuredSchema),
-          system: resolvedSystemPrompt || undefined,
-          messages: messagesForModel as any,
-          temperature,
-          maxOutputTokens: maxTokens,
+      const trimmedInput = userInput.trim();
+      debugLog('Trimmed input', trimmedInput);
+
+      if (!trimmedInput) {
+        throw new ValidationError('AI Agent requires a non-empty user input.', {
+          fieldErrors: { userInput: ['Input cannot be empty'] },
+        });
+      }
+
+      const effectiveProvider = (chatModel?.provider ?? 'openai') as ModelProvider;
+      const effectiveModel = ensureModelName(effectiveProvider, chatModel?.modelId ?? null);
+
+      let overrideApiKey = chatModel?.apiKey ?? null;
+      if (modelApiKey && modelApiKey.trim().length > 0) {
+        overrideApiKey = modelApiKey.trim();
+      }
+
+      const effectiveApiKey = resolveApiKey(effectiveProvider, overrideApiKey);
+      debugLog('Resolved model configuration', {
+        effectiveProvider,
+        effectiveModel,
+        hasExplicitApiKey: Boolean(chatModel?.apiKey) || Boolean(modelApiKey),
+        apiKeyProvided: Boolean(effectiveApiKey),
+      });
+
+      const explicitBaseUrl = chatModel?.baseUrl?.trim();
+      const baseUrl =
+        explicitBaseUrl && explicitBaseUrl.length > 0
+          ? explicitBaseUrl
+          : effectiveProvider === 'gemini'
+            ? GEMINI_BASE_URL
+            : effectiveProvider === 'openrouter'
+              ? OPENROUTER_BASE_URL
+              : OPENAI_BASE_URL;
+
+      debugLog('Resolved base URL', { explicitBaseUrl, baseUrl });
+
+      const sanitizedHeaders =
+        chatModel && (chatModel.provider === 'openai' || chatModel.provider === 'openrouter')
+          ? sanitizeHeaders(chatModel.headers)
+          : undefined;
+      debugLog('Sanitized headers', sanitizedHeaders);
+
+      const incomingState = conversationState;
+      debugLog('Incoming conversation state', incomingState);
+
+      const sessionId = incomingState?.sessionId ?? randomUUID();
+      const existingMessages = Array.isArray(incomingState?.messages) ? incomingState.messages : [];
+      const existingToolHistory = Array.isArray(incomingState?.toolInvocations)
+        ? incomingState.toolInvocations
+        : [];
+      debugLog('Session details', {
+        sessionId,
+        existingMessagesCount: existingMessages.length,
+        existingToolHistoryCount: existingToolHistory.length,
+      });
+
+      let history: AgentMessage[] = ensureSystemMessage([...existingMessages], systemPrompt ?? '');
+      history = trimConversation(history, memorySize);
+      debugLog('History after ensuring system message and trimming', history);
+
+      const userMessage: AgentMessage = { role: 'user', content: trimmedInput };
+      const historyWithUser = trimConversation([...history, userMessage], memorySize);
+      debugLog('History with user message', historyWithUser);
+
+      const toolMetadataByName = new Map<string, RegisteredToolMetadata>();
+      const registeredTools: Record<string, Tool<any, any>> = {};
+
+      for (const entry of discoveredTools) {
+        registeredTools[entry.name] = entry.tool;
+        toolMetadataByName.set(entry.name, entry.metadata);
+      }
+
+      const manualMcpTools = registerMcpTools({
+        tools: mcpTools,
+        sessionId,
+        toolFactory: toolFn,
+        agentStream,
+        fetcher: context.http.fetch,
+        logger: context.logger,
+      });
+      for (const entry of manualMcpTools) {
+        let finalName = entry.name;
+        if (registeredTools[finalName]) {
+          finalName = `${finalName}_manual`;
+        }
+        registeredTools[finalName] = entry.tool;
+        toolMetadataByName.set(finalName, entry.metadata);
+      }
+
+      const availableToolsCount = Object.keys(registeredTools).length;
+      const toolsConfig = availableToolsCount > 0 ? registeredTools : undefined;
+      debugLog('Tools configuration', {
+        availableToolsCount,
+        toolsConfigKeys: toolsConfig ? Object.keys(toolsConfig) : [],
+      });
+
+      const systemMessageEntry = historyWithUser.find((message) => message.role === 'system');
+      const resolvedSystemPrompt = systemPrompt?.trim()?.length
+        ? systemPrompt.trim()
+        : systemMessageEntry && typeof systemMessageEntry.content === 'string'
+          ? systemMessageEntry.content
+          : systemMessageEntry && systemMessageEntry.content !== undefined
+            ? JSON.stringify(systemMessageEntry.content)
+            : '';
+      debugLog('Resolved system prompt', resolvedSystemPrompt);
+
+      const messagesForModel = historyWithUser
+        .filter((message) => message.role !== 'system')
+        .map((message) => {
+          if (message.role === 'tool') {
+            const content = message.content as any;
+            return {
+              role: 'tool' as const,
+              content: [
+                {
+                  type: 'tool-result' as const,
+                  toolCallId: content.toolCallId || 'unknown',
+                  toolName: content.toolName || 'unknown',
+                  result: content.result,
+                },
+              ],
+            };
+          }
+          return {
+            role: message.role as 'user' | 'assistant',
+            content:
+              typeof message.content === 'string'
+                ? message.content
+                : JSON.stringify(message.content),
+          };
+        });
+      debugLog('Messages for model', messagesForModel);
+
+      const createGoogleGenerativeAI =
+        dependencies?.createGoogleGenerativeAI ?? createGoogleGenerativeAIImpl;
+      const createOpenAI = dependencies?.createOpenAI ?? createOpenAIImpl;
+      const openAIOptions = {
+        apiKey: effectiveApiKey,
+        ...(baseUrl ? { baseURL: baseUrl } : {}),
+        ...(sanitizedHeaders && Object.keys(sanitizedHeaders).length > 0
+          ? { headers: sanitizedHeaders }
+          : {}),
+      };
+      const model =
+        effectiveProvider === 'gemini'
+          ? createGoogleGenerativeAI({
+            apiKey: effectiveApiKey,
+            ...(baseUrl ? { baseURL: baseUrl } : {}),
+          })(effectiveModel)
+          : createOpenAI(openAIOptions)(effectiveModel);
+      debugLog('Model factory created', {
+        provider: effectiveProvider,
+        modelId: effectiveModel,
+        baseUrl,
+        headers: sanitizedHeaders,
+        temperature,
+        maxTokens,
+        stepLimit,
+      });
+
+      const structuredSchema = resolveStructuredOutputSchema({
+        structuredOutputEnabled,
+        schemaType,
+        jsonExample,
+        jsonSchema,
+      });
+
+      let responseText: string;
+      let structuredOutput: unknown = null;
+      let generationResult: any;
+
+      if (structuredSchema) {
+        context.logger.info('[AIAgent] Using structured output mode with JSON Schema.');
+        context.emitProgress({
+          level: 'info',
+          message: 'AI agent generating structured output...',
+          data: {
+            agentRunId,
+            agentStatus: 'running',
+          },
         });
 
-        structuredOutput = objectResult.object;
-        responseText = JSON.stringify(structuredOutput, null, 2);
-        generationResult = {
-          text: responseText,
-          steps: [],
-          toolResults: [],
-          finishReason: 'stop',
-          usage: objectResult.usage,
-        };
-        debugLog('Structured output generated successfully', structuredOutput);
-      } catch (error) {
-        // If generateObject fails and auto-fix is enabled, try text generation + fix
-        if (autoFixFormat) {
-          context.logger.warn(
-            '[AIAgent] Structured output failed, attempting auto-fix via text generation.',
-          );
+        const generateObject = dependencies?.generateObject ?? generateObjectImpl;
+        const generateText = dependencies?.generateText ?? generateTextImpl;
 
-          const textResult = await generateText({
+        try {
+          const objectResult = await generateObject({
             model,
+            schema: createJsonSchema(structuredSchema),
             system: resolvedSystemPrompt || undefined,
-            messages: [
-              ...messagesForModel,
-              {
-                role: 'user' as const,
-                content: `Respond with valid JSON matching this schema: ${JSON.stringify(structuredSchema)}`,
-              },
-            ] as any,
+            messages: messagesForModel as any,
             temperature,
             maxOutputTokens: maxTokens,
           });
 
-          const fixedOutput = attemptJsonFix(textResult.text);
-          if (fixedOutput !== null) {
-            structuredOutput = fixedOutput;
-            responseText = JSON.stringify(fixedOutput, null, 2);
-            generationResult = {
-              text: responseText,
-              steps: [],
-              toolResults: [],
-              finishReason: 'stop',
-              usage: textResult.usage,
-            };
-            debugLog('Auto-fix succeeded', fixedOutput);
-          } else {
-            throw new ValidationError(
-              `Structured output failed and auto-fix could not parse response`,
-              {
-                cause: error instanceof Error ? error : undefined,
-                details: {
-                  field: 'structuredOutput',
-                  originalError: error instanceof Error ? error.message : String(error),
-                  responseSnippet: textResult.text.slice(0, 500),
-                  fullResponseLength: textResult.text.length,
-                },
-              },
+          structuredOutput = objectResult.object;
+          responseText = JSON.stringify(structuredOutput, null, 2);
+          generationResult = {
+            text: responseText,
+            steps: [],
+            toolResults: [],
+            finishReason: 'stop',
+            usage: objectResult.usage,
+          };
+          debugLog('Structured output generated successfully', structuredOutput);
+        } catch (error) {
+          if (autoFixFormat) {
+            context.logger.warn(
+              '[AIAgent] Structured output failed, attempting auto-fix via text generation.',
             );
+
+            const textResult = await generateText({
+              model,
+              system: resolvedSystemPrompt || undefined,
+              messages: [
+                ...messagesForModel,
+                {
+                  role: 'user' as const,
+                  content: `Respond with valid JSON matching this schema: ${JSON.stringify(structuredSchema)}`,
+                },
+              ] as any,
+              temperature,
+              maxOutputTokens: maxTokens,
+            });
+
+            const fixedOutput = attemptJsonFix(textResult.text);
+            if (fixedOutput !== null) {
+              structuredOutput = fixedOutput;
+              responseText = JSON.stringify(fixedOutput, null, 2);
+              generationResult = {
+                text: responseText,
+                steps: [],
+                toolResults: [],
+                finishReason: 'stop',
+                usage: textResult.usage,
+              };
+              debugLog('Auto-fix succeeded', fixedOutput);
+            } else {
+              throw new ValidationError(
+                `Structured output failed and auto-fix could not parse response`,
+                {
+                  cause: error instanceof Error ? error : undefined,
+                  details: {
+                    field: 'structuredOutput',
+                    originalError: error instanceof Error ? error.message : String(error),
+                    responseSnippet: textResult.text.slice(0, 500),
+                    fullResponseLength: textResult.text.length,
+                  },
+                },
+              );
+            }
+          } else {
+            throw error;
           }
-        } else {
-          throw error;
         }
+      } else {
+        const ToolLoopAgent = dependencies?.ToolLoopAgent ?? ToolLoopAgentImpl;
+        const stepCountIs = dependencies?.stepCountIs ?? stepCountIsImpl;
+        let streamedStepCount = 0;
+        const agent = new ToolLoopAgent({
+          id: `${sessionId}-agent`,
+          model,
+          instructions: resolvedSystemPrompt || undefined,
+          ...(toolsConfig ? { tools: toolsConfig } : {}),
+          temperature,
+          maxOutputTokens: maxTokens,
+          stopWhen: stepCountIs(stepLimit),
+          onStepFinish: (stepResult: any) => {
+            const mappedStep = mapStepToReasoning(stepResult, streamedStepCount, sessionId);
+            streamedStepCount += 1;
+            agentStream.emitReasoningStep(mappedStep);
+
+            if (Array.isArray(stepResult.toolCalls)) {
+              for (const call of stepResult.toolCalls) {
+                agentStream.emitToolInput(call.toolCallId, call.toolName, call.args);
+              }
+            }
+            if (Array.isArray(stepResult.toolResults)) {
+              for (const result of stepResult.toolResults) {
+                agentStream.emitToolOutput(result.toolCallId, result.toolName, result.result);
+              }
+            }
+          },
+        });
+
+        console.log(`[AIAgent::execute] Using ${effectiveProvider} model "${effectiveModel}" with ${availableToolsCount} tool(s)`);
+        console.log(`[AIAgent::execute] Tool names: ${Object.keys(registeredTools).join(', ') || 'none'}`);
+        context.logger.info(
+          `[AIAgent] Using ${effectiveProvider} model "${effectiveModel}" with ${availableToolsCount} connected tool(s).`,
+        );
+        context.emitProgress({
+          level: 'info',
+          message: 'AI agent reasoning in progress...',
+          data: {
+            agentRunId,
+            agentStatus: 'running',
+          },
+        });
+
+        console.log(`[AIAgent::execute] Calling agent.generate() with ${messagesForModel.length} messages...`);
+        try {
+          generationResult = await agent.generate({
+            messages: messagesForModel as any,
+          });
+          console.log(`[AIAgent::execute] agent.generate() returned successfully`);
+          console.log(`[AIAgent::execute] Result finishReason: ${generationResult?.finishReason}`);
+          console.log(`[AIAgent::execute] Result text length: ${generationResult?.text?.length || 0}`);
+          console.log(`[AIAgent::execute] Result steps count: ${generationResult?.steps?.length || 0}`);
+        } catch (genError) {
+          console.error(`[AIAgent::execute] agent.generate() FAILED:`, genError);
+          throw genError;
+        }
+
+        responseText =
+          typeof generationResult.text === 'string'
+            ? generationResult.text
+            : String(generationResult.text ?? '');
+        console.log(`[AIAgent::execute] Final responseText: "${responseText.substring(0, 200)}..."`);
       }
-    } else {
-      // Use ToolLoopAgent for standard text generation with tools
-      const ToolLoopAgent = dependencies?.ToolLoopAgent ?? ToolLoopAgentImpl;
-      const stepCountIs = dependencies?.stepCountIs ?? stepCountIsImpl;
-      let streamedStepCount = 0;
-      const agent = new ToolLoopAgent({
-        id: `${sessionId}-agent`,
-        model,
-        instructions: resolvedSystemPrompt || undefined,
-        ...(toolsConfig ? { tools: toolsConfig } : {}),
-        temperature,
-        maxOutputTokens: maxTokens,
-        stopWhen: stepCountIs(stepLimit),
-        onStepFinish: (stepResult: unknown) => {
-          const mappedStep = mapStepToReasoning(stepResult, streamedStepCount, sessionId);
-          streamedStepCount += 1;
-          agentStream.emitReasoningStep(mappedStep);
-        },
-      });
-      debugLog('ToolLoopAgent instantiated', {
-        id: `${sessionId}-agent`,
-        temperature,
-        maxTokens,
-        stepLimit,
-        toolKeys: toolsConfig ? Object.keys(toolsConfig) : [],
-      });
 
-      context.logger.info(
-        `[AIAgent] Using ${effectiveProvider} model "${effectiveModel}" with ${availableToolsCount} connected tool(s).`,
-      );
-      context.emitProgress({
-        level: 'info',
-        message: 'AI agent reasoning in progress...',
-        data: {
-          agentRunId,
-          agentStatus: 'running',
-        },
-      });
-      debugLog('Invoking ToolLoopAgent.generate with payload', {
-        messages: messagesForModel,
-      });
+      const currentTimestamp = new Date().toISOString();
+      const getToolArgs = (entity: any) =>
+        entity?.args !== undefined ? entity.args : (entity?.input ?? null);
+      const getToolOutput = (entity: any) =>
+        entity?.result !== undefined ? entity.result : (entity?.output ?? null);
 
-      generationResult = await agent.generate({
-        messages: messagesForModel as any,
-      });
-      debugLog('Generation result', generationResult);
-
-      responseText =
-        typeof generationResult.text === 'string'
-          ? generationResult.text
-          : String(generationResult.text ?? '');
-    }
-    debugLog('Response text', responseText);
-
-    const currentTimestamp = new Date().toISOString();
-    debugLog('Current timestamp', currentTimestamp);
-
-    const getToolArgs = (entity: any) =>
-      entity?.args !== undefined ? entity.args : (entity?.input ?? null);
-    const getToolOutput = (entity: any) =>
-      entity?.result !== undefined ? entity.result : (entity?.output ?? null);
-
-    const reasoningTrace: ReasoningStep[] = Array.isArray(generationResult.steps)
-      ? generationResult.steps.map((step: any, index: number) =>
+      const reasoningTrace: ReasoningStep[] = Array.isArray(generationResult.steps)
+        ? generationResult.steps.map((step: any, index: number) =>
           mapStepToReasoning(step, index, sessionId),
         )
-      : [];
-    debugLog('Reasoning trace', reasoningTrace);
+        : [];
 
-    const toolLogEntries: ToolInvocationEntry[] = Array.isArray(generationResult.toolResults)
-      ? generationResult.toolResults.map((toolResult: any, index: number) => {
+      const toolLogEntries: ToolInvocationEntry[] = Array.isArray(generationResult.toolResults)
+        ? generationResult.toolResults.map((toolResult: any, index: number) => {
           const toolName = toolResult?.toolName ?? 'tool';
           return {
             id: `${sessionId}-${toolResult?.toolCallId ?? index + 1}`,
@@ -1516,11 +1644,10 @@ Loop the Conversation State output back into the next agent invocation to keep m
             metadata: toolMetadataByName.get(toolName),
           };
         })
-      : [];
-    debugLog('Tool log entries', toolLogEntries);
+        : [];
 
-    const toolMessages: AgentMessage[] = Array.isArray(generationResult.toolResults)
-      ? generationResult.toolResults.map((toolResult: any) => ({
+      const toolMessages: AgentMessage[] = Array.isArray(generationResult.toolResults)
+        ? generationResult.toolResults.map((toolResult: any) => ({
           role: 'tool',
           content: {
             toolCallId: toolResult?.toolCallId ?? '',
@@ -1529,57 +1656,50 @@ Loop the Conversation State output back into the next agent invocation to keep m
             result: getToolOutput(toolResult),
           },
         }))
-      : [];
-    debugLog('Tool messages appended to history', toolMessages);
+        : [];
 
-    const assistantMessage: AgentMessage = {
-      role: 'assistant',
-      content: responseText,
-    };
-    debugLog('Assistant message', assistantMessage);
+      const assistantMessage: AgentMessage = {
+        role: 'assistant',
+        content: responseText,
+      };
 
-    let updatedMessages = trimConversation([...historyWithUser, ...toolMessages], memorySize);
-    updatedMessages = trimConversation([...updatedMessages, assistantMessage], memorySize);
-    debugLog('Updated messages after trimming', updatedMessages);
+      let updatedMessages = trimConversation([...historyWithUser, ...toolMessages], memorySize);
+      updatedMessages = trimConversation([...updatedMessages, assistantMessage], memorySize);
 
-    const combinedToolHistory = [...existingToolHistory, ...toolLogEntries];
-    debugLog('Combined tool history', combinedToolHistory);
+      const combinedToolHistory = [...existingToolHistory, ...toolLogEntries];
 
-    const nextState: ConversationState = {
-      sessionId,
-      messages: updatedMessages,
-      toolInvocations: combinedToolHistory,
-    };
-    debugLog('Next conversation state', nextState);
+      const nextState: ConversationState = {
+        sessionId,
+        messages: updatedMessages,
+        toolInvocations: combinedToolHistory,
+      };
 
-    agentStream.emitTextDelta(responseText);
-    agentStream.emitFinish(generationResult.finishReason ?? 'stop', responseText);
-    context.emitProgress({
-      level: 'info',
-      message: 'AI agent completed.',
-      data: {
+      agentStream.emitTextDelta(responseText);
+      agentStream.emitFinish(generationResult.finishReason ?? 'stop', responseText);
+      context.emitProgress({
+        level: 'info',
+        message: 'AI agent completed.',
+        data: {
+          agentRunId,
+          agentStatus: 'completed',
+        },
+      });
+
+      return {
+        responseText,
+        structuredOutput,
+        conversationState: nextState,
+        toolInvocations: toolLogEntries,
+        reasoningTrace,
+        usage: generationResult.usage,
+        rawResponse: generationResult,
         agentRunId,
-        agentStatus: 'completed',
-      },
-    });
-    debugLog('Final output payload', {
-      responseText,
-      conversationState: nextState,
-      toolInvocations: toolLogEntries,
-      reasoningTrace,
-      usage: generationResult.usage,
-    });
-
-    return {
-      responseText,
-      structuredOutput,
-      conversationState: nextState,
-      toolInvocations: toolLogEntries,
-      reasoningTrace,
-      usage: generationResult.usage,
-      rawResponse: generationResult,
-      agentRunId,
-    };
+      };
+    } finally {
+      if (closeDiscovery) {
+        await closeDiscovery();
+      }
+    }
   },
 });
 

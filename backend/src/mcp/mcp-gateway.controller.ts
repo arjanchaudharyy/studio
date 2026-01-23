@@ -35,11 +35,16 @@ export class McpGatewayController {
       return res.status(400).send('runId missing in session token');
     }
 
-    let transport = this.transports.get(runId);
+    // Cache key includes allowedNodeIds to support multiple agents with different tool scopes
+    const cacheKey = allowedNodeIds && allowedNodeIds.length > 0 
+      ? `${runId}:${allowedNodeIds.sort().join(',')}`
+      : runId;
+
+    let transport = this.transports.get(cacheKey);
 
     // Initialization if transport doesn't exist
     if (!transport) {
-      this.logger.log(`Initializing new MCP transport for run: ${runId}`);
+      this.logger.log(`Initializing new MCP transport for run: ${runId} with allowedNodeIds: ${allowedNodeIds?.join(',') ?? 'none'}`);
 
       const allowedToolsHeader = req.headers['x-allowed-tools'];
       const allowedTools =
@@ -48,9 +53,9 @@ export class McpGatewayController {
           : undefined;
 
       transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => runId,
+        sessionIdGenerator: () => cacheKey,
       });
-      this.transports.set(runId, transport);
+      this.transports.set(cacheKey, transport);
 
       try {
         const server = await this.mcpGateway.getServerForRun(
@@ -62,7 +67,7 @@ export class McpGatewayController {
         await server.connect(transport);
       } catch (error) {
         this.logger.error(`Failed to initialize MCP server for run ${runId}: ${error}`);
-        this.transports.delete(runId);
+        this.transports.delete(cacheKey);
         return res
           .status(error instanceof Error && error.name === 'NotFoundException' ? 404 : 403)
           .send(error instanceof Error ? error.message : 'Access denied');
@@ -72,10 +77,10 @@ export class McpGatewayController {
     if (req.method === 'GET') {
       // Cleanup on client disconnect (specifically for the SSE stream)
       res.on('close', async () => {
-        this.logger.log(`MCP SSE connection closed for run: ${runId}`);
+        this.logger.log(`MCP SSE connection closed for run: ${runId} with allowedNodeIds: ${allowedNodeIds?.join(',') ?? 'none'}`);
         // We don't necessarily want to delete the transport here if POSTs are still allowed,
         // but for ShipSec run-bounded sessions, closing SSE usually means the agent is done.
-        this.transports.delete(runId);
+        this.transports.delete(cacheKey);
         await this.mcpGateway.cleanupRun(runId);
       });
 

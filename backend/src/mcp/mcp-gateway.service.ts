@@ -32,6 +32,7 @@ export class McpGatewayService {
 
   /**
    * Get or create an MCP Server instance for a specific workflow run
+   * Key includes both runId and allowedNodeIds to support multiple agents with different tool scopes
    */
   async getServerForRun(
     runId: string,
@@ -42,7 +43,12 @@ export class McpGatewayService {
     // 1. Validate Access
     await this.validateRunAccess(runId, organizationId);
 
-    const existing = this.servers.get(runId);
+    // Cache key includes allowedNodeIds so different agents with different tool scopes get different servers
+    const cacheKey = allowedNodeIds && allowedNodeIds.length > 0 
+      ? `${runId}:${allowedNodeIds.sort().join(',')}`
+      : runId;
+
+    const existing = this.servers.get(cacheKey);
     if (existing) {
       return existing;
     }
@@ -53,7 +59,7 @@ export class McpGatewayService {
     });
 
     await this.registerTools(server, runId, allowedTools, allowedNodeIds);
-    this.servers.set(runId, server);
+    this.servers.set(cacheKey, server);
 
     return server;
   }
