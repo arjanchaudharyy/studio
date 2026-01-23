@@ -95,9 +95,9 @@ export function getRecentLogs(lines = 100): LogEntry[] {
     const content = fs.readFileSync(DEBUG_LOG_FILE, 'utf-8');
     return content
       .split('\n')
-      .filter(line => line.trim())
+      .filter((line) => line.trim())
       .slice(-lines)
-      .map(line => {
+      .map((line) => {
         try {
           return JSON.parse(line);
         } catch {
@@ -114,14 +114,14 @@ export function getRecentLogs(lines = 100): LogEntry[] {
  * Get logs filtered by context
  */
 export function getLogsByContext(context: string, lines = 100): LogEntry[] {
-  return getRecentLogs(lines * 2).filter(log => log.context.includes(context));
+  return getRecentLogs(lines * 2).filter((log) => log.context.includes(context));
 }
 
 /**
  * Get logs filtered by level
  */
 export function getLogsByLevel(level: string, lines = 100): LogEntry[] {
-  return getRecentLogs(lines * 2).filter(log => log.level === level);
+  return getRecentLogs(lines * 2).filter((log) => log.level === level);
 }
 
 /**

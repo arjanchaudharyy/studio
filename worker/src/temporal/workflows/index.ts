@@ -671,7 +671,7 @@ export async function shipsecWorkflowRun(
           console.log(`[Workflow] Node ${action.ref} registered as tool, setting results.`);
           const toolResult = { mode: 'tool', status: 'ready', tools: [] };
           results.set(action.ref, toolResult);
-          
+
           await recordTraceEventActivity({
             type: 'NODE_COMPLETED',
             runId: input.runId,

@@ -209,7 +209,7 @@ export class ToolRegistryService implements OnModuleDestroy {
     );
   }
 
-   async getToolsForRun(runId: string, nodeIds?: string[]): Promise<RegisteredTool[]> {
+  async getToolsForRun(runId: string, nodeIds?: string[]): Promise<RegisteredTool[]> {
     if (!this.redis) {
       return [];
     }
@@ -229,7 +229,6 @@ export class ToolRegistryService implements OnModuleDestroy {
 
     return tools;
   }
-
 
   /**
    * Get a specific tool by node ID

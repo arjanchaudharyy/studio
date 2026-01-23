@@ -379,8 +379,20 @@ describe('compileWorkflowGraph', () => {
       edges: [
         { id: 'e1', source: 'start', target: 'tool1' },
         { id: 'e2', source: 'start', target: 'tool2' },
-        { id: 't1', source: 'tool1', target: 'agent', sourceHandle: 'tools', targetHandle: 'tools' },
-        { id: 't2', source: 'tool2', target: 'agent', sourceHandle: 'tools', targetHandle: 'tools' },
+        {
+          id: 't1',
+          source: 'tool1',
+          target: 'agent',
+          sourceHandle: 'tools',
+          targetHandle: 'tools',
+        },
+        {
+          id: 't2',
+          source: 'tool2',
+          target: 'agent',
+          sourceHandle: 'tools',
+          targetHandle: 'tools',
+        },
       ],
       viewport: { x: 0, y: 0, zoom: 1 },
     };

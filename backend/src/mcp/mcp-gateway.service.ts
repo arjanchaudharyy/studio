@@ -44,9 +44,10 @@ export class McpGatewayService {
     await this.validateRunAccess(runId, organizationId);
 
     // Cache key includes allowedNodeIds so different agents with different tool scopes get different servers
-    const cacheKey = allowedNodeIds && allowedNodeIds.length > 0 
-      ? `${runId}:${allowedNodeIds.sort().join(',')}`
-      : runId;
+    const cacheKey =
+      allowedNodeIds && allowedNodeIds.length > 0
+        ? `${runId}:${allowedNodeIds.sort().join(',')}`
+        : runId;
 
     const existing = this.servers.get(cacheKey);
     if (existing) {

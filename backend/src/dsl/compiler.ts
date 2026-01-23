@@ -124,9 +124,7 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
           : undefined,
       toolConfig,
       connectedToolNodeIds:
-        connectedToolNodeIds && connectedToolNodeIds.length > 0
-          ? connectedToolNodeIds
-          : undefined,
+        connectedToolNodeIds && connectedToolNodeIds.length > 0 ? connectedToolNodeIds : undefined,
     };
   }
 

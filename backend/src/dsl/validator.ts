@@ -397,7 +397,7 @@ function validateEdgeCompatibility(
     if (!sourcePort) {
       const sourceNodeMetadata = compiledDefinition.nodes[sourceAction.ref];
       if (sourceHandle === 'tools' && sourceNodeMetadata?.mode === 'tool') {
-        
+        // Allow explicit tool connection bypass
       } else {
         errors.push({
           node: targetAction.ref,
