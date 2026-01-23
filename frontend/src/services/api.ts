@@ -808,6 +808,17 @@ export const api = {
       }
       return await response.blob();
     },
+
+    delete: async (id: string): Promise<void> => {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/v1/artifacts/${id}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete artifact');
+      }
+    },
   },
 
   humanInputs: {

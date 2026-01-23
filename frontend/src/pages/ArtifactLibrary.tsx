@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, RefreshCw, Search, Copy, ExternalLink } from 'lucide-react';
+import { Download, RefreshCw, Search, Copy, ExternalLink, Trash2 } from 'lucide-react';
 import { useArtifactStore } from '@/store/artifactStore';
 import { api } from '@/services/api';
 import { Button } from '@/components/ui/button';
@@ -28,8 +28,16 @@ const formatTimestamp = (value: string) => {
 
 export function ArtifactLibrary() {
   const [searchQuery, setSearchQuery] = useState('');
-  const { library, libraryLoading, libraryError, fetchLibrary, downloadArtifact, downloading } =
-    useArtifactStore();
+  const {
+    library,
+    libraryLoading,
+    libraryError,
+    fetchLibrary,
+    downloadArtifact,
+    downloading,
+    deleteArtifact,
+    deleting,
+  } = useArtifactStore();
   const [copiedRemoteUri, setCopiedRemoteUri] = useState<string | null>(null);
   const [workflows, setWorkflows] = useState<Record<string, string>>({});
 
@@ -154,6 +162,8 @@ export function ArtifactLibrary() {
                     artifact={artifact}
                     workflowName={workflows[artifact.workflowId] || 'Unknown Workflow'}
                     onDownload={() => downloadArtifact(artifact)}
+                    onDelete={() => deleteArtifact(artifact.id)}
+                    isDeleting={Boolean(deleting[artifact.id])}
                     onCopyRemoteUri={async (uri: string) => {
                       try {
                         await navigator.clipboard.writeText(uri);
@@ -182,16 +192,20 @@ function ArtifactLibraryRow({
   artifact,
   workflowName,
   onDownload,
+  onDelete,
   onCopyRemoteUri,
   copiedRemoteUri,
   isDownloading,
+  isDeleting,
 }: {
   artifact: ArtifactMetadata;
   workflowName: string;
   onDownload: () => void;
+  onDelete: () => void;
   onCopyRemoteUri: (uri: string) => void;
   copiedRemoteUri: string | null;
   isDownloading: boolean;
+  isDeleting: boolean;
 }) {
   const remoteUploads = getRemoteUploads(artifact);
 
@@ -261,7 +275,7 @@ function ArtifactLibraryRow({
       </td>
       <td className="px-3 md:px-4 py-3 md:py-4 align-top text-left">
         <div className="flex flex-wrap justify-start gap-1 md:gap-2">
-          {/* <Button
+          <Button
             type="button"
             variant="ghost"
             size="sm"
@@ -271,10 +285,11 @@ function ArtifactLibraryRow({
                 onDelete();
               }
             }}
+            disabled={isDeleting}
           >
             <Trash2 className="h-4 w-4" />
-            <span className="hidden md:inline">Delete</span>
-          </Button> */}
+            <span className="hidden md:inline">{isDeleting ? 'Deleting…' : 'Delete'}</span>
+          </Button>
           <Button
             type="button"
             variant="ghost"
