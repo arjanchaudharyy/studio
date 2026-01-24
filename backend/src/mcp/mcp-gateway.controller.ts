@@ -2,6 +2,7 @@ import { Controller, All, UseGuards, Req, Res, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
 import { Public } from '../auth/public.decorator';
 import { McpAuthGuard, type McpGatewayRequest } from './mcp-auth.guard';
@@ -42,9 +43,23 @@ export class McpGatewayController {
         : runId;
 
     let transport = this.transports.get(cacheKey);
+    const body = req.body as unknown;
+    const isPost = req.method === 'POST';
+    const isGet = req.method === 'GET';
+    const isDelete = req.method === 'DELETE';
+    const isInitRequest =
+      isPost &&
+      (isInitializeRequest(body) ||
+        (Array.isArray(body) && body.some((item) => isInitializeRequest(item))));
 
     // Initialization if transport doesn't exist
     if (!transport) {
+      if (!isInitRequest) {
+        return res
+          .status(400)
+          .send('Bad Request: No valid session ID provided');
+      }
+
       this.logger.log(
         `Initializing new MCP transport for run: ${runId} with allowedNodeIds: ${allowedNodeIds?.join(',') ?? 'none'}`,
       );
@@ -57,6 +72,7 @@ export class McpGatewayController {
 
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => cacheKey,
+        enableJsonResponse: true,
       });
       this.transports.set(cacheKey, transport);
 
@@ -77,7 +93,11 @@ export class McpGatewayController {
       }
     }
 
-    if (req.method === 'GET') {
+    if ((isGet || isDelete) && !transport.sessionId) {
+      return res.status(400).send('Bad Request: Server not initialized');
+    }
+
+    if (isGet) {
       // Cleanup on client disconnect (specifically for the SSE stream)
       res.on('close', async () => {
         this.logger.log(

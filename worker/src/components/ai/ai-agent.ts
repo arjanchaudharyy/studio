@@ -124,6 +124,8 @@ const inputSchema = inputs({
       label: 'Connected Tools',
       description:
         'Connect tool-mode nodes here to scope gateway tool discovery for this agent.',
+      allowAny: true,
+      reason: 'Tool-mode port acts as a graph anchor; payloads are not consumed by the agent.',
       connectionType: { kind: 'primitive', name: 'json' },
     },
   ),
@@ -494,7 +496,7 @@ async function registerGatewayTools({
     dbg.debug('Creating MCP client via AI SDK HTTP transport...');
     const mcpClient = await createMCPClient({
       transport: {
-        type: 'http',
+        type: 'sse',
         url: gatewayUrl,
         headers: { Authorization: `Bearer ${sessionToken}` },
       },

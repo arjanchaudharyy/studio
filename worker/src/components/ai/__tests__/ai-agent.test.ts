@@ -258,7 +258,7 @@ describe('core.ai.agent (refactor)', () => {
       expect(createMCPClientMock).toHaveBeenCalledWith(
         expect.objectContaining({
           transport: {
-            type: 'http',
+            type: 'sse',
             url: expect.stringContaining('/mcp/gateway'),
             headers: { Authorization: 'Bearer gateway-token' },
           },

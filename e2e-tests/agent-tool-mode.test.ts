@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll } from 'bun:test';
 
 const API_BASE = 'http://127.0.0.1:3211/api/v1';
 const HEADERS = {
@@ -9,6 +9,7 @@ const HEADERS = {
 const runE2E = process.env.RUN_E2E === 'true';
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const hasOpenRouterKey = typeof OPENROUTER_KEY === 'string' && OPENROUTER_KEY.length > 0;
+const MODEL_ID = 'openai/gpt-5-mini';
 
 async function pollRunStatus(runId: string, timeoutMs = 120000): Promise<{ status: string }> {
     const startTime = Date.now();
@@ -83,7 +84,7 @@ e2eDescribe('Agent Tool Mode Orchestration E2E', () => {
                                 modelApiKey: OPENROUTER_KEY,
                                 chatModel: {
                                     provider: 'openai',
-                                    modelId: 'openai/gpt-4o-mini',
+                                    modelId: MODEL_ID,
                                     baseUrl: 'https://openrouter.ai/api/v1',
                                     apiKey: OPENROUTER_KEY
                                 }
@@ -138,14 +139,14 @@ e2eDescribe('Agent Tool Mode Orchestration E2E', () => {
                         label: 'Security Agent',
                         config: {
                             params: {
-                                systemPrompt: 'You are a security assistant. Use the ip_tool to check your IP address and report it.',
+                                systemPrompt: 'You are a security assistant. Call ip_tool exactly once and report the IP address.',
                             },
                             inputOverrides: {
                                 userInput: 'What is my current IP?',
                                 modelApiKey: OPENROUTER_KEY,
                                 chatModel: {
                                     provider: 'openai',
-                                    modelId: 'openai/gpt-4o-mini',
+                                    modelId: MODEL_ID,
                                     baseUrl: 'https://openrouter.ai/api/v1',
                                     apiKey: OPENROUTER_KEY
                                 }
@@ -180,10 +181,15 @@ e2eDescribe('Agent Tool Mode Orchestration E2E', () => {
 
         const agentCompleted = trace.events.find((e: any) => e.nodeId === 'agent' && e.type === 'COMPLETED');
         expect(agentCompleted).toBeDefined();
+        if (!agentCompleted) {
+            throw new Error('Agent node did not complete');
+        }
         const responseText = agentCompleted.outputSummary.responseText;
         console.log(`[Test] Agent Response: ${responseText}`);
         // Agent should see the tool and either call it or describe it
-        expect(responseText.toLowerCase()).toContain('tool') || expect(responseText).toMatch(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
+        const hasTool = responseText.toLowerCase().includes('tool');
+        const hasIp = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(responseText);
+        expect(hasTool || hasIp).toBe(true);
     }, 120000);
 
     test('Multiple agents have isolated tool sets based on graph connections', async () => {
@@ -229,13 +235,13 @@ e2eDescribe('Agent Tool Mode Orchestration E2E', () => {
                     data: {
                         label: 'Agent A',
                         config: {
-                            params: { systemPrompt: 'Report which tools you see.' },
+                            params: { systemPrompt: 'List the available tools by name only.' },
                             inputOverrides: {
                                 userInput: 'List your available tools.',
                                 modelApiKey: OPENROUTER_KEY,
                                 chatModel: {
                                     provider: 'openai',
-                                    modelId: 'openai/gpt-4o-mini',
+                                    modelId: MODEL_ID,
                                     baseUrl: 'https://openrouter.ai/api/v1',
                                     apiKey: OPENROUTER_KEY
                                 }
@@ -250,13 +256,13 @@ e2eDescribe('Agent Tool Mode Orchestration E2E', () => {
                     data: {
                         label: 'Agent B',
                         config: {
-                            params: { systemPrompt: 'Report which tools you see.' },
+                            params: { systemPrompt: 'List the available tools by name only.' },
                             inputOverrides: {
                                 userInput: 'List your available tools.',
                                 modelApiKey: OPENROUTER_KEY,
                                 chatModel: {
                                     provider: 'openai',
-                                    modelId: 'openai/gpt-4o-mini',
+                                    modelId: MODEL_ID,
                                     baseUrl: 'https://openrouter.ai/api/v1',
                                     apiKey: OPENROUTER_KEY
                                 }
@@ -286,6 +292,9 @@ e2eDescribe('Agent Tool Mode Orchestration E2E', () => {
 
         const agentA = trace.events.find((e: any) => e.nodeId === 'agent_a' && e.type === 'COMPLETED');
         const agentB = trace.events.find((e: any) => e.nodeId === 'agent_b' && e.type === 'COMPLETED');
+        if (!agentA || !agentB) {
+            throw new Error('Agent runs did not complete');
+        }
 
         console.log(`[Test] Agent A Response: ${agentA.outputSummary.responseText}`);
         console.log(`[Test] Agent B Response: ${agentB.outputSummary.responseText}`);
