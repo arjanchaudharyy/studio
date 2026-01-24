@@ -118,26 +118,6 @@ export async function runComponentActivity(
 ): Promise<RunComponentActivityOutput> {
   const { action, inputs, params, warnings = [] } = input;
   const activityInfo = Context.current().info;
-  console.log(`🎯 ACTIVITY CALLED - runComponentActivity:`, {
-    activityId: activityInfo.activityId,
-    attempt: activityInfo.attempt,
-    workflowId: activityInfo.workflowExecution?.workflowId ?? 'unknown',
-    runId: activityInfo.workflowExecution?.runId ?? 'unknown',
-    componentId: action.componentId,
-    ref: action.ref,
-    timestamp: new Date().toISOString(),
-  });
-
-  console.log(`📋 Activity input details:`, {
-    componentId: action.componentId,
-    ref: action.ref,
-    hasParams: !!params,
-    paramKeys: params ? Object.keys(params) : [],
-    hasInputs: !!inputs,
-    inputKeys: inputs ? Object.keys(inputs) : [],
-    warningsCount: warnings.length,
-  });
-
   const component = componentRegistry.get(action.componentId);
   if (!component) {
     console.error(`[Activity] Component not found: ${action.componentId}`);

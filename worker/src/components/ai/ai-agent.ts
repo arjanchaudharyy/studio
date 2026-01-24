@@ -1,6 +1,5 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
-import { DebugLogger } from '../../utils/debug-logger';
 import {
   ToolLoopAgent,
   stepCountIs,
@@ -545,13 +544,9 @@ async function getGatewaySessionToken(
   organizationId: string | null,
   connectedToolNodeIds?: string[],
 ): Promise<string> {
-  const dbg = new DebugLogger('agent:gateway-token');
-  dbg.info('START', { runId, organizationId, nodeIds: connectedToolNodeIds });
-
   const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
 
   if (!internalToken) {
-    dbg.error('Missing INTERNAL_SERVICE_TOKEN');
     throw new ConfigurationError(
       'INTERNAL_SERVICE_TOKEN env var must be set for agent tool discovery',
       { configKey: 'INTERNAL_SERVICE_TOKEN' },
@@ -560,7 +555,6 @@ async function getGatewaySessionToken(
 
   const url = `${DEFAULT_API_BASE_URL}/internal/mcp/generate-token`;
   const body = { runId, organizationId, allowedNodeIds: connectedToolNodeIds };
-  dbg.debug('Calling', { url, body });
 
   const response = await fetch(url, {
     method: 'POST',
@@ -571,21 +565,16 @@ async function getGatewaySessionToken(
     body: JSON.stringify(body),
   });
 
-  dbg.debug('Response received', { status: response.status });
-
   if (!response.ok) {
     const errorText = await response.text();
-    dbg.error('Failed to fetch token', { status: response.status, error: errorText });
     throw new Error(`Failed to generate gateway session token: ${errorText}`);
   }
 
   const payload = await response.json();
   const token = isRecord(payload) && typeof payload.token === 'string' ? payload.token : null;
   if (!token) {
-    dbg.error('Token response malformed', { payload });
     throw new Error('Failed to generate gateway session token: invalid response shape');
   }
-  dbg.info('Token received', { tokenLength: token.length });
   return token;
 }
 
@@ -601,31 +590,17 @@ async function registerGatewayTools({
   tools: ToolSet;
   close: () => Promise<void>;
 }> {
-  const dbg = new DebugLogger('agent:gateway-tools');
-  dbg.info('START', { gatewayUrl, tokenLength: sessionToken?.length });
-
   try {
-    dbg.debug('Creating MCP client via AI SDK HTTP transport...');
     const mcpClient = await createMCPClient({
       transport: {
         type: 'http',
         url: gatewayUrl,
         headers: { Authorization: `Bearer ${sessionToken}` },
       },
-      onUncaughtError: (error) => {
-        dbg.error('MCP client error', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      },
     });
-    dbg.debug('MCP client connected');
 
-    dbg.debug('Fetching tools from gateway...');
     const tools = await mcpClient.tools();
     const toolNames = Object.keys(tools);
-    dbg.info('Tools discovered', { count: toolNames.length, names: toolNames });
-
-    dbg.info('SUCCESS', { registeredCount: toolNames.length });
     return {
       tools,
       close: async () => {
@@ -633,7 +608,6 @@ async function registerGatewayTools({
       },
     };
   } catch (error) {
-    dbg.error('ERROR', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 }
@@ -682,63 +656,33 @@ Loop the Conversation State output back into the next agent invocation to keep m
     const { userInput, conversationState, chatModel, modelApiKey, tools: toolsAnchor } = inputs;
     const { systemPrompt, temperature, maxTokens, memorySize, stepLimit } = params;
 
-    console.log(`[AIAgent::execute] ========== AGENT EXECUTION START ==========`);
-    console.log(`[AIAgent::execute] runId=${context.runId}, componentRef=${context.componentRef}`);
-    console.log(`[AIAgent::execute] metadata:`, JSON.stringify(context.metadata, null, 2));
-    console.log(`[AIAgent::execute] inputs.userInput: "${inputs.userInput?.substring(0, 100)}..."`);
-    console.log(`[AIAgent::execute] inputs.chatModel:`, JSON.stringify(inputs.chatModel));
-    console.log(`[AIAgent::execute] tools anchor input:`, JSON.stringify(toolsAnchor));
-
-    const debugLog = (...args: unknown[]) => {
-      const msg = `[AIAgent Debug] ${args.join(' ')}`;
-      console.log(msg);
-      context.logger.debug(msg);
-    };
     const agentRunId = `${context.runId}:${context.componentRef}:${randomUUID()}`;
-    console.log(`[AIAgent::execute] Generated agentRunId: ${agentRunId}`);
 
     const agentStream = new AgentStreamRecorder(context, agentRunId);
     const { connectedToolNodeIds, organizationId } = context.metadata;
-    console.log(
-      `[AIAgent::execute] connectedToolNodeIds from metadata: ${JSON.stringify(connectedToolNodeIds)}`,
-    );
-    console.log(
-      `[AIAgent::execute] Full metadata keys: ${Object.keys(context.metadata).join(', ')}`,
-    );
 
     let discoveredTools: ToolSet = {};
     let closeDiscovery: (() => Promise<void>) | undefined;
 
     if (connectedToolNodeIds && connectedToolNodeIds.length > 0) {
-      console.log(
-        `[AIAgent::execute] Starting tool discovery for ${connectedToolNodeIds.length} connected node(s)...`,
-      );
       context.logger.info(
         `Discovering tools from gateway for nodes: ${connectedToolNodeIds.join(', ')}`,
       );
       try {
-        console.log(`[AIAgent::execute] Calling getGatewaySessionToken...`);
         const sessionToken = await getGatewaySessionToken(
           context.runId,
           organizationId ?? null,
           connectedToolNodeIds,
         );
-        console.log(`[AIAgent::execute] Got session token, now calling registerGatewayTools...`);
         const discoveryResult = await registerGatewayTools({
           gatewayUrl: DEFAULT_GATEWAY_URL,
           sessionToken,
         });
         discoveredTools = discoveryResult.tools;
         closeDiscovery = discoveryResult.close;
-        console.log(
-          `[AIAgent::execute] Tool discovery SUCCESS - found ${Object.keys(discoveredTools).length} tools`,
-        );
       } catch (error) {
-        console.error(`[AIAgent::execute] Tool discovery FAILED:`, error);
         context.logger.error(`Failed to discover tools from gateway: ${error}`);
       }
-    } else {
-      console.log(`[AIAgent::execute] No connectedToolNodeIds - skipping gateway tool discovery`);
     }
 
     try {
@@ -752,19 +696,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
         },
       });
 
-      debugLog('Incoming params', {
-        userInput,
-        conversationState,
-        chatModel,
-        systemPrompt,
-        temperature,
-        maxTokens,
-        memorySize,
-        stepLimit,
-      });
-
       const trimmedInput = userInput.trim();
-      debugLog('Trimmed input', trimmedInput);
 
       if (!trimmedInput) {
         throw new ValidationError('AI Agent requires a non-empty user input.', {
@@ -781,13 +713,6 @@ Loop the Conversation State output back into the next agent invocation to keep m
       }
 
       const effectiveApiKey = resolveApiKey(effectiveProvider, overrideApiKey);
-      debugLog('Resolved model configuration', {
-        effectiveProvider,
-        effectiveModel,
-        hasExplicitApiKey: Boolean(chatModel?.apiKey) || Boolean(modelApiKey),
-        apiKeyProvided: Boolean(effectiveApiKey),
-      });
-
       const explicitBaseUrl = chatModel?.baseUrl?.trim();
       const baseUrl =
         explicitBaseUrl && explicitBaseUrl.length > 0
@@ -798,41 +723,24 @@ Loop the Conversation State output back into the next agent invocation to keep m
               ? OPENROUTER_BASE_URL
               : OPENAI_BASE_URL;
 
-      debugLog('Resolved base URL', { explicitBaseUrl, baseUrl });
-
       const sanitizedHeaders =
         chatModel && (chatModel.provider === 'openai' || chatModel.provider === 'openrouter')
           ? sanitizeHeaders(chatModel.headers)
           : undefined;
-      debugLog('Sanitized headers', sanitizedHeaders);
 
       const incomingState = conversationState;
-      debugLog('Incoming conversation state', incomingState);
 
       const sessionId = incomingState?.sessionId ?? randomUUID();
       const existingMessages = Array.isArray(incomingState?.messages) ? incomingState.messages : [];
-      debugLog('Session details', {
-        sessionId,
-        existingMessagesCount: existingMessages.length,
-      });
 
       let history: AgentMessage[] = ensureSystemMessage([...existingMessages], systemPrompt ?? '');
       history = trimConversation(history, memorySize);
-      debugLog('History after ensuring system message and trimming', history);
 
       const userMessage: AgentMessage = { role: 'user', content: trimmedInput };
       const historyWithUser = trimConversation([...history, userMessage], memorySize);
-      debugLog('History with user message', historyWithUser);
 
       const availableToolsCount = Object.keys(discoveredTools).length;
       const toolsConfig = availableToolsCount > 0 ? discoveredTools : undefined;
-      debugLog('Tools configuration', {
-        availableToolsCount,
-        toolsConfigKeys: toolsConfig ? Object.keys(toolsConfig) : [],
-      });
-      if (toolsConfig) {
-        debugLog('Tools configuration details', summarizeToolConfig(toolsConfig));
-      }
 
       const systemMessageEntry = historyWithUser.find((message) => message.role === 'system');
       const resolvedSystemPrompt = systemPrompt?.trim()?.length
@@ -842,14 +750,7 @@ Loop the Conversation State output back into the next agent invocation to keep m
           : systemMessageEntry && systemMessageEntry.content !== undefined
             ? JSON.stringify(systemMessageEntry.content)
             : '';
-      debugLog('Resolved system prompt', resolvedSystemPrompt);
-
       const messagesForModel = toModelMessages(historyWithUser);
-      debugLog('Messages for model (summary)', summarizeModelMessages(messagesForModel));
-      debugLog(
-        'Messages for model (truncated)',
-        safeStringify(messagesForModel, LOG_TRUNCATE_LIMIT),
-      );
 
       const openAIOptions = {
         apiKey: effectiveApiKey,
@@ -874,17 +775,6 @@ Loop the Conversation State output back into the next agent invocation to keep m
           : isOpenRouter
             ? openAIProvider.chat(effectiveModel)
             : openAIProvider(effectiveModel);
-      debugLog('Model factory created', {
-        provider: effectiveProvider,
-        modelId: effectiveModel,
-        modelMode: isOpenRouter ? 'chat' : 'responses',
-        baseUrl,
-        headers: sanitizedHeaders,
-        temperature,
-        maxTokens,
-        stepLimit,
-      });
-
       const agentSettings: ToolLoopAgentSettings<never, AgentTools> = {
         id: `${sessionId}-agent`,
         model,
@@ -893,41 +783,14 @@ Loop the Conversation State output back into the next agent invocation to keep m
         maxOutputTokens: maxTokens,
         stopWhen: stepCountIs(stepLimit),
         onStepFinish: (stepResult: AgentStepResult) => {
-          console.log('[AIAgent::execute] Step finished', {
-            text: stepResult.text,
-            finishReason: stepResult.finishReason,
-            toolCalls: stepResult.toolCalls.length,
-            toolResults: stepResult.toolResults.length,
-          });
-
           for (const call of stepResult.toolCalls) {
             const input = getToolInput(call);
             agentStream.emitToolInput(call.toolCallId, call.toolName, toRecord(input));
-            console.log('[AIAgent::execute] Tool call issued', {
-              toolCallId: call.toolCallId,
-              toolName: call.toolName,
-              input,
-            });
-            console.log('[AIAgent::execute] Tool call issued (truncated)', {
-              toolCallId: call.toolCallId,
-              toolName: call.toolName,
-              inputPreview: safeStringify(input, 600),
-            });
           }
 
           for (const result of stepResult.toolResults) {
             const output = getToolOutput(result);
             agentStream.emitToolOutput(result.toolCallId, result.toolName, output);
-            console.log('[AIAgent::execute] Tool call result', {
-              toolCallId: result.toolCallId,
-              toolName: result.toolName,
-              output,
-            });
-            console.log('[AIAgent::execute] Tool call result (truncated)', {
-              toolCallId: result.toolCallId,
-              toolName: result.toolName,
-              outputPreview: safeStringify(output, 600),
-            });
           }
         },
         ...(toolsConfig ? { tools: toolsConfig } : {}),
@@ -935,12 +798,6 @@ Loop the Conversation State output back into the next agent invocation to keep m
 
       const agent = new ToolLoopAgent<never, AgentTools>(agentSettings);
 
-      console.log(
-        `[AIAgent::execute] Using ${effectiveProvider} model "${effectiveModel}" with ${availableToolsCount} tool(s)`,
-      );
-      console.log(
-        `[AIAgent::execute] Tool names: ${Object.keys(discoveredTools).join(', ') || 'none'}`,
-      );
       context.logger.info(
         `[AIAgent] Using ${effectiveProvider} model "${effectiveModel}" with ${availableToolsCount} connected tool(s).`,
       );
@@ -953,40 +810,13 @@ Loop the Conversation State output back into the next agent invocation to keep m
         },
       });
 
-      console.log(
-        `[AIAgent::execute] Calling agent.generate() with ${messagesForModel.length} messages...`,
-      );
-      console.log(
-        `[AIAgent::execute] agent.generate payload: ${safeStringify(
-          {
-            model: effectiveModel,
-            provider: effectiveProvider,
-            modelMode: isOpenRouter ? 'chat' : 'responses',
-            temperature,
-            maxTokens,
-            stepLimit,
-            messages: messagesForModel,
-            tools: toolsConfig ? summarizeToolConfig(toolsConfig) : undefined,
-          },
-          LOG_TRUNCATE_LIMIT,
-        )}`,
-      );
       let generationResult: AgentGenerationResult;
       try {
         generationResult = await agent.generate({
           messages: messagesForModel,
         });
-        console.log(`[AIAgent::execute] agent.generate() returned successfully`);
-        console.log(`[AIAgent::execute] Result finishReason: ${generationResult?.finishReason}`);
-        console.log(
-          `[AIAgent::execute] Result text length: ${generationResult?.text?.length || 0}`,
-        );
-        console.log(
-          `[AIAgent::execute] Result steps count: ${generationResult?.steps?.length || 0}`,
-        );
       } catch (genError) {
         const errorSummary = formatErrorForLog(genError, LOG_TRUNCATE_LIMIT);
-        console.error(`[AIAgent::execute] agent.generate() FAILED (truncated)`, errorSummary);
         context.logger.error(
           `[AIAgent] agent.generate() FAILED (truncated): ${safeStringify(
             errorSummary,
@@ -997,9 +827,6 @@ Loop the Conversation State output back into the next agent invocation to keep m
       }
 
       const responseText = generationResult.text;
-      console.log(
-        `[AIAgent::execute] Final responseText: "${responseText.substring(0, 200)}..."`,
-      );
 
       const toolMessages: AgentMessage[] = generationResult.toolResults.map((toolResult) => ({
         role: 'tool',
