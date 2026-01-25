@@ -33,6 +33,7 @@ class MockToolLoopAgent {
 
 vi.mock('ai', () => ({
   ToolLoopAgent: MockToolLoopAgent,
+  generateText: vi.fn(),
   stepCountIs: stepCountIsMock,
 }));
 vi.mock('@ai-sdk/openai', () => ({
@@ -256,8 +257,8 @@ describe('core.ai.agent (refactor)', () => {
       expect(createMCPClientMock).toHaveBeenCalledWith(
         expect.objectContaining({
           transport: {
-            type: 'sse',
-            url: expect.stringContaining('/mcp/gateway'),
+            type: 'http',
+            url: 'http://localhost:3211/mcp/gateway',
             headers: { Authorization: 'Bearer gateway-token' },
           },
         }),
