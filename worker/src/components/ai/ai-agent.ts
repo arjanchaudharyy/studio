@@ -44,13 +44,7 @@ const DEFAULT_MEMORY_SIZE = 8;
 const DEFAULT_STEP_LIMIT = 4;
 const LOG_TRUNCATE_LIMIT = 2000;
 
-const DEFAULT_API_BASE_URL =
-  process.env.STUDIO_API_BASE_URL ??
-  process.env.SHIPSEC_API_BASE_URL ??
-  process.env.API_BASE_URL ??
-  'http://localhost:3211';
-
-const DEFAULT_GATEWAY_URL = `${DEFAULT_API_BASE_URL}/mcp/gateway`;
+import { DEFAULT_GATEWAY_URL, getGatewaySessionToken } from './utils';
 
 const agentMessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant', 'tool']),
@@ -461,45 +455,6 @@ function toModelMessages(messages: AgentMessage[]): ModelMessage[] {
   }
 
   return result;
-}
-
-async function getGatewaySessionToken(
-  runId: string,
-  organizationId: string | null,
-  connectedToolNodeIds?: string[],
-): Promise<string> {
-  const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
-
-  if (!internalToken) {
-    throw new ConfigurationError(
-      'INTERNAL_SERVICE_TOKEN env var must be set for agent tool discovery',
-      { configKey: 'INTERNAL_SERVICE_TOKEN' },
-    );
-  }
-
-  const url = `${DEFAULT_API_BASE_URL}/internal/mcp/generate-token`;
-  const body = { runId, organizationId, allowedNodeIds: connectedToolNodeIds };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Internal-Token': internalToken,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to generate gateway session token: ${errorText}`);
-  }
-
-  const payload = await response.json();
-  const token = isRecord(payload) && typeof payload.token === 'string' ? payload.token : null;
-  if (!token) {
-    throw new Error('Failed to generate gateway session token: invalid response shape');
-  }
-  return token;
 }
 
 interface RegisterGatewayToolsParams {
