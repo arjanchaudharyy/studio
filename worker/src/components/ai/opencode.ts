@@ -211,8 +211,18 @@ const definition = defineComponent({
 The following context is available in /workspace/context.json.
 Please investigate the issue and generate a detailed report.
 `;
-    const template = systemPrompt?.trim() ? systemPrompt : defaultPrompt;
-    const finalPrompt = template.replace('{{TASK}}', task);
+
+    // Build final prompt: use systemPrompt if provided, otherwise use default template
+    // Always append the task to ensure it's included
+    let finalPrompt: string;
+    if (systemPrompt?.trim()) {
+      finalPrompt = `${systemPrompt}\n\n# Task\n${task}`;
+      if (taskContext && Object.keys(taskContext).length > 0) {
+        finalPrompt += '\n\n# Context\nThe following context is available in /workspace/context.json.';
+      }
+    } else {
+      finalPrompt = defaultPrompt.replace('{{TASK}}', task);
+    }
 
     // 4. Setup Isolated Volume
     const tenantId = (context as any).tenantId ?? 'default-tenant';
