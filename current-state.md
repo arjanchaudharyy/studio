@@ -1,96 +1,103 @@
-# OpenCode Agent E2E Testing - Current State Update
+# OpenCode Agent E2E Testing - RESOLVED
 
 ## Progress Summary
 
-### ✅ Completed
+### ✅ All Completed
 1. **Z.AI Provider Added** - `zai-coding-plan` provider added to LLMProviderSchema
 2. **Component Fixes** - OpenCode component updated with:
    - Proper model string format: `zai-coding-plan/glm-4.7`
    - Provider config with `apiKey` in `provider.options.apiKey`
    - MCP config fix: `type: "remote"` instead of `transport: "http"`
-3. **Committed** - Hash `87dbf5d`
-
-### ⚠️ In Progress
-4. **E2E Test Failing** - Tests fail due to Docker command argument handling
+3. **E2E Tests Fixed and Passing** - All issues resolved:
+   - **`--quiet` flag doesn't exist** in opencode 1.1.34, changed to `--log-level ERROR`
+   - **Wrapper script approach** to handle prompt file reading inside container
+   - **Entry point override** using `/bin/sh` to execute wrapper script
+   - **Test assertions fixed** - changed from `output?.report` to `outputSummary?.report`
 
 ---
 
-## Root Cause Analysis
+## Root Cause - The `--quiet` Flag Issue
 
-### The Issue
-When passing `['run', '--quiet', finalPrompt]` where `finalPrompt` contains spaces, the arguments are not being correctly interpreted by Docker/PTY layer.
+### Discovery
+The `--quiet` flag **does not exist** in opencode version 1.1.34. When used, opencode shows help text instead of executing the command.
 
-### Evidence from Logs
-```
-[Docker][PTY] Spawning: docker run ... --entrypoint sh ghcr.io/anomalyco/opencode run --quiet Analyze the security alert...
-```
-
-The prompt appears without quotes, causing it to be split into multiple arguments.
-
-### What Works Manually
+### Manual Verification
 ```bash
-# This works:
-docker run ... ghcr.io/anomalyco/opencode run "Write a hello world function in Python."
+# This shows help (wrong):
+docker run ... ghcr.io/anomalyco/opencode run --quiet "hello"
 
-# But the component's array format ['run', '--quiet', prompt] doesn't work
+# This works (correct):
+docker run ... ghcr.io/anomalyco/opencode run --log-level ERROR "hello"
 ```
 
 ---
 
-## Possible Solutions
+## Final Implementation
 
-### Option 1: Use `stdinJson: false` in Runner Definition
-Set `stdinJson: false` in the runner definition to prevent stdin handling that might interfere.
+### Wrapper Script Approach
+The prompt is written to `prompt.txt` and read by a wrapper script inside the container:
 
-### Option 2: Pass Command as Single String
-Change command from array to single string that gets shell-parsed:
 ```typescript
-command: [`sh`, `-c`, `opencode run --quiet '${finalPrompt.replace(/'/g, "'\\''")}'`]
-```
+// Write wrapper script that reads prompt from file
+const wrapperScript = '#!/bin/sh\nopencode run --log-level ERROR "$(cat /workspace/prompt.txt)"\n';
 
-### Option 3: Use Direct Prompt Argument
-Try passing prompt as direct argument without `--quiet` flag.
+await volume.initialize({
+  'context.json': contextJson,
+  'opencode.jsonc': JSON.stringify(opencodeConfig, null, 2),
+  'prompt.txt': finalPrompt,
+  'run.sh': wrapperScript,
+});
 
-### Option 4: Investigate PTY Mode
-PTY mode (`runDockerWithPty`) is being used when it shouldn't be. Need to debug why.
-
----
-
-## Current Component State
-
-**File**: `worker/src/components/ai/opencode.ts`
-
-**Current Implementation**:
-```typescript
-const escapedPrompt = finalPrompt.replace(/'/g, "'\\''");
+// Execute with /bin/sh entrypoint
 const runnerConfig = {
   ...definition.runner,
-  entrypoint: 'sh',
-  command: ['-c', `opencode run --quiet '${escapedPrompt}'`],
+  entrypoint: '/bin/sh',
+  command: ['/workspace/run.sh'],
   network: 'host' as const,
-  ...
+  volumes: [volume.getVolumeConfig('/workspace', false)],
+  workingDir: '/workspace',
 };
 ```
 
----
-
-## Manual Test Results
-
-| Command | Result |
-|---------|--------|
-| `docker run ... opencode run "hello world"` | ✅ Works |
-| `docker run ... sh -c "opencode run 'hello'"` | ❌ Shows help |
-| `docker run ... --entrypoint sh opencode -c "..."` | ❌ Shows help |
-| `docker run ... --entrypoint /bin/sh opencode -lc "..."` | ❌ Shows help |
+### Why This Works
+1. **`entrypoint: '/bin/sh'`** overrides the image's default `opencode` entrypoint
+2. **Wrapper script** runs inside the container, so `$(cat /workspace/prompt.txt)` is evaluated by the container shell
+3. **`--log-level ERROR`** suppresses verbose logging (replaces the non-existent `--quiet` flag)
 
 ---
 
-## Next Steps
+## Test Results
 
-1. Debug why PTY mode is being used in E2E tests
-2. Try removing entrypoint override and pass prompt directly
-3. Consider using `stdinJson: false` in runner definition
-4. Update `current-state.md` and commit progress
+### E2E Tests: ✅ PASSING
+```
+bun test e2e-tests/opencode.test.ts
+
+  2 pass
+  0 fail
+  10 expect() calls
+Ran 2 tests across 1 file. [30.31s]
+```
+
+### Tests Implemented
+1. **Basic Test** - OpenCode agent runs with Z.AI GLM-4.7
+2. **Context Test** - OpenCode agent uses context from input (JSON data)
+
+---
+
+## Key Findings
+
+### OpenCode Configuration
+1. **Z.AI Native Provider**: `zai-coding-plan` is a first-class provider in OpenCode
+2. **Model Format**: `zai-coding-plan/glm-4.7` (provider/modelId)
+3. **API Key**: Goes in `provider.zai-coding-plan.options.apiKey`
+4. **MCP Format**: `mcp.{name}: {type: 'remote', url: '...'}`
+5. **No `--quiet` flag**: Use `--log-level ERROR` instead
+
+### Docker Execution Pattern
+For complex commands with shell expansion:
+- Write a wrapper script to a file
+- Use `/bin/sh` as entrypoint
+- Execute the wrapper script as the command
 
 ---
 
@@ -99,13 +106,12 @@ const runnerConfig = {
 - **ZAI_API_KEY**: `aa8e1ccdcb48463aa3def6939a959a5c.GK2rlnuBm76aHRaI`
 - **GLM Model**: `zai-coding-plan/glm-4.7`
 - **Studio API**: Running on `http://127.0.0.1:3211`
+- **OpenCode Version**: 1.1.34
 
 ---
 
-## Key Findings
+## Files Modified
 
-1. **Z.AI Native Provider**: `zai-coding-plan` is a first-class provider in OpenCode - no npm or baseURL needed
-2. **Model Format**: Must be `zai-coding-plan/glm-4.7` (provider/modelId)
-3. **API Key**: Goes in `provider.zai-coding-plan.options.apiKey`
-4. **MCP Format**: `mcp.{name}: {type: 'remote', url: '...'}`
-5. **Docker Command Issue**: Multi-word prompts need shell parsing for correct argument handling
+1. `packages/contracts/src/index.ts` - Added `zai-coding-plan` provider schema
+2. `worker/src/components/ai/opencode.ts` - Fixed command execution and removed `--quiet` flag
+3. `e2e-tests/opencode.test.ts` - Created E2E tests and fixed assertions

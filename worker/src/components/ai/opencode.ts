@@ -219,22 +219,27 @@ Please investigate the issue and generate a detailed report.
     const volume = new IsolatedContainerVolume(tenantId, context.runId);
 
     try {
-      // Initialize workspace with config and context files
+      // 5. Execute Docker Container
+      // Write a wrapper script to properly execute opencode with file reading
+      // The script runs inside the container, so $(cat /workspace/prompt.txt) works correctly
+      // Note: --quiet flag doesn't exist in opencode 1.1.34, use --log-level ERROR instead
+      const wrapperScript = '#!/bin/sh\nopencode run --log-level ERROR "$(cat /workspace/prompt.txt)"\n';
+
+      // Initialize workspace with config, context, prompt, and wrapper script
       await volume.initialize({
         'context.json': contextJson,
         'opencode.jsonc': JSON.stringify(opencodeConfig, null, 2),
+        'prompt.txt': finalPrompt,
+        'run.sh': wrapperScript,
       });
 
-      // 5. Execute Docker Container
-      // Use sh -c to properly quote the prompt string
-      // The prompt is passed as a single argument to sh -c, which then passes it to opencode
-      const escapedPrompt = finalPrompt.replace(/'/g, "'\\''"); // Escape single quotes in the prompt
       const runnerConfig = {
         ...definition.runner,
-        entrypoint: 'sh',
+        // Override entrypoint to /bin/sh to avoid the image's default 'opencode' entrypoint
+        // The command will be executed as: /bin/sh /workspace/run.sh
+        entrypoint: '/bin/sh',
         command: [
-          '-c',
-          `opencode run --quiet '${escapedPrompt}'`,
+          '/workspace/run.sh',
         ],
         // Use host network to access localhost gateway
         network: 'host' as const,

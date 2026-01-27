@@ -114,7 +114,7 @@ e2eDescribe('OpenCode Agent E2E', () => {
         expect(opencodeCompleted).toBeDefined();
 
         if (opencodeCompleted) {
-            const report = opencodeCompleted.output?.report;
+            const report = opencodeCompleted.outputSummary?.report;
             console.log(`[Test] OpenCode Report: ${report?.substring(0, 200)}...`);
             expect(report).toBeDefined();
             expect(typeof report).toBe('string');
@@ -185,7 +185,7 @@ e2eDescribe('OpenCode Agent E2E', () => {
         expect(opencodeCompleted).toBeDefined();
 
         if (opencodeCompleted) {
-            const report = opencodeCompleted.output?.report;
+            const report = opencodeCompleted.outputSummary?.report;
             console.log(`[Test] Security Analysis Report: ${report?.substring(0, 300)}...`);
             expect(report).toBeDefined();
             expect(typeof report).toBe('string');
