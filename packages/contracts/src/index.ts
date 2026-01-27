@@ -49,6 +49,8 @@ const buildLlmProviderSchema = () =>
       modelId: z.string(),
       apiKey: z.string().optional(),
       apiKeySecretId: z.string().optional(),
+      baseUrl: z.string().optional(),
+      headers: z.record(z.string(), z.string()).optional(),
     }),
   ]);
 
