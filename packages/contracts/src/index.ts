@@ -44,6 +44,12 @@ const buildLlmProviderSchema = () =>
       baseUrl: z.string().optional(),
       headers: z.record(z.string(), z.string()).optional(),
     }),
+    z.object({
+      provider: z.literal('zai-coding-plan'),
+      modelId: z.string(),
+      apiKey: z.string().optional(),
+      apiKeySecretId: z.string().optional(),
+    }),
   ]);
 
 export const LLMProviderSchema = () =>

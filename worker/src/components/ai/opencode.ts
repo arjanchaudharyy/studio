@@ -152,30 +152,50 @@ const definition = defineComponent({
       }
     }
 
+    // Helper to map provider to OpenCode model string format
+    const getOpenCodeModelString = (model: { provider: string; modelId: string } | undefined): string => {
+      if (!model) return 'gpt-4o';
+      // OpenCode expects models in format: provider/modelId
+      // Most providers follow this pattern
+      return `${model.provider}/${model.modelId}`;
+    };
+
     // 2. Prepare opencode.json config
     // Note: We use 'host' networking, so we can reach localhost
     const mcpConfig = gatewayToken
       ? {
-          mcpServers: {
+          mcp: {
             'shipsec-gateway': {
+              type: 'remote' as const,
               url: DEFAULT_GATEWAY_URL,
-              transport: 'http',
               headers: {
                 Authorization: `Bearer ${gatewayToken}`,
               },
             },
           },
         }
-      : { mcpServers: {} };
+      : {};
+
+    // Build provider config for OpenCode
+    // Z.AI requires the API key to be in provider.options.apiKey
+    const providerConfigForOpenCode: Record<string, unknown> = {
+      ...(model?.provider === 'zai-coding-plan' && model.apiKey
+        ? {
+            'zai-coding-plan': {
+              options: {
+                apiKey: model.apiKey,
+              },
+            },
+          }
+        : {}),
+    };
 
     const opencodeConfig = {
       ...mcpConfig,
+      ...providerConfigForOpenCode,
       autoApprove: autoApprove,
-      // Map ShipSec model config to OpenCode model string if possible
-      // implementation detail: OpenCode expects specific model strings, we might need a mapper
-      // For now, pass the modelId directly if it looks compatible, or default to a safe one
-      model: model?.modelId ?? 'gpt-4o',
-      // Add provider specific env vars if needed via ENV in the runner config
+      model: getOpenCodeModelString(model),
+      // Merge in any additional provider config from parameters
       ...providerConfig,
     };
 
@@ -207,9 +227,7 @@ Please investigate the issue and generate a detailed report.
 
       // 5. Execute Docker Container
       // Command: opencode run --quiet "$(cat /workspace/investigator.md)"
-      // We need to mount the config file to the correct location expected by OpenCode
-      // Global config: ~/.config/opencode/opencode.jsonc
-      // or Project config: ./opencode.jsonc (in CWD)
+      // Config file: ./opencode.jsonc in the workspace (project-level config)
 
       const runnerConfig = {
         ...definition.runner,
@@ -224,14 +242,8 @@ Please investigate the issue and generate a detailed report.
         // Use host network to access localhost gateway
         network: 'host' as const,
         env: {
-          // OpenCode might need API keys.
-          // If the definition includes an API Key in the 'model' contract, we should pass it.
-          ...(model?.apiKey
-            ? { OPENAI_API_KEY: model.apiKey, ANTHROPIC_API_KEY: model.apiKey }
-            : {}),
-          // We might simply pass OPENCODE_API_KEY if the user provided it in a generic way,
-          // but ShipSec contract separates providers.
-          // For now let's set the common ones if available.
+          // OpenCode loads provider configuration from opencode.jsonc
+          // API keys are passed via provider config, not env vars
         },
         volumes: [
           volume.getVolumeConfig('/workspace', false), // Read-write, mounted at /workspace
