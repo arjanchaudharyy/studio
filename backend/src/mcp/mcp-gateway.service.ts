@@ -79,19 +79,22 @@ export class McpGatewayService {
    * This is used when tools register after an MCP session has already initialized.
    */
   async refreshServersForRun(runId: string): Promise<void> {
-    const matchingEntries = Array.from(this.servers.entries()).filter(([key]) =>
-      key === runId || key.startsWith(`${runId}:`),
+    const matchingEntries = Array.from(this.servers.entries()).filter(
+      ([key]) => key === runId || key.startsWith(`${runId}:`),
     );
 
     if (matchingEntries.length === 0) {
       return;
     }
 
-    this.logger.log(`Refreshing MCP servers for run ${runId} (${matchingEntries.length} instance(s))`);
+    this.logger.log(
+      `Refreshing MCP servers for run ${runId} (${matchingEntries.length} instance(s))`,
+    );
 
     await Promise.all(
       matchingEntries.map(async ([cacheKey, server]) => {
-        const allowedNodeIds = cacheKey === runId ? undefined : cacheKey.split(':').slice(1).join(':').split(',');
+        const allowedNodeIds =
+          cacheKey === runId ? undefined : cacheKey.split(':').slice(1).join(':').split(',');
         const toolSet = this.registeredToolNames.get(cacheKey) ?? new Set<string>();
         this.registeredToolNames.set(cacheKey, toolSet);
         await this.registerTools(server, runId, undefined, allowedNodeIds, toolSet);
@@ -172,14 +175,10 @@ export class McpGatewayService {
 
     // 1. Register Internal Tools
     const internalTools = allRegistered.filter((t) => t.type === 'component');
-    this.logger.log(
-      `Registering ${internalTools.length} internal tool(s) for run ${runId}`,
-    );
+    this.logger.log(`Registering ${internalTools.length} internal tool(s) for run ${runId}`);
     for (const tool of internalTools) {
       if (allowedTools && allowedTools.length > 0 && !allowedTools.includes(tool.toolName)) {
-        this.logger.log(
-          `Skipping internal tool ${tool.toolName} (not in allowedTools)`,
-        );
+        this.logger.log(`Skipping internal tool ${tool.toolName} (not in allowedTools)`);
         continue;
       }
 
@@ -188,9 +187,7 @@ export class McpGatewayService {
         continue;
       }
 
-      this.logger.log(
-        `Registering internal tool ${tool.toolName} (node=${tool.nodeId})`,
-      );
+      this.logger.log(`Registering internal tool ${tool.toolName} (node=${tool.nodeId})`);
       const component = tool.componentId ? componentRegistry.get(tool.componentId) : null;
       const inputShape = component ? getToolInputShape(component) : undefined;
 
@@ -282,16 +279,12 @@ export class McpGatewayService {
         const tools = await this.fetchExternalTools(source);
         const prefix = source.toolName;
 
-        this.logger.log(
-          `External source ${source.toolName} returned ${tools.length} tool(s)`,
-        );
+        this.logger.log(`External source ${source.toolName} returned ${tools.length} tool(s)`);
         for (const t of tools) {
           const proxiedName = `${prefix}__${t.name}`;
 
           if (allowedTools && allowedTools.length > 0 && !allowedTools.includes(proxiedName)) {
-            this.logger.log(
-              `Skipping proxied tool ${proxiedName} (not in allowedTools)`,
-            );
+            this.logger.log(`Skipping proxied tool ${proxiedName} (not in allowedTools)`);
             continue;
           }
 
@@ -300,9 +293,7 @@ export class McpGatewayService {
             continue;
           }
 
-          this.logger.log(
-            `Registering proxied tool ${proxiedName} (source=${source.toolName})`,
-          );
+          this.logger.log(`Registering proxied tool ${proxiedName} (source=${source.toolName})`);
           server.registerTool(
             proxiedName,
             {

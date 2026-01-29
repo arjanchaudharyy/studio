@@ -502,6 +502,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   // Get component category (default to 'input' for entry points)
   const componentCategory: ComponentCategory =
     (component?.category as ComponentCategory) || (isEntryPoint ? 'input' : 'input');
+  const showMcpBadge = componentCategory === 'mcp' || isToolModeOnly;
 
   // Entry Point Helper Data
   // Get workflowId from store first, then from node data (passed from Canvas), then from route params
@@ -1088,7 +1089,14 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                       !isEntryPoint && mode === 'design' ? 'Double-click to rename' : undefined
                     }
                   >
-                    <h3 className="text-sm font-semibold truncate">{displayLabel}</h3>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-sm font-semibold truncate">{displayLabel}</h3>
+                      {showMcpBadge && (
+                        <span className="inline-flex items-center rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-200">
+                          MCP
+                        </span>
+                      )}
+                    </div>
                     {hasCustomLabel && (
                       <span className="text-[10px] text-muted-foreground opacity-70 truncate block">
                         {component.name}
@@ -1233,7 +1241,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
               className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700"
             >
               <CheckCircle className="h-3 w-3 mr-1" />
-              Completed
+              {componentCategory === 'mcp' ? 'Server Ready' : 'Completed'}
             </Badge>
           )}
           {visualState.status === 'error' && (

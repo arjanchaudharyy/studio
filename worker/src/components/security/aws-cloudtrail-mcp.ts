@@ -11,6 +11,7 @@ import {
 } from '@shipsec/component-sdk';
 import { awsCredentialSchema } from '@shipsec/contracts';
 import { startMcpDockerServer } from '../core/mcp-runtime';
+import { IsolatedContainerVolume } from '../../utils/isolated-volume';
 
 const inputSchema = inputs({
   credentials: port(awsCredentialSchema(), {
@@ -51,7 +52,7 @@ const parameterSchema = parameters({
 const definition = defineComponent({
   id: 'security.aws-cloudtrail-mcp',
   label: 'AWS CloudTrail MCP Server',
-  category: 'security',
+  category: 'mcp',
   runner: {
     kind: 'docker',
     image: 'placeholder',
@@ -66,9 +67,9 @@ const definition = defineComponent({
     slug: 'aws-cloudtrail-mcp',
     version: '1.0.0',
     type: 'process',
-    category: 'security',
+    category: 'mcp',
     description: 'Expose AWS CloudTrail via MCP for tool-mode agents.',
-    icon: 'Shield',
+    icon: 'Plug',
     author: {
       name: 'ShipSecAI',
       type: 'shipsecai',
@@ -110,14 +111,47 @@ const definition = defineComponent({
       env.AWS_SESSION_TOKEN = credentials.sessionToken;
     }
 
-    return startMcpDockerServer({
-      image: params.image,
-      command: [],
-      env,
-      port,
-      params,
-      context,
-    });
+    env.AWS_SHARED_CREDENTIALS_FILE = '/root/.aws/credentials';
+    env.AWS_CONFIG_FILE = '/root/.aws/config';
+    env.AWS_PROFILE = 'default';
+
+    const tenantId = (context as any).tenantId ?? 'default-tenant';
+    const volume = new IsolatedContainerVolume(tenantId, context.runId);
+    let volumeInitialized = false;
+
+    try {
+      const credsLines = [
+        '[default]',
+        `aws_access_key_id = ${credentials.accessKeyId}`,
+        `aws_secret_access_key = ${credentials.secretAccessKey}`,
+      ];
+      if (credentials.sessionToken) {
+        credsLines.push(`aws_session_token = ${credentials.sessionToken}`);
+      }
+
+      const configLines = ['[default]', `region = ${region}`, 'output = json'];
+
+      await volume.initialize({
+        credentials: credsLines.join('\n'),
+        config: configLines.join('\n'),
+      });
+      volumeInitialized = true;
+
+      return await startMcpDockerServer({
+        image: params.image,
+        command: [],
+        env,
+        port,
+        params,
+        context,
+        volumes: [volume.getVolumeConfig('/root/.aws', true)],
+      });
+    } catch (error) {
+      if (volumeInitialized) {
+        await volume.cleanup().catch(() => {});
+      }
+      throw error;
+    }
   },
 });
 

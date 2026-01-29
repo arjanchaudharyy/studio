@@ -72,7 +72,7 @@ const parameterSchema = parameters({
 const definition = defineComponent({
   id: 'core.mcp.server',
   label: 'MCP Server',
-  category: 'it_ops',
+  category: 'mcp',
   // The runner configuration here is a placeholder.
   // The actual runner config is constructed dynamically in the execute method
   // because `this.runner` is not interpolated when used directly in `execute`.
@@ -90,7 +90,7 @@ const definition = defineComponent({
     slug: 'mcp-server',
     version: '1.0.0',
     type: 'process',
-    category: 'it_ops',
+    category: 'mcp',
     description: 'Run an external Model Context Protocol (MCP) server.',
     icon: 'Server',
     author: {

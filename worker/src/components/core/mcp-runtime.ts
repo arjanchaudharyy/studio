@@ -1,20 +1,25 @@
 import { createServer } from 'node:net';
 import { runComponentWithRunner, ValidationError } from '@shipsec/component-sdk';
 
-type StartMcpServerInput = {
+interface StartMcpServerInput {
   image: string;
   command?: string[];
   args?: string[];
   env?: Record<string, string>;
   port?: number;
+  volumes?: {
+    source: string;
+    target: string;
+    readOnly?: boolean;
+  }[];
   params: Record<string, unknown>;
   context: any;
-};
+}
 
-type StartMcpServerOutput = {
+interface StartMcpServerOutput {
   endpoint: string;
   containerId?: string;
-};
+}
 
 async function getAvailablePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -46,7 +51,7 @@ export async function startMcpDockerServer(
     });
   }
 
-  const endpoint = `http://localhost:${port}/mcp`;
+  const endpoint = `http://127.0.0.1:${port}/mcp`;
   const runnerConfig = {
     kind: 'docker' as const,
     image: input.image,
@@ -54,7 +59,8 @@ export async function startMcpDockerServer(
     env: { ...input.env, PORT: String(port), ENDPOINT: endpoint },
     network: 'bridge' as const,
     detached: true,
-    ports: { [port]: port },
+    ports: { [`127.0.0.1:${port}`]: port } as unknown as Record<number, number>,
+    volumes: input.volumes,
   };
 
   const result = await runComponentWithRunner(

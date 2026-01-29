@@ -81,10 +81,10 @@ export async function registerLocalMcpActivity(
   });
 }
 
-export async function cleanupLocalMcpActivity(
-  input: CleanupLocalMcpActivityInput,
-): Promise<void> {
-  const response = await callInternalApi('cleanup', { runId: input.runId });
+export async function cleanupLocalMcpActivity(input: CleanupLocalMcpActivityInput): Promise<void> {
+  const response = (await callInternalApi('cleanup', { runId: input.runId })) as {
+    containerIds?: string[];
+  };
   const containerIds = Array.isArray(response?.containerIds) ? response.containerIds : [];
 
   if (containerIds.length === 0) {
@@ -109,6 +109,41 @@ export async function cleanupLocalMcpActivity(
       }
     }),
   );
+
+  if (!/^[a-zA-Z0-9_.-]+$/.test(input.runId)) {
+    console.warn(`[MCP Cleanup] Skipping volume cleanup with unsafe runId: ${input.runId}`);
+    return;
+  }
+
+  try {
+    const { stdout } = await execAsync(
+      `docker volume ls --filter "label=studio.managed=true" --filter "label=studio.run=${input.runId}" --format "{{.Name}}"`,
+    );
+    const volumeNames = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (volumeNames.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      volumeNames.map(async (volumeName) => {
+        if (!/^[a-zA-Z0-9_.-]+$/.test(volumeName)) {
+          console.warn(`[MCP Cleanup] Skipping volume with unsafe name: ${volumeName}`);
+          return;
+        }
+        try {
+          await execAsync(`docker volume rm ${volumeName}`);
+        } catch (error) {
+          console.warn(`[MCP Cleanup] Failed to remove volume ${volumeName}:`, error);
+        }
+      }),
+    );
+  } catch (error) {
+    console.warn(`[MCP Cleanup] Failed to list volumes for run ${input.runId}:`, error);
+  }
 }
 
 export async function prepareAndRegisterToolActivity(input: {

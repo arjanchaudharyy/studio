@@ -218,7 +218,6 @@ export interface RegisterLocalMcpActivityInput {
   containerId: string;
 }
 
-
 export interface PrepareAndRegisterToolActivityInput {
   runId: string;
   nodeId: string;

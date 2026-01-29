@@ -179,6 +179,7 @@ export const ComponentMetadataSchema = z.object({
     'input',
     'transform',
     'ai',
+    'mcp',
     'security',
     'it_ops',
     'notification',
