@@ -7,8 +7,9 @@ import {
   parameters,
   param,
   port,
-  runComponentWithRunner,
+  ValidationError,
 } from '@shipsec/component-sdk';
+import { startMcpDockerServer } from './mcp-runtime';
 
 const inputSchema = inputs({});
 
@@ -96,56 +97,43 @@ const definition = defineComponent({
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
+    agentTool: {
+      enabled: true,
+      toolName: 'mcp_server',
+      toolDescription: 'Expose an MCP server as a tool source.',
+    },
     isLatest: true,
   },
   async execute({ params }, context) {
-    let containerId: string | undefined;
-    const serverPort = params.port || 8080; // Determine the port once
+    const serverPort = params.port || 8080;
+    const isStdioMode = params.mode === 'stdio';
 
-    if (params.image) {
-      const isStdioMode = params.mode === 'stdio';
-      // Manually construct runner config to resolve parameters,
-      // as `this.runner` is not interpolated when used directly in `execute`.
-      const runnerConfig = {
-        kind: 'docker' as const, // Explicitly type as 'docker' literal
-        image: params.image,
-        // Combine command and args into a single array for the Docker command
-        command: isStdioMode
-          ? []
-          : [...(params.command || []), ...(params.args || [])],
-        env: {
-          ...params.env,
-          ...(isStdioMode
-            ? {
-                MCP_COMMAND: params.stdioCommand ?? '',
-                MCP_ARGS: JSON.stringify(params.stdioArgs ?? []),
-                MCP_PORT: String(serverPort),
-              }
-            : {}),
-        },
-        detached: true,
-        // Map the internal server port to the same host port
-        ports: { [serverPort]: serverPort },
-      };
-
-      // For local docker MCP servers, we start the container using the runner.
-      const result = await runComponentWithRunner(
-        runnerConfig, // Pass the dynamically constructed runner config
-        async () => ({}),
-        params,
-        context,
-      );
-
-      if (result && typeof result === 'object' && 'containerId' in result) {
-        containerId = (result as any).containerId;
-      }
+    if (isStdioMode && !params.stdioCommand) {
+      throw new ValidationError('Stdio command is required for stdio MCP servers', {
+        fieldErrors: { stdioCommand: ['Stdio command is required'] },
+      });
     }
 
-    const port = params.port || 8080;
-    return {
-      endpoint: `http://localhost:${port}`,
-      containerId,
+    const command = isStdioMode ? [] : [...(params.command || []), ...(params.args || [])];
+    const env = {
+      ...params.env,
+      ...(isStdioMode
+        ? {
+            MCP_COMMAND: params.stdioCommand ?? '',
+            MCP_ARGS: JSON.stringify(params.stdioArgs ?? []),
+            MCP_PORT: String(serverPort),
+          }
+        : {}),
     };
+
+    return startMcpDockerServer({
+      image: params.image,
+      command,
+      env,
+      port: serverPort,
+      params,
+      context,
+    });
   },
 });
 

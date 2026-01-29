@@ -1,82 +1,119 @@
-# ENG-101: Frontend: Tool Mode & Agent Node UI Implementation Plan
+# MCP AWS Servers Plan (CloudTrail + CloudWatch)
 
-## Overview
-This plan details the frontend implementation for supporting Agentic workflows, including a Tool Mode toggle for nodes, an MCP Server node type, and enhancements to the Run Timeline to visualize agent execution and reasoning.
+Goal: Make AWS CloudTrail + CloudWatch MCP servers usable locally via OpenCode and the MCP Gateway, with a standardized MCP-node lifecycle (start → register → cleanup), and UI support through tool-mode nodes.
 
-## User Review Required
-> [!IMPORTANT]
-> - Confirm if `core.mcp.server` component definition exists in the backend or if it needs to be mocked/created in frontend for now.
-> - Clarify if "MCP Server node type in palette" implies a specific UI for browsing a catalog (e.g., distinct from normal list). We will implement it as a distinct category in the existing Sidebar for now.
+This plan is split into commit-sized phases. No code changes beyond the plan should happen until you approve.
 
-## Proposed Changes
+---
 
-### 1. Tool Mode Toggle
-**Goal**: Allow users to toggle nodes into "Tool Mode", changing their visual representation and port exposure.
+## Constraints and Principles
+- MCP server nodes are tool-mode only.
+- MCP servers are long-lived per workflow run (start once, expose tools, cleanup on finalize).
+- All MCP servers exposed to agents must be HTTP (stdio is wrapped with proxy).
+- AWS credentials are provided via a credential bundle input (or equivalent).
 
-#### [MODIFY] [WorkflowNode.tsx](file:///Users/betterclever/shipsec/shipsec-studio/frontend/src/components/workflow/WorkflowNode.tsx)
-- Add a "Tool Mode" toggle button to the node header (visible for agent-callable nodes).
-- **State**: Track `isToolMode` state (likely in `node.data.config.isToolMode` or similar).
-- **Rendering**:
-    - When `isToolMode` is active:
-        - Show "Exposed" inputs/outputs (the ones the Agent sees).
-        - Hide internal wiring ports not relevant to the Agent? Or show them differently?
-        - Apply a distinct visual style (e.g., "Tool" badge, different border color).
-    - **Visual Distinction**: "Visual distinction for tool calls vs normal nodes".
-        - Add a "Tool" icon/badge.
-        - Change border style (e.g., dashed vs solid, or a specific color like purple/indigo for tools).
+---
 
-### 2. MCP Server Node & Palette
-**Goal**: Add MCP Server nodes to the palette with catalog selection.
+## Commit Plan
 
-#### [MODIFY] [Sidebar.tsx](file:///Users/betterclever/shipsec/shipsec-studio/frontend/src/components/layout/Sidebar.tsx)
-- Add `mcp_server` to `categoryOrder` and `categoryColors`.
-- Ensure MCP Server components are correctly categorized and displayed.
-- **Catalog Selection**:
-    - If a specific Catalog UI is needed, we might need a "Add from Catalog" button in the `mcp_server` section or a separate view.
-    - *Plan*: Integrate into the existing accordion list for now, ensuring `mcp_server` category is prominent.
+### Commit 1 — MCP lifecycle helper (worker)
+Scope: Standardize MCP node lifecycle with shared helper utilities.
+- Create a shared helper (e.g., `worker/src/components/core/mcp-runtime.ts`):
+  - `runMcpServerInToolMode(...)` to start container, inject env, return endpoint/containerId.
+  - `registerMcpServer(...)` wrapper (call `registerLocalMcpActivity`).
+  - `assertToolModeOnly(context)` guard.
+- Update `core.mcp.server` to call the helper and enforce tool-mode.
+- Keep current stdio proxy support (already added) as a supported mode.
 
-#### [NEW] [MCPServerNode.tsx] (Optional)
-- If MCP Server nodes require special rendering (e.g., connection status to external server), create a custom node type.
-- *Default*: Use `WorkflowNode` but with "MCP" styling.
+Artifacts:
+- Helper module added.
+- `core.mcp.server` uses helper and rejects non-tool mode.
 
-### 3. Agent Node & Tools Port
-**Goal**: Enhance the Agent Node UI to support multi-connection tools port.
+---
 
-#### [MODIFY] [WorkflowNode.tsx](file:///Users/betterclever/shipsec/shipsec-studio/frontend/src/components/workflow/WorkflowNode.tsx)
-- **Tools Port**:
-    - Ensure the `tools` input port (anchor) handles multiple connections visually.
-    - ReactFlow `Handle` supports `isConnectable={true}` (default).
-    - **Visual**: Style the "Tools" port distinctly (e.g., different shape or color) to indicate it's a "Tool Collection" port.
+### Commit 2 — AWS MCP proxy images (docker)
+Scope: Build derived images that include AWS MCP stdio servers.
+- Add `docker/mcp-aws-cloudtrail/`:
+  - Dockerfile builds from `shipsec/mcp-stdio-proxy` and installs CloudTrail MCP (e.g., `uvx awslabs-cloudtrail-mcp-server`).
+- Add `docker/mcp-aws-cloudwatch/`:
+  - Dockerfile builds from same base and installs CloudWatch MCP.
+- Document build commands and expected env vars.
 
-### 4. Run Timeline Enhancements
-**Goal**: Visualize agent execution, reasoning, and tool calls.
+Artifacts:
+- New docker folders + README for each image.
 
-#### [MODIFY] [ExecutionTimeline.tsx](file:///Users/betterclever/shipsec/shipsec-studio/frontend/src/components/timeline/ExecutionTimeline.tsx)
-- **Expandable Tool Calls**:
-    - Show Agent events (steps) on the timeline track.
-    - Allow clicking an Agent event to expand/focus it.
-    - `agentMarkers` seem implemented. Ensure they are fully wired up to show sub-steps.
+---
 
-#### [MODIFY] [AgentTracePanel.tsx](file:///Users/betterclever/shipsec/shipsec-studio/frontend/src/components/timeline/AgentTracePanel.tsx)
-- **Thinking/Reasoning**:
-    - Ensure `step.thought` is displayed prominently (it is currently `ExpandableText`).
-    - **Tool Calls**:
-        - `AgentStepCard` shows tool calls. Improve visual distinction.
-        - Add "Thinking" section (e.g., "Agent is thinking..." animation or collapsible "Reasoning" block).
+### Commit 3 — AWS MCP components (tool-mode only)
+Scope: Add two components that encapsulate AWS MCP lifecycle.
+- `worker/src/components/security/aws-cloudtrail-mcp.ts`
+- `worker/src/components/security/aws-cloudwatch-mcp.ts`
 
-## Verification Plan
+Each component:
+- Runner: docker, image points to the new AWS proxy image.
+- Parameters:
+  - `region`
+  - `mcpPort` (default 8080)
+  - optional `extraArgs` (array)
+- Inputs:
+  - `awsCredentials` (credential bundle: accessKeyId, secretAccessKey, sessionToken)
+- Execute:
+  - Assert tool-mode only.
+  - Start container with env: AWS creds + region + MCP_COMMAND/MCP_ARGS.
+  - Register with gateway via activity.
+  - Output: endpoint + containerId (for debug)
 
-### Manual Verification
-1.  **Tool Mode**:
-    - Drag a component (e.g., "Recursive Web Scraper") to canvas.
-    - Toggle "Tool Mode". Verify visual change (border/badge) and port changes.
-    - Connect it to an Agent node's "Tools" port.
-2.  **MCP Server**:
-    - Check Palette for "MCP Servers" category.
-    - Drag an MCP Server node to canvas.
-3.  **Run Timeline**:
-    - Run a workflow with an Agent.
-    - Open "Execution" view.
-    - Check Timeline for Agent markers.
-    - Click Agent node -> Check "Agent Trace" panel.
-    - Verify "Thinking" and "Tool Calls" are shown clearly.
+Artifacts:
+- New components registered in index.
+- Optional unit tests for components (basic config validation).
+
+---
+
+### Commit 4 — UI tool-mode safeguards + AWS MCP visibility
+Scope: UI clarity and guardrails.
+- Add “tool-mode only” badge or warning for MCP server components.
+- Update component metadata / docs to reflect tool-mode only behavior.
+- Ensure AWS MCP components appear in the palette under `security` (or a new `mcp` category if desired).
+
+Artifacts:
+- UI hints in config panel / node rendering.
+
+---
+
+## Lint & Typecheck Instructions
+Run after each commit (or at least after Commit 4):
+
+```bash
+bun --cwd worker run lint
+bun --cwd worker run typecheck
+bun --cwd backend run lint
+bun --cwd backend run typecheck
+bun --cwd frontend run lint
+bun --cwd frontend run typecheck
+```
+
+If only worker changes are made in a commit, it is acceptable to run just the worker checks for that commit and the full set at the end.
+
+---
+
+## Manual Validation (you will run)
+1. Build the AWS proxy images.
+2. In UI, add AWS CloudTrail MCP node and set tool mode.
+3. Connect to OpenCode tools port.
+4. Run workflow and verify tools show up in the gateway.
+5. Confirm containers stop after workflow completes.
+
+---
+
+## Open Questions to Resolve Before Coding
+- Should AWS MCP components live under `security` or a new `mcp` category?
+- Do we want a single generic “AWS MCP” component with a server selector, or separate components?
+- What is the final “credential bundle” schema in the UI?
+
+---
+
+## Implementation Order (after plan approval)
+1) Commit 1
+2) Commit 2
+3) Commit 3
+4) Commit 4
