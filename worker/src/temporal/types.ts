@@ -218,10 +218,15 @@ export interface RegisterLocalMcpActivityInput {
   containerId: string;
 }
 
+
 export interface PrepareAndRegisterToolActivityInput {
   runId: string;
   nodeId: string;
   componentId: string;
   inputs: Record<string, unknown>;
   params: Record<string, unknown>;
+}
+
+export interface CleanupLocalMcpActivityInput {
+  runId: string;
 }

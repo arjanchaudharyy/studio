@@ -6,6 +6,7 @@ import {
   ServiceError,
 } from '@shipsec/component-sdk';
 import {
+  CleanupLocalMcpActivityInput,
   RegisterComponentToolActivityInput,
   RegisterLocalMcpActivityInput,
   RegisterRemoteMcpActivityInput,
@@ -78,6 +79,36 @@ export async function registerLocalMcpActivity(
     endpoint,
     containerId,
   });
+}
+
+export async function cleanupLocalMcpActivity(
+  input: CleanupLocalMcpActivityInput,
+): Promise<void> {
+  const response = await callInternalApi('cleanup', { runId: input.runId });
+  const containerIds = Array.isArray(response?.containerIds) ? response.containerIds : [];
+
+  if (containerIds.length === 0) {
+    return;
+  }
+
+  const { exec } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const execAsync = promisify(exec);
+
+  await Promise.all(
+    containerIds.map(async (containerId: string) => {
+      if (!containerId || typeof containerId !== 'string') return;
+      if (!/^[a-zA-Z0-9_.-]+$/.test(containerId)) {
+        console.warn(`[MCP Cleanup] Skipping container with unsafe id: ${containerId}`);
+        return;
+      }
+      try {
+        await execAsync(`docker rm -f ${containerId}`);
+      } catch (error) {
+        console.warn(`[MCP Cleanup] Failed to remove container ${containerId}:`, error);
+      }
+    }),
+  );
 }
 
 export async function prepareAndRegisterToolActivity(input: {

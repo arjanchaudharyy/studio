@@ -50,4 +50,10 @@ export class InternalMcpController {
     await this.toolRegistry.registerLocalMcp(body);
     return { success: true };
   }
+
+  @Post('cleanup')
+  async cleanupRun(@Body() body: { runId: string }) {
+    const containerIds = await this.toolRegistry.cleanupRun(body.runId);
+    return { containerIds };
+  }
 }

@@ -28,6 +28,7 @@ import type {
   WorkflowAction,
   PrepareRunPayloadActivityInput,
   RegisterComponentToolActivityInput,
+  CleanupLocalMcpActivityInput,
   RegisterLocalMcpActivityInput,
   RegisterRemoteMcpActivityInput,
   PrepareAndRegisterToolActivityInput,
@@ -41,6 +42,7 @@ const {
   expireHumanInputRequestActivity,
   registerLocalMcpActivity,
   registerRemoteMcpActivity,
+  cleanupLocalMcpActivity,
   prepareAndRegisterToolActivity,
 } = proxyActivities<{
   runComponentActivity(input: RunComponentActivityInput): Promise<RunComponentActivityOutput>;
@@ -70,6 +72,7 @@ const {
   registerComponentToolActivity(input: RegisterComponentToolActivityInput): Promise<void>;
   registerLocalMcpActivity(input: RegisterLocalMcpActivityInput): Promise<void>;
   registerRemoteMcpActivity(input: RegisterRemoteMcpActivityInput): Promise<void>;
+  cleanupLocalMcpActivity(input: CleanupLocalMcpActivityInput): Promise<void>;
   prepareAndRegisterToolActivity(input: PrepareAndRegisterToolActivityInput): Promise<void>;
 }>({
   startToCloseTimeout: '10 minutes',
@@ -886,6 +889,9 @@ export async function shipsecWorkflowRun(
       [{ outputs, error: normalizedError.message }],
     );
   } finally {
+    await cleanupLocalMcpActivity({ runId: input.runId }).catch((err) => {
+      console.error(`[Workflow] Failed to cleanup MCP containers for run ${input.runId}`, err);
+    });
     await finalizeRunActivity({ runId: input.runId }).catch((err) => {
       console.error(`[Workflow] Failed to finalize run ${input.runId}`, err);
     });
