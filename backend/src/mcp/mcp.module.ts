@@ -7,10 +7,11 @@ import { McpGatewayController } from './mcp-gateway.controller';
 import { SecretsModule } from '../secrets/secrets.module';
 import { InternalMcpController } from './internal-mcp.controller';
 import { WorkflowsModule } from '../workflows/workflows.module';
+import { ApiKeysModule } from '../api-keys/api-keys.module';
 
 @Global()
 @Module({
-  imports: [SecretsModule, WorkflowsModule],
+  imports: [SecretsModule, WorkflowsModule, ApiKeysModule],
   controllers: [McpGatewayController, InternalMcpController],
   providers: [
     {
@@ -18,6 +19,11 @@ import { WorkflowsModule } from '../workflows/workflows.module';
       useFactory: () => {
         // Use the same Redis URL as terminal or a dedicated one
         const url = process.env.TOOL_REGISTRY_REDIS_URL ?? process.env.TERMINAL_REDIS_URL;
+        if (!url) {
+          console.warn('[MCP] Redis URL not set; tool registry disabled');
+        } else {
+          console.info(`[MCP] Tool registry Redis URL: ${url}`);
+        }
         if (!url) {
           return null;
         }
