@@ -22,6 +22,7 @@
       "bun-types"
     ],
     "incremental": true,
+    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
     "composite": true,
     "assumeChangesOnlyAffectDirectDependencies": true
   },

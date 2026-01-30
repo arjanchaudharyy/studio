@@ -328,7 +328,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function buildProviderEnv(model?: { provider: string; apiKey?: string }) {
+function buildProviderEnv(model?: { provider: string; apiKey?: string }): Record<string, string> {
   if (!model?.apiKey) {
     return {};
   }
