@@ -54,21 +54,13 @@ export function DynamicArtifactNameInput({
       />
 
       <div className="flex items-center gap-2">
-        <Select
-          disabled={disabled}
-          onValueChange={handleInsertPlaceholder}
-          value=""
-        >
+        <Select disabled={disabled} onValueChange={handleInsertPlaceholder} value="">
           <SelectTrigger className="h-8 text-xs">
             <SelectValue placeholder="Insert placeholder..." />
           </SelectTrigger>
           <SelectContent>
             {DYNAMIC_PARAMETERS.map((param) => (
-              <SelectItem
-                key={param.placeholder}
-                value={param.placeholder}
-                className="text-xs"
-              >
+              <SelectItem key={param.placeholder} value={param.placeholder} className="text-xs">
                 <span className="font-mono">{param.placeholder}</span>
                 <span className="ml-2 text-muted-foreground">— {param.description}</span>
               </SelectItem>
