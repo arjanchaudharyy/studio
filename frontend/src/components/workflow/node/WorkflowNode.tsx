@@ -1189,7 +1189,11 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                                   isInactive &&
                                     '!border-slate-300 !bg-slate-200 dark:!bg-slate-800 opacity-30',
                                 )}
-                                style={{ top: '50%', right: '-18px', transform: 'translateY(-50%)' }}
+                                style={{
+                                  top: '50%',
+                                  right: '-18px',
+                                  transform: 'translateY(-50%)',
+                                }}
                               />
                             </div>
                           );

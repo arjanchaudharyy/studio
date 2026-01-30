@@ -14,6 +14,7 @@ import { LogIngestService } from '../../logging/log-ingest.service';
 import { NodeIOIngestService } from '../../node-io/node-io-ingest.service';
 import { SecretsEncryptionService } from '../../secrets/secrets.encryption';
 import { InternalMcpController } from '../internal-mcp.controller';
+import { McpGatewayService } from '../mcp-gateway.service';
 import { ToolRegistryService, TOOL_REGISTRY_REDIS } from '../tool-registry.service';
 import { Pool } from 'pg';
 
@@ -60,6 +61,9 @@ describe('MCP Internal API (Integration)', () => {
     const mockRedis = new MockRedis();
     const encryption = new SecretsEncryptionService();
     const toolRegistryService = new ToolRegistryService(mockRedis as unknown as any, encryption);
+    const mockGatewayService = {
+      refreshServersForRun: async () => {},
+    };
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), McpModule],
     })
@@ -89,6 +93,8 @@ describe('MCP Internal API (Integration)', () => {
       .useValue({
         validateKey: async () => null,
       })
+      .overrideProvider(McpGatewayService)
+      .useValue(mockGatewayService)
       .overrideProvider(AnalyticsService)
       .useValue({
         isEnabled: () => false,
@@ -128,6 +134,8 @@ describe('MCP Internal API (Integration)', () => {
     const controller = moduleFixture.get(InternalMcpController);
     (controller as unknown as { toolRegistry: ToolRegistryService }).toolRegistry =
       toolRegistryService;
+    (controller as unknown as { mcpGatewayService: typeof mockGatewayService }).mcpGatewayService =
+      mockGatewayService;
   });
 
   afterAll(async () => {

@@ -201,6 +201,8 @@ const definition = defineComponent({
       ...providerConfig,
     };
 
+    const providerEnv = buildProviderEnv(model);
+
     // 3. Prepare Context and Prompt
     const contextJson = JSON.stringify(taskContext ?? {}, null, 2);
 
@@ -255,10 +257,7 @@ Please investigate the issue and generate a detailed report.
         command: ['/workspace/run.sh'],
         // Use host network to access localhost gateway
         network: 'host' as const,
-        env: {
-          // OpenCode loads provider configuration from opencode.jsonc
-          // API keys are passed via provider config, not env vars
-        },
+        env: providerEnv,
         volumes: [
           volume.getVolumeConfig('/workspace', false), // Read-write, mounted at /workspace
         ],
@@ -327,6 +326,29 @@ Please investigate the issue and generate a detailed report.
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function buildProviderEnv(model?: { provider: string; apiKey?: string }) {
+  if (!model?.apiKey) {
+    return {};
+  }
+
+  switch (model.provider) {
+    case 'openai':
+      return { OPENAI_API_KEY: model.apiKey };
+    case 'openrouter':
+      return { OPENROUTER_API_KEY: model.apiKey };
+    case 'anthropic':
+      return { ANTHROPIC_API_KEY: model.apiKey };
+    case 'groq':
+      return { GROQ_API_KEY: model.apiKey };
+    case 'xai':
+      return { XAI_API_KEY: model.apiKey };
+    case 'deepseek':
+      return { DEEPSEEK_API_KEY: model.apiKey };
+    default:
+      return {};
+  }
 }
 
 componentRegistry.register(definition);
