@@ -16,7 +16,7 @@ const inputSchema = inputs({
       .string()
       .optional()
       .describe(
-        'Name for the artifact. Supports dynamic placeholders: {{run_id}}, {{timestamp}}, {{dataset}}, {{task}}, {{run_name}}. Defaults to {{run_id}}-{{timestamp}}.',
+        'Name for the artifact. Supports dynamic placeholders: {{run_id}}, {{node_id}}, {{timestamp}}, {{date}}, {{time}}. Defaults to {{run_id}}-{{timestamp}}.',
       ),
     {
       label: 'Artifact Name',
@@ -46,11 +46,9 @@ const inputSchema = inputs({
 /**
  * Substitutes dynamic placeholders in artifact name template.
  * Supported placeholders:
- * - {{run_id}} - Current run ID
+ * - {{run_id}} - Full workflow run ID
+ * - {{node_id}} - Component's node ID in the workflow (e.g., "artifact-writer-1")
  * - {{timestamp}} - Unix timestamp in milliseconds
- * - {{dataset}} - Dataset name (if available)
- * - {{task}} - Task name (if available)
- * - {{run_name}} - Human-readable run name
  * - {{date}} - ISO date (YYYY-MM-DD)
  * - {{time}} - ISO time (HH-MM-SS)
  */
@@ -63,16 +61,10 @@ function substituteArtifactName(
   const isoDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
   const isoTime = now.toISOString().split('T')[1].split('.')[0].replace(/:/g, '-'); // HH-MM-SS
 
-  // Extract a shorter run name from runId (last segment after last hyphen, or first 8 chars)
-  const runIdParts = context.runId.split('-');
-  const runName = runIdParts.length > 1 ? runIdParts.slice(-1)[0] : context.runId.slice(0, 8);
-
   return template
     .replace(/\{\{run_id\}\}/gi, context.runId)
+    .replace(/\{\{node_id\}\}/gi, context.componentRef)
     .replace(/\{\{timestamp\}\}/gi, timestamp)
-    .replace(/\{\{dataset\}\}/gi, 'default')
-    .replace(/\{\{task\}\}/gi, context.componentRef)
-    .replace(/\{\{run_name\}\}/gi, runName)
     .replace(/\{\{date\}\}/gi, isoDate)
     .replace(/\{\{time\}\}/gi, isoTime);
 }
