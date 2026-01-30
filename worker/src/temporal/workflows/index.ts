@@ -1,6 +1,7 @@
 import {
   ApplicationFailure,
   condition,
+  defineQuery,
   getExternalWorkflowHandle,
   proxyActivities,
   setHandler,
@@ -11,7 +12,13 @@ import {
 import type { ComponentRetryPolicy } from '@shipsec/component-sdk';
 import { runWorkflowWithScheduler } from '../workflow-scheduler';
 import { buildActionPayload } from '../input-resolver';
-import { resolveHumanInputSignal, type HumanInputResolution } from '../signals';
+import {
+  resolveHumanInputSignal,
+  executeToolCallSignal,
+  type HumanInputResolution,
+  type ToolCallRequest,
+  type ToolCallResult,
+} from '../signals';
 import type { ExecutionTriggerMetadata, PreparedRunPayload } from '@shipsec/shared';
 import type {
   RunComponentActivityInput,
@@ -21,8 +28,8 @@ import type {
   WorkflowAction,
   PrepareRunPayloadActivityInput,
   RegisterComponentToolActivityInput,
+  CleanupLocalMcpActivityInput,
   RegisterLocalMcpActivityInput,
-  RegisterRemoteMcpActivityInput,
   PrepareAndRegisterToolActivityInput,
 } from '../types';
 
@@ -33,7 +40,7 @@ const {
   createHumanInputRequestActivity,
   expireHumanInputRequestActivity,
   registerLocalMcpActivity,
-  registerRemoteMcpActivity,
+  cleanupLocalMcpActivity,
   prepareAndRegisterToolActivity,
 } = proxyActivities<{
   runComponentActivity(input: RunComponentActivityInput): Promise<RunComponentActivityOutput>;
@@ -62,7 +69,7 @@ const {
   expireHumanInputRequestActivity(requestId: string): Promise<void>;
   registerComponentToolActivity(input: RegisterComponentToolActivityInput): Promise<void>;
   registerLocalMcpActivity(input: RegisterLocalMcpActivityInput): Promise<void>;
-  registerRemoteMcpActivity(input: RegisterRemoteMcpActivityInput): Promise<void>;
+  cleanupLocalMcpActivity(input: CleanupLocalMcpActivityInput): Promise<void>;
   prepareAndRegisterToolActivity(input: PrepareAndRegisterToolActivityInput): Promise<void>;
 }>({
   startToCloseTimeout: '10 minutes',
@@ -79,6 +86,31 @@ const { recordTraceEventActivity } = proxyActivities<{
 }>({
   startToCloseTimeout: '1 minute',
 });
+
+const MCP_SERVER_COMPONENTS: Record<
+  string,
+  { toolName: (params: Record<string, unknown>) => string; description: string }
+> = {
+  'core.mcp.server': {
+    toolName: (params) => {
+      const image = typeof params.image === 'string' ? params.image : '';
+      return image.split('/').pop()?.split(':')[0] || 'mcp_server';
+    },
+    description: 'Local MCP Server',
+  },
+  'security.aws-cloudtrail-mcp': {
+    toolName: () => 'aws_cloudtrail_mcp',
+    description: 'AWS CloudTrail MCP Server',
+  },
+  'security.aws-cloudwatch-mcp': {
+    toolName: () => 'aws_cloudwatch_mcp',
+    description: 'AWS CloudWatch MCP Server',
+  },
+};
+
+function isMcpServerComponent(componentId: string): boolean {
+  return componentId in MCP_SERVER_COMPONENTS;
+}
 
 /**
  * Check if an output indicates a pending approval gate
@@ -136,6 +168,83 @@ export async function shipsecWorkflowRun(
       pending.resolve(resolution);
     }
   });
+
+  // Track pending tool calls and their results (for MCP gateway)
+  const pendingToolCalls = new Map<
+    string,
+    { request: ToolCallRequest; resolve: (result: ToolCallResult) => void }
+  >();
+  const toolCallResults = new Map<string, ToolCallResult>();
+
+  // Set up signal handler for tool call execution requests
+  setHandler(executeToolCallSignal, async (request: ToolCallRequest) => {
+    console.log(
+      `[Workflow] Received tool call signal: callId=${request.callId}, componentId=${request.componentId}`,
+    );
+
+    // Execute the component via runComponentActivity
+    try {
+      const activityOutput = await _runComponentActivity({
+        runId: input.runId,
+        workflowId: input.workflowId,
+        workflowVersionId: input.workflowVersionId,
+        organizationId: input.organizationId,
+        action: {
+          ref: `tool-call:${request.callId}`,
+          componentId: request.componentId,
+        },
+        // Merge credentials (pre-bound) with agent-provided arguments
+        inputs: {
+          ...(request.credentials ?? {}),
+          ...request.arguments,
+        },
+        params: request.parameters ?? {},
+        metadata: {
+          streamId: request.callId,
+        },
+      });
+
+      const result: ToolCallResult = {
+        callId: request.callId,
+        success: true,
+        output: activityOutput.output,
+        completedAt: new Date().toISOString(),
+      };
+
+      toolCallResults.set(request.callId, result);
+      console.log(`[Workflow] Tool call completed: callId=${request.callId}, success=true`);
+
+      // Resolve any pending waiters
+      const pending = pendingToolCalls.get(request.callId);
+      if (pending) {
+        pending.resolve(result);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const result: ToolCallResult = {
+        callId: request.callId,
+        success: false,
+        error: errorMessage,
+        completedAt: new Date().toISOString(),
+      };
+
+      toolCallResults.set(request.callId, result);
+      console.log(`[Workflow] Tool call failed: callId=${request.callId}, error=${errorMessage}`);
+
+      const pending = pendingToolCalls.get(request.callId);
+      if (pending) {
+        pending.resolve(result);
+      }
+    }
+  });
+
+  // Set up query handler for tool call results
+  setHandler(
+    defineQuery<ToolCallResult | null, [string]>('getToolCallResult'),
+    (callId: string) => {
+      return toolCallResults.get(callId) ?? null;
+    },
+  );
 
   console.log(`[Workflow] Starting shipsec workflow run: ${input.runId}`);
   console.log(
@@ -525,6 +634,7 @@ export async function shipsecWorkflowRun(
             groupId: nodeMetadata?.groupId,
             triggeredBy,
             failure,
+            connectedToolNodeIds: nodeMetadata?.connectedToolNodeIds,
           },
         };
 
@@ -533,7 +643,8 @@ export async function shipsecWorkflowRun(
         const isToolMode = nodeMetadata?.mode === 'tool';
 
         if (isToolMode) {
-          if (action.componentId === 'core.mcp.server') {
+          console.log(`[Workflow] Node ${action.ref} is in tool mode, registering...`);
+          if (isMcpServerComponent(action.componentId)) {
             const { runComponentActivity: runMcp } = proxyActivities<{
               runComponentActivity(
                 input: RunComponentActivityInput,
@@ -548,30 +659,29 @@ export async function shipsecWorkflowRun(
             const endpoint = output.endpoint;
             const containerId = output.containerId;
 
-            if (mergedParams.type === 'docker' || mergedParams.image) {
-              await registerLocalMcpActivity({
-                runId: input.runId,
-                nodeId: action.ref,
-                toolName:
-                  (mergedParams.image as string)?.split('/').pop()?.split(':')[0] || 'mcp_server',
-                description: `Local MCP Server (${mergedParams.image})`,
-                inputSchema: {},
-                image: mergedParams.image as string,
-                port: (mergedParams.port as number) || 8080,
-                endpoint,
-                containerId,
-              });
-            } else {
-              await registerRemoteMcpActivity({
-                runId: input.runId,
-                nodeId: action.ref,
-                toolName: 'remote_mcp',
-                description: `Remote MCP Server (${endpoint})`,
-                inputSchema: {},
-                endpoint: endpoint as string,
-                authToken: mergedParams.authToken as string,
-              });
+            if (!endpoint) {
+              throw new Error('MCP server output missing endpoint');
             }
+
+            if (!containerId) {
+              throw new Error('MCP server output missing containerId');
+            }
+
+            const mcpMeta = MCP_SERVER_COMPONENTS[action.componentId];
+            const toolName = mcpMeta.toolName(mergedParams);
+            const description = mcpMeta.description;
+
+            await registerLocalMcpActivity({
+              runId: input.runId,
+              nodeId: action.ref,
+              toolName,
+              description,
+              inputSchema: {},
+              image: (mergedParams.image as string) || 'unknown',
+              port: (mergedParams.port as number) || 8080,
+              endpoint,
+              containerId,
+            });
           } else {
             await prepareAndRegisterToolActivity({
               runId: input.runId,
@@ -582,8 +692,27 @@ export async function shipsecWorkflowRun(
             });
           }
 
-          // Tool registration is successful, proceed as a successful node execution
-          return { activePorts: ['default'] };
+          console.log(`[Workflow] Node ${action.ref} registered as tool, setting results.`);
+          const toolResult = { mode: 'tool', status: 'ready', tools: [] };
+          results.set(action.ref, toolResult);
+
+          await recordTraceEventActivity({
+            type: 'NODE_COMPLETED',
+            runId: input.runId,
+            nodeRef: action.ref,
+            timestamp: new Date().toISOString(),
+            outputSummary: toolResult,
+            level: 'info',
+          });
+
+          return { activePorts: ['default', 'tools'] };
+        }
+
+        if (isMcpServerComponent(action.componentId)) {
+          throw ApplicationFailure.nonRetryable(
+            `Component ${action.componentId} is tool-mode only`,
+            'ToolModeOnly',
+          );
         }
 
         const { runComponentActivity: runComponentWithRetry } = proxyActivities<{
@@ -788,6 +917,9 @@ export async function shipsecWorkflowRun(
       [{ outputs, error: normalizedError.message }],
     );
   } finally {
+    await cleanupLocalMcpActivity({ runId: input.runId }).catch((err) => {
+      console.error(`[Workflow] Failed to cleanup MCP containers for run ${input.runId}`, err);
+    });
     await finalizeRunActivity({ runId: input.runId }).catch((err) => {
       console.error(`[Workflow] Failed to finalize run ${input.runId}`, err);
     });

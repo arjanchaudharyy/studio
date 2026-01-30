@@ -45,6 +45,7 @@ export interface WorkflowNodeMetadata {
     boundInputIds: string[];
     exposedInputIds: string[];
   };
+  connectedToolNodeIds?: string[];
 }
 
 export interface WorkflowFailureMetadata {
@@ -92,6 +93,7 @@ export interface RunComponentActivityInput {
     groupId?: string;
     triggeredBy?: string;
     failure?: WorkflowFailureMetadata;
+    connectedToolNodeIds?: string[];
   };
 }
 
@@ -222,4 +224,8 @@ export interface PrepareAndRegisterToolActivityInput {
   componentId: string;
   inputs: Record<string, unknown>;
   params: Record<string, unknown>;
+}
+
+export interface CleanupLocalMcpActivityInput {
+  runId: string;
 }

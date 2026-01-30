@@ -50,6 +50,9 @@ export interface RegisteredTool {
   /** Component ID (for component tools) */
   componentId?: string;
 
+  /** Additional parameters for the component */
+  parameters?: Record<string, unknown>;
+
   /** JSON Schema for action inputs */
   inputSchema: ToolInputSchema;
 
@@ -100,7 +103,16 @@ export class ToolRegistryService implements OnModuleDestroy {
       return;
     }
 
-    const { runId, nodeId, toolName, componentId, description, inputSchema, credentials } = input;
+    const {
+      runId,
+      nodeId,
+      toolName,
+      componentId,
+      description,
+      inputSchema,
+      credentials,
+      parameters,
+    } = input;
 
     // Encrypt credentials
     const credentialsJson = JSON.stringify(credentials);
@@ -113,6 +125,7 @@ export class ToolRegistryService implements OnModuleDestroy {
       type: 'component',
       status: 'ready',
       componentId,
+      parameters,
       description,
       inputSchema,
       encryptedCredentials,
@@ -196,18 +209,26 @@ export class ToolRegistryService implements OnModuleDestroy {
     );
   }
 
-  /**
-   * Get all registered tools for a workflow run
-   */
-  async getToolsForRun(runId: string): Promise<RegisteredTool[]> {
+  async getToolsForRun(runId: string, nodeIds?: string[]): Promise<RegisteredTool[]> {
     if (!this.redis) {
+      this.logger.warn('Redis not configured, tool registry disabled');
       return [];
     }
 
     const key = this.getRegistryKey(runId);
     const toolsHash = await this.redis.hgetall(key);
 
-    return Object.values(toolsHash).map((json) => JSON.parse(json) as RegisteredTool);
+    let tools = Object.values(toolsHash).map((json) => JSON.parse(json) as RegisteredTool);
+
+    this.logger.debug(`Found ${tools.length} tool(s) for run ${runId}`);
+
+    if (nodeIds && nodeIds.length > 0) {
+      this.logger.debug(`Filtering tools by nodeIds: ${nodeIds.join(', ')}`);
+      tools = tools.filter((t) => nodeIds.includes(t.nodeId));
+      this.logger.debug(`Filtered down to ${tools.length} tool(s)`);
+    }
+
+    return tools;
   }
 
   /**
