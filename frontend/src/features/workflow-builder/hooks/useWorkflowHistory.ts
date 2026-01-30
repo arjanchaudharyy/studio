@@ -115,7 +115,7 @@ export const useWorkflowHistory = ({
 
   /**
    * Capture the current graph state as an undoable snapshot.
-   * 
+   *
    * IMPORTANT: Always pass BOTH nodes and edges for a consistent snapshot.
    * The debouncing ensures that rapid changes (like node deletion which triggers
    * both onNodesChange and onEdgesChange) are captured as a single history entry.
