@@ -307,6 +307,7 @@ export type ComponentCategory =
   | 'input'
   | 'transform'
   | 'ai'
+  | 'mcp'
   | 'security'
   | 'it_ops'
   | 'notification'

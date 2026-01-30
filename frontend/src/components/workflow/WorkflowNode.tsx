@@ -446,6 +446,11 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   const MAX_TEXT_HEIGHT = 1200;
   const DEFAULT_TEXT_WIDTH = 320;
   const DEFAULT_TEXT_HEIGHT = 300;
+  const TOOL_MODE_ONLY_COMPONENTS = new Set([
+    'core.mcp.server',
+    'security.aws-cloudtrail-mcp',
+    'security.aws-cloudwatch-mcp',
+  ]);
   const [textSize, setTextSize] = useState<{ width: number; height: number }>(() => {
     const uiSize = (data as any)?.ui?.size as { width?: number; height?: number } | undefined;
     return {
@@ -488,6 +493,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   const component = getComponent(componentRef);
   const isTextBlock = component?.id === 'core.ui.text';
   const isEntryPoint = component?.id === 'core.workflow.entrypoint';
+  const isToolModeOnly = component?.id ? TOOL_MODE_ONLY_COMPONENTS.has(component.id) : false;
 
   // Detect dark mode using theme store (reacts to theme changes)
   const theme = useThemeStore((state) => state.theme);
@@ -496,6 +502,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   // Get component category (default to 'input' for entry points)
   const componentCategory: ComponentCategory =
     (component?.category as ComponentCategory) || (isEntryPoint ? 'input' : 'input');
+  const showMcpBadge = componentCategory === 'mcp' || isToolModeOnly;
 
   // Entry Point Helper Data
   // Get workflowId from store first, then from node data (passed from Canvas), then from route params
@@ -517,8 +524,32 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
   // Tool Mode State
   const isToolMode = (nodeData.config as any)?.isToolMode || false;
 
+  useEffect(() => {
+    if (!isToolModeOnly || isToolMode) return;
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.id !== id) return n;
+        const currentConfig = (n.data as any).config || {};
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            config: {
+              ...currentConfig,
+              isToolMode: true,
+            },
+          },
+        };
+      }),
+    );
+    markDirty();
+  }, [id, isToolMode, isToolModeOnly, markDirty, setNodes]);
+
   const toggleToolMode = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isToolModeOnly) {
+      return;
+    }
     setNodes((nds) =>
       nds.map((n) => {
         if (n.id !== id) return n;
@@ -1058,7 +1089,14 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                       !isEntryPoint && mode === 'design' ? 'Double-click to rename' : undefined
                     }
                   >
-                    <h3 className="text-sm font-semibold truncate">{displayLabel}</h3>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-sm font-semibold truncate">{displayLabel}</h3>
+                      {showMcpBadge && (
+                        <span className="inline-flex items-center rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-200">
+                          MCP
+                        </span>
+                      )}
+                    </div>
                     {hasCustomLabel && (
                       <span className="text-[10px] text-muted-foreground opacity-70 truncate block">
                         {component.name}
@@ -1074,13 +1112,21 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                   <button
                     type="button"
                     onClick={toggleToolMode}
+                    disabled={isToolModeOnly}
                     className={cn(
                       'flex items-center gap-1.5 px-2 py-1 rounded transition-all border',
+                      isToolModeOnly && 'opacity-70 cursor-not-allowed',
                       isToolMode
                         ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
                         : 'bg-background text-muted-foreground/60 border-border hover:border-purple-400 hover:text-purple-600',
                     )}
-                    title={isToolMode ? 'Disable Tool Mode' : 'Enable Tool Mode'}
+                    title={
+                      isToolModeOnly
+                        ? 'Tool Mode Only'
+                        : isToolMode
+                          ? 'Disable Tool Mode'
+                          : 'Enable Tool Mode'
+                    }
                   >
                     <Hammer
                       className={cn('h-3.5 w-3.5', isToolMode ? 'text-white' : 'text-current')}
@@ -1195,7 +1241,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
               className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700"
             >
               <CheckCircle className="h-3 w-3 mr-1" />
-              Completed
+              {componentCategory === 'mcp' ? 'Server Ready' : 'Completed'}
             </Badge>
           )}
           {visualState.status === 'error' && (
