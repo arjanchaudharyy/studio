@@ -137,6 +137,8 @@ const definition = defineComponent({
       `[OpenCode] Starting execution with connectedToolNodeIds: ${JSON.stringify(connectedToolNodeIds || [])}`,
     );
     context.logger.info(`[OpenCode] Organization ID: ${organizationId}`);
+    context.logger.info(`[OpenCode] Full metadata: ${JSON.stringify(context.metadata)}`);
+    context.logger.info(`[OpenCode] All context keys: ${Object.keys(context).join(', ')}`);
 
     // 1. Resolve Gateway Token for MCP
     let gatewayToken = '';
