@@ -174,15 +174,20 @@ const definition = defineComponent({
 
     // 2. Prepare opencode.json config
     // Note: We use 'host' networking, so we can reach localhost
+    // Correct format from https://opencode.ai/docs/mcp-servers/
+    // CRITICAL: oauth: false is required for custom headers (OAuth is auto-detected as default in v1.0.137+)
+    // See: https://github.com/anomalyco/opencode/issues/5278
     const mcpConfig = gatewayToken
       ? {
           mcp: {
             'shipsec-gateway': {
               type: 'remote' as const,
               url: DEFAULT_GATEWAY_URL,
+              oauth: false,
               headers: {
                 Authorization: `Bearer ${gatewayToken}`,
               },
+              enabled: true,
             },
           },
         }
@@ -198,6 +203,7 @@ const definition = defineComponent({
       ...(model?.provider === 'zai-coding-plan' && model.apiKey
         ? {
             'zai-coding-plan': {
+              npm: '@ai-sdk/openai-compatible',
               options: {
                 apiKey: model.apiKey,
               },
@@ -208,9 +214,9 @@ const definition = defineComponent({
 
     const opencodeConfig = {
       ...mcpConfig,
-      ...providerConfigForOpenCode,
-      autoApprove: autoApprove,
+      provider: providerConfigForOpenCode,
       model: getOpenCodeModelString(model),
+      permission: 'allow',
       // Merge in any additional provider config from parameters
       ...providerConfig,
     };
@@ -262,7 +268,7 @@ Please investigate the issue and generate a detailed report.
       // Initialize workspace with config, context, prompt, and wrapper script
       await volume.initialize({
         'context.json': contextJson,
-        'opencode.jsonc': JSON.stringify(opencodeConfig, null, 2),
+        'opencode.json': JSON.stringify(opencodeConfig, null, 2),
         'prompt.txt': finalPrompt,
         'run.sh': wrapperScript,
       });
