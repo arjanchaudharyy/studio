@@ -31,32 +31,35 @@ class MockToolLoopAgent {
   }
 }
 
-const baseContext: ExecutionContext = {
-  runId: 'test-run',
-  componentRef: 'core.ai.agent',
-  logger: {
-    debug: () => {},
-    info: () => {},
-    error: () => {},
-    warn: () => {},
-  },
-  emitProgress: () => {},
-  metadata: {
+function createTestContext(overrides?: Partial<ExecutionContext>): ExecutionContext {
+  return {
     runId: 'test-run',
     componentRef: 'core.ai.agent',
-    aiSdkOverrides: {
-      ToolLoopAgent: MockToolLoopAgent,
-      stepCountIs: stepCountIsMock,
-      createOpenAI: createOpenAIMock,
-      createGoogleGenerativeAI: createGoogleGenerativeAIMock,
-      createMCPClient: createMCPClientMock,
+    logger: {
+      debug: () => {},
+      info: () => {},
+      error: () => {},
+      warn: () => {},
     },
-  },
-  http: {
-    fetch: async () => new Response(),
-    toCurl: () => '',
-  },
-};
+    emitProgress: () => {},
+    metadata: {
+      runId: 'test-run',
+      componentRef: 'core.ai.agent',
+      aiSdkOverrides: {
+        ToolLoopAgent: MockToolLoopAgent,
+        stepCountIs: stepCountIsMock,
+        createOpenAI: createOpenAIMock,
+        createGoogleGenerativeAI: createGoogleGenerativeAIMock,
+        createMCPClient: createMCPClientMock,
+      },
+    },
+    http: {
+      fetch: async () => new Response(),
+      toCurl: () => '',
+    },
+    ...overrides,
+  };
+}
 
 function createUsage(overrides: Partial<LanguageModelUsage> = {}): LanguageModelUsage {
   return {
@@ -165,7 +168,7 @@ describe('core.ai.agent (refactor)', () => {
           stepLimit: 2,
         },
       },
-      baseContext,
+      createTestContext(),
     );
 
     expect(result.responseText).toBe('Hello agent');
@@ -211,13 +214,12 @@ describe('core.ai.agent (refactor)', () => {
       close: async () => {},
     });
 
-    const contextWithTools: ExecutionContext = {
-      ...baseContext,
+    const contextWithTools: ExecutionContext = createTestContext({
       metadata: {
-        ...baseContext.metadata,
+        ...createTestContext().metadata,
         connectedToolNodeIds: ['tool-node-1'],
       },
-    };
+    });
 
     try {
       const result = await runComponentWithRunner(
@@ -303,7 +305,7 @@ describe('core.ai.agent (refactor)', () => {
           stepLimit: 2,
         },
       },
-      baseContext,
+      createTestContext(),
     );
 
     const toolMessage = result.conversationState.messages.find(
