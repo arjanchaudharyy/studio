@@ -53,7 +53,7 @@ function createTestContext(overrides?: Partial<ExecutionContext>): ExecutionCont
       },
     },
     http: {
-      fetch: async () => new Response(),
+      fetch: (url, init) => globalThis.fetch(url, init),
       toCurl: () => '',
     },
     ...overrides,
