@@ -50,7 +50,7 @@ const inputSchema = inputs({
     description: 'Connect tool-mode nodes here to expose them to the agent.',
     allowAny: true,
     reason: 'Tool-mode port acts as a graph anchor; payloads are not consumed directly.',
-    connectionType: { kind: 'primitive', name: 'json' },
+    connectionType: { kind: 'contract', name: 'mcp.tool' },
   }),
 });
 

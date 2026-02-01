@@ -67,11 +67,12 @@ export function validateConnection(
   let sourceOutputs = (sourceNode.data as any).dynamicOutputs || sourceComponent.outputs || [];
 
   // Special case: Tool Mode virtual port
-  if ((sourceNode.data.config as any)?.isToolMode) {
+  const sourceConfig = sourceNode.data.config as any;
+  if (sourceConfig?.isToolMode || sourceConfig?.mode === 'tool') {
     sourceOutputs = [
       ...sourceOutputs,
       {
-        id: 'tool-export',
+        id: 'tools',
         label: 'Tool Export',
         connectionType: { kind: 'contract' as const, name: 'mcp.tool' },
         description: 'Exposes this node as a tool for Agents',
@@ -206,7 +207,8 @@ export function getNodeValidationWarnings(
   // Check for required inputs that are not connected
   const manualParameters = (node.data.config?.params ?? {}) as Record<string, unknown>;
   const inputOverrides = (node.data.config?.inputOverrides ?? {}) as Record<string, unknown>;
-  const isToolMode = (node.data.config as any)?.isToolMode;
+  const config = node.data.config as any;
+  const isToolMode = Boolean(config?.isToolMode || config?.mode === 'tool');
 
   component.inputs.forEach((input) => {
     // In Tool Mode, skip validation for non-credential inputs

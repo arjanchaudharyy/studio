@@ -1,7 +1,11 @@
 import { WorkflowGraphDto, WorkflowNodeDto } from '../workflows/dto/workflow-graph.dto';
 // Ensure all worker components are registered before accessing the registry
 import '../../../worker/src/components';
-import { componentRegistry, type ComponentPortMetadata } from '@shipsec/component-sdk';
+import {
+  componentRegistry,
+  getCredentialInputIds,
+  type ComponentPortMetadata,
+} from '@shipsec/component-sdk';
 import { extractPorts } from '@shipsec/component-sdk/zod-ports';
 import {
   WorkflowAction,
@@ -157,6 +161,8 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
     }
 
     const component = componentRegistry.get(node.type);
+    const credentialInputIds = component ? new Set(getCredentialInputIds(component)) : new Set();
+    const nodeMode = (config.mode as WorkflowNodeMetadata['mode']) ?? 'normal';
     const params: Record<string, unknown> = { ...rawParams };
     const inputOverrides: Record<string, unknown> = { ...rawInputOverrides };
 
@@ -188,6 +194,10 @@ export function compileWorkflowGraph(graph: WorkflowGraphDto): WorkflowDefinitio
     // Validate required inputs have either a manual value or a connection
     for (const [inputId, metadata] of inputMetadata.entries()) {
       if (!metadata.required) {
+        continue;
+      }
+
+      if (nodeMode === 'tool' && !credentialInputIds.has(inputId)) {
         continue;
       }
 

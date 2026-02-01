@@ -149,7 +149,9 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
     (component?.category as ComponentCategory) || (isEntryPoint ? 'input' : 'input');
   const isToolModeOnly = component?.id ? TOOL_MODE_ONLY_COMPONENTS.has(component.id) : false;
   const showMcpBadge = componentCategory === 'mcp' || isToolModeOnly;
-  const isToolMode = (nodeData.config as any)?.isToolMode || false;
+  const isToolMode = Boolean(
+    (nodeData.config as any)?.isToolMode || (nodeData.config as any)?.mode === 'tool',
+  );
 
   // Workflow ID resolution
   const workflowIdFromNode = (nodeData as any)?.workflowId as string | undefined;
@@ -942,26 +944,53 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                 <div className="space-y-1.5">
                   {visibleInputs.map((input) => {
                     const edges = getEdges();
-                    const connection = edges.find(
-                      (edge) => edge.target === id && edge.targetHandle === input.id,
-                    );
-                    const hasConnection = Boolean(connection);
+                    const isToolsPort = input.id === 'tools';
+                    const connections = isToolsPort
+                      ? edges.filter((edge) => edge.target === id && edge.targetHandle === input.id)
+                      : [];
+                    const connection = isToolsPort
+                      ? connections[0]
+                      : edges.find((edge) => edge.target === id && edge.targetHandle === input.id);
+                    const hasConnection = isToolsPort
+                      ? connections.length > 0
+                      : Boolean(connection);
                     const manualCandidate = inputOverrides[input.id];
                     const manualValueProvided = manualValueProvidedForInput(input, hasConnection);
 
                     let sourceInfo: string | null = null;
                     if (!manualValueProvided && connection) {
-                      const sourceNode = getNodes().find((n) => n.id === connection.source);
-                      if (sourceNode) {
-                        const sourceComponent = getComponent(
-                          (sourceNode.data as any).componentId ??
-                            (sourceNode.data as any).componentSlug,
-                        );
-                        if (sourceComponent) {
-                          const sourceOutput = sourceComponent.outputs.find(
-                            (o) => o.id === connection.sourceHandle,
+                      const sourceNodes = isToolsPort
+                        ? connections
+                            .map((edge) => getNodes().find((n) => n.id === edge.source))
+                            .filter(Boolean)
+                        : [getNodes().find((n) => n.id === connection.source)].filter(Boolean);
+                      const sourceLabels = sourceNodes
+                        .map((sourceNode) => {
+                          if (!sourceNode) return null;
+                          return (sourceNode.data as any)?.label || sourceNode.id;
+                        })
+                        .filter(Boolean) as string[];
+                      if (sourceLabels.length > 0) {
+                        if (sourceLabels.length <= 2) {
+                          sourceInfo = sourceLabels.join(', ');
+                        } else {
+                          sourceInfo = `${sourceLabels.slice(0, 2).join(', ')} +${
+                            sourceLabels.length - 2
+                          }`;
+                        }
+                      } else if (!isToolsPort) {
+                        const sourceNode = getNodes().find((n) => n.id === connection.source);
+                        if (sourceNode) {
+                          const sourceComponent = getComponent(
+                            (sourceNode.data as any).componentId ??
+                              (sourceNode.data as any).componentSlug,
                           );
-                          sourceInfo = sourceOutput?.label || 'Connected';
+                          if (sourceComponent) {
+                            const sourceOutput = sourceComponent.outputs.find(
+                              (o) => o.id === connection.sourceHandle,
+                            );
+                            sourceInfo = sourceOutput?.label || 'Connected';
+                          }
                         }
                       }
                     }
@@ -1063,7 +1092,7 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
               <Handle
                 type="source"
                 position={Position.Right}
-                id="tool-export"
+                id="tools"
                 className="!w-[10px] !h-[10px] !border-2 !border-purple-500 !bg-purple-500 !rounded-full"
                 style={{ top: '50%', right: '-18px', transform: 'translateY(-50%)' }}
               />

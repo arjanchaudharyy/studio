@@ -31,6 +31,7 @@ import { useComponentStore } from '@/store/componentStore';
 import { ParameterFieldWrapper } from './ParameterField';
 import { WebhookDetails } from './WebhookDetails';
 import { SecretSelect } from '@/components/inputs/SecretSelect';
+import { useReactFlow } from 'reactflow';
 import type { Node } from 'reactflow';
 import type { FrontendNodeData } from '@/schemas/node';
 import type { ComponentType, KeyboardEvent } from 'react';
@@ -301,6 +302,7 @@ export function ConfigPanel({
 }: ConfigPanelProps) {
   const isMobile = useIsMobile();
   const { getComponent, loading } = useComponentStore();
+  const { getEdges, getNodes } = useReactFlow();
   const fallbackWorkflowId = useWorkflowStore((state) => state.metadata.id);
   const workflowId = workflowIdProp ?? fallbackWorkflowId;
   const navigate = useNavigate();
@@ -418,7 +420,9 @@ export function ConfigPanel({
 
   const nodeData: FrontendNodeData = selectedNode.data;
   const componentRef: string | undefined = nodeData.componentId ?? nodeData.componentSlug;
-  const isToolMode = Boolean((nodeData.config as any)?.isToolMode);
+  const isToolMode = Boolean(
+    (nodeData.config as any)?.isToolMode || (nodeData.config as any)?.mode === 'tool',
+  );
   const component = getComponent(componentRef);
 
   if (!component) {
@@ -955,11 +959,11 @@ export function ConfigPanel({
           )}
 
           {/* Inputs Section */}
-          {!isToolMode && componentInputs.length > 0 && (
+          {componentInputs.length > 0 && (
             <CollapsibleSection
               title="Inputs"
               count={
-                (nodeData.config as any)?.isToolMode
+                isToolMode
                   ? componentInputs.filter(isCredentialInput).length
                   : componentInputs.length
               }
@@ -967,13 +971,18 @@ export function ConfigPanel({
             >
               <div className="space-y-0 mt-2">
                 {componentInputs.map((input, index) => {
-                  const isToolMode = (nodeData.config as any)?.isToolMode;
                   if (isToolMode && !isCredentialInput(input)) {
                     return null;
                   }
 
-                  const connection = nodeData.inputs?.[input.id];
-                  const hasConnection = Boolean(connection);
+                  const isToolsPort = input.id === 'tools';
+                  const toolEdges = isToolsPort
+                    ? getEdges().filter(
+                        (edge) => edge.target === selectedNode.id && edge.targetHandle === 'tools',
+                      )
+                    : [];
+                  const connection = isToolsPort ? undefined : nodeData.inputs?.[input.id];
+                  const hasConnection = isToolsPort ? toolEdges.length > 0 : Boolean(connection);
                   const manualValue = inputOverrides[input.id];
                   const manualOverridesPort = input.valuePriority === 'manual-first';
                   const allowsManualInput = inputSupportsManualValue(input) || manualOverridesPort;
@@ -984,6 +993,25 @@ export function ConfigPanel({
                     manualValue !== null &&
                     (typeof manualValue === 'string' ? manualValue.trim().length > 0 : true);
                   const manualLocked = hasConnection && !manualOverridesPort;
+                  const connectedSourceLabels = isToolsPort
+                    ? toolEdges
+                        .map((edge) => {
+                          const sourceNode = getNodes().find((n) => n.id === edge.source);
+                          return (sourceNode?.data as any)?.label || edge.source;
+                        })
+                        .filter(Boolean)
+                    : connection
+                      ? [connection.source]
+                      : [];
+                  const connectedSummary = (() => {
+                    if (connectedSourceLabels.length === 0) return '';
+                    if (connectedSourceLabels.length <= 2) {
+                      return connectedSourceLabels.join(', ');
+                    }
+                    return `${connectedSourceLabels.slice(0, 2).join(', ')} +${
+                      connectedSourceLabels.length - 2
+                    }`;
+                  })();
                   const portType = resolvePortType(input);
                   const primitiveName = portType?.kind === 'primitive' ? portType.name : null;
                   const isNumberInput = primitiveName === 'number';
@@ -1152,7 +1180,7 @@ export function ConfigPanel({
                         ) : hasConnection ? (
                           <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
                             <CheckCircle2 className="h-3 w-3" />
-                            <span>Connected from {connection?.source}</span>
+                            <span>Connected from {connectedSummary || connection?.source}</span>
                           </div>
                         ) : input.required ? (
                           <div className="flex items-center gap-1.5 text-destructive">
