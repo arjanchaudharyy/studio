@@ -63,13 +63,13 @@ type AgentTools = ToolSet;
 type AgentStepResult = StepResult<AgentTools>;
 type AgentGenerationResult = GenerateTextResult<AgentTools, never>;
 type ToolResultOutput = ToolResultPart['output'];
-type AiSdkOverrides = {
+interface AiSdkOverrides {
   ToolLoopAgent?: typeof ToolLoopAgent;
   stepCountIs?: typeof stepCountIs;
   createOpenAI?: typeof createOpenAI;
   createGoogleGenerativeAI?: typeof createGoogleGenerativeAI;
   createMCPClient?: typeof createMCPClient;
-};
+}
 
 const inputSchema = inputs({
   userInput: port(
