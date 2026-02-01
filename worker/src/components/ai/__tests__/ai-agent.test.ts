@@ -14,8 +14,8 @@ const createMCPClientMock = vi.fn();
 
 let toolLoopAgentSettings: unknown;
 let lastGenerateMessages: unknown;
+let nextGenerateResultOverride: unknown;
 type GenerationResult = GenerateTextResult<ToolSet, ReturnType<typeof AIOutput.text>>;
-let nextGenerateResult = createGenerationResult();
 
 class MockToolLoopAgent {
   settings: unknown;
@@ -27,7 +27,7 @@ class MockToolLoopAgent {
 
   async generate({ messages }: { messages: unknown }) {
     lastGenerateMessages = messages;
-    return nextGenerateResult;
+    return nextGenerateResultOverride || createGenerationResult();
   }
 }
 
@@ -125,7 +125,7 @@ function expectRecord(value: unknown, label: string): Record<string, unknown> {
 beforeEach(() => {
   toolLoopAgentSettings = undefined;
   lastGenerateMessages = undefined;
-  nextGenerateResult = createGenerationResult();
+  nextGenerateResultOverride = undefined;
   stepCountIsMock.mockClear();
   createOpenAIMock.mockClear();
   createGoogleGenerativeAIMock.mockClear();
@@ -142,7 +142,7 @@ describe('core.ai.agent (refactor)', () => {
     const component = componentRegistry.get<AiAgentInput, AiAgentOutput>('core.ai.agent');
     expect(component).toBeDefined();
 
-    nextGenerateResult = createGenerationResult({ text: 'Hello agent' });
+    nextGenerateResultOverride = createGenerationResult({ text: 'Hello agent' });
 
     const result = await runComponentWithRunner(
       component!.runner,
@@ -268,7 +268,7 @@ describe('core.ai.agent (refactor)', () => {
     const component = componentRegistry.get<AiAgentInput, AiAgentOutput>('core.ai.agent');
     expect(component).toBeDefined();
 
-    nextGenerateResult = createGenerationResult({
+    nextGenerateResultOverride = createGenerationResult({
       text: 'Tool done',
       toolResults: [
         {
