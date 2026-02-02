@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'bun:test';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'bun:test';
 import { componentRegistry } from '@shipsec/component-sdk';
 import * as SDK from '@shipsec/component-sdk'; // Import for spying
 import { IsolatedContainerVolume } from '../../../utils/isolated-volume';
+import * as utils from '../utils';
 import '../opencode'; // Register the component
 
 // Mock IsolatedContainerVolume
@@ -18,21 +19,17 @@ vi.mock('../../../utils/isolated-volume', () => {
   };
 });
 
-// Mock getGatewaySessionToken
-vi.mock('../utils', () => {
-  return {
-    DEFAULT_GATEWAY_URL: 'http://localhost:3211/api/v1/mcp/gateway',
-    getGatewaySessionToken: vi.fn().mockResolvedValue('mock-session-token'),
-  };
-});
-
 describe('shipsec.opencode.agent', () => {
   let runSpy: any;
 
-  beforeAll(() => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Mock getGatewaySessionToken
+    // We use spyOn so we can restore it later if needed, but here we just want to ensure it's mocked for this suite.
+    vi.spyOn(utils, 'getGatewaySessionToken').mockResolvedValue('mock-session-token');
+
     // Spy on runComponentWithRunner
-    // Note: This relies on how Bun/Vitest handles ESM spying.
-    // If runComponentWithRunner is a read-only export, this might fail or not affect opencode.ts
     runSpy = vi.spyOn(SDK, 'runComponentWithRunner').mockResolvedValue({
       stdout: '# Report\n\nInvestigation complete.',
       stderr: '',
@@ -42,8 +39,8 @@ describe('shipsec.opencode.agent', () => {
     } as any);
   });
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+  afterAll(() => {
+    vi.restoreAllMocks();
   });
 
   it('should be registered', () => {
