@@ -56,6 +56,7 @@ describe('MCP Internal API (Integration)', () => {
     process.env.NODE_ENV = 'test';
     process.env.SKIP_INGEST_SERVICES = 'true';
     process.env.SHIPSEC_SKIP_MIGRATION_CHECK = 'true';
+    process.env.SECRET_STORE_MASTER_KEY = '0123456789abcdef0123456789abcdef';
 
     const { McpModule } = await import('../mcp.module');
     const mockRedis = new MockRedis();

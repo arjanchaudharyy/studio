@@ -591,6 +591,8 @@ export const WorkflowNode = ({ data, selected, id }: NodeProps<NodeData>) => {
                       type="button"
                       onClick={toggleToolMode}
                       disabled={isToolModeOnly}
+                      aria-label={isToolMode ? 'Disable Tool Mode' : 'Enable Tool Mode'}
+                      aria-pressed={isToolMode}
                       className={cn(
                         'flex items-center gap-1.5 px-2 py-1 rounded transition-all border',
                         isToolMode

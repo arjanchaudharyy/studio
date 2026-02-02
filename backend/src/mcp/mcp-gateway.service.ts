@@ -15,6 +15,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { randomBytes } from 'node:crypto';
 
 import { ToolRegistryService, RegisteredTool } from './tool-registry.service';
 import { TemporalService } from '../temporal/temporal.service';
@@ -51,9 +52,11 @@ export class McpGatewayService {
     await this.validateRunAccess(runId, organizationId);
 
     // Cache key includes allowedNodeIds so different agents with different tool scopes get different servers
+    // Escape commas to prevent cache key collisions (e.g., ['a,b', 'c'] vs ['a', 'b,c'])
+    const escapeNodeId = (id: string): string => id.replace(/,/g, '\\,');
     const cacheKey =
       allowedNodeIds && allowedNodeIds.length > 0
-        ? `${runId}:${allowedNodeIds.sort().join(',')}`
+        ? `${runId}:${allowedNodeIds.sort().map(escapeNodeId).join(',')}`
         : runId;
 
     const existing = this.servers.get(cacheKey);
@@ -320,7 +323,7 @@ export class McpGatewayService {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
-      const sessionId = `stdio-proxy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const sessionId = `stdio-proxy-${Date.now()}-${randomBytes(8).toString('hex')}`;
 
       const transport = new StreamableHTTPClientTransport(new URL(source.endpoint), {
         requestInit: {
@@ -379,7 +382,7 @@ export class McpGatewayService {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      const sessionId = `stdio-proxy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const sessionId = `stdio-proxy-${Date.now()}-${randomBytes(8).toString('hex')}`;
       const transport = new StreamableHTTPClientTransport(new URL(source.endpoint), {
         requestInit: {
           headers: {

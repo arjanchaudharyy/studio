@@ -183,6 +183,12 @@ export async function shipsecWorkflowRun(
 
   // Set up signal handler for tool call execution requests
   setHandler(executeToolCallSignal, async (request: ToolCallRequest) => {
+    // Prevent duplicate execution of the same callId
+    if (toolCallResults.has(request.callId)) {
+      console.warn(`[Workflow] Duplicate tool call ignored: ${request.callId}`);
+      return;
+    }
+
     console.log(
       `[Workflow] Received tool call signal: callId=${request.callId}, componentId=${request.componentId}`,
     );

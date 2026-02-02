@@ -63,9 +63,15 @@ export class McpGatewayController {
       );
 
       const allowedToolsHeader = req.headers['x-allowed-tools'];
+      const ALLOWED_TOOLS_MAX = 100;
+      const ALLOWED_TOOL_NAME_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
       const allowedTools =
         typeof allowedToolsHeader === 'string'
-          ? allowedToolsHeader.split(',').map((t) => t.trim())
+          ? allowedToolsHeader
+              .split(',')
+              .map((t) => t.trim())
+              .filter((t) => ALLOWED_TOOL_NAME_REGEX.test(t))
+              .slice(0, ALLOWED_TOOLS_MAX)
           : undefined;
 
       transport = new StreamableHTTPServerTransport({
