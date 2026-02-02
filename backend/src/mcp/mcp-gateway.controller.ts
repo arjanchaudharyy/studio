@@ -16,6 +16,8 @@ export class McpGatewayController {
   private readonly logger = new Logger(McpGatewayController.name);
 
   // Mapping of runId to its current Streamable HTTP transport
+  // NOTE: In-memory transport storage for active sessions. Single-instance design.
+  // SCALING LIMITATION: For horizontal scaling, implement sticky sessions via load balancer
   private readonly transports = new Map<string, StreamableHTTPServerTransport>();
 
   constructor(private readonly mcpGateway: McpGatewayService) {}

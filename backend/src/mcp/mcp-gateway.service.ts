@@ -28,6 +28,11 @@ export class McpGatewayService {
   private readonly logger = new Logger(McpGatewayService.name);
 
   // Cache of servers per runId
+  // NOTE: This is in-memory state for active sessions. Single-instance design.
+  // SCALING LIMITATION: For horizontal scaling, implement one of:
+  // - Redis pub/sub for cache invalidation across instances
+  // - Sticky sessions via load balancer affinity (simplest)
+  // - Stateful instances dedicated to MCP gateway
   private readonly servers = new Map<string, McpServer>();
   private readonly registeredToolNames = new Map<string, Set<string>>();
 
