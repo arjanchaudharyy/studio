@@ -41,7 +41,7 @@ import { useToast } from '@/components/ui/use-toast';
 import type { WorkflowSchedule } from '@shipsec/shared';
 import { cn } from '@/lib/utils';
 import { useOptionalWorkflowSchedulesContext } from '@/features/workflow-builder/contexts/useWorkflowSchedulesContext';
-import { mobilePlacementState, clearMobilePlacement } from '@/components/layout/sidebar-state';
+import { usePlacementStore } from '@/components/layout/sidebar-state';
 import { EntryPointActionsContext } from './entry-point-context';
 
 // Custom hook to detect mobile viewport
@@ -136,6 +136,10 @@ export function Canvas({
   const { toast } = useToast();
   const { setConfigPanelOpen } = useWorkflowUiStore();
   const isMobile = useIsMobile();
+
+  // Component placement state (for spotlight/sidebar component placement)
+  const placementState = usePlacementStore();
+  const isPlacementActive = placementState.isPlacementActiveForWorkflow(workflowId ?? null);
 
   // Sync selection state with UI store for mobile bottom sheet visibility
   useEffect(() => {
@@ -602,7 +606,8 @@ export function Canvas({
       if (mode !== 'design') return;
 
       // Check if there's a component selected for placement (mobile flow)
-      if (mobilePlacementState.isActive && mobilePlacementState.componentId) {
+      // Only place if the placement is scoped to this workflow
+      if (isPlacementActive && placementState.componentId) {
         let clientX: number;
         let clientY: number;
 
@@ -619,16 +624,16 @@ export function Canvas({
         }
 
         // Create node at tap position
-        createNodeFromComponent(mobilePlacementState.componentId, clientX, clientY);
+        createNodeFromComponent(placementState.componentId, clientX, clientY);
 
         // Clear placement state
-        clearMobilePlacement();
+        placementState.clearPlacement();
 
         event.preventDefault();
         event.stopPropagation();
       }
     },
-    [createNodeFromComponent, mode],
+    [createNodeFromComponent, mode, isPlacementActive, placementState],
   );
 
   // Handle node click for config panel
@@ -678,11 +683,28 @@ export function Canvas({
     [mode],
   );
 
-  // Handle pane click to deselect
-  const onPaneClick = useCallback(() => {
-    hasUserInteractedRef.current = true;
-    setSelectedNode(null);
-  }, []);
+  // Handle pane click to deselect or place component
+  const onPaneClick = useCallback(
+    (event: React.MouseEvent) => {
+      hasUserInteractedRef.current = true;
+
+      // Check if there's a component selected for placement (from spotlight/sidebar)
+      // Only place if the placement is scoped to this workflow
+      if (mode === 'design' && isPlacementActive && placementState.componentId) {
+        // Create node at click position
+        createNodeFromComponent(placementState.componentId, event.clientX, event.clientY);
+
+        // Clear placement state
+        placementState.clearPlacement();
+
+        return;
+      }
+
+      // Default behavior: deselect node
+      setSelectedNode(null);
+    },
+    [mode, isPlacementActive, placementState, createNodeFromComponent],
+  );
 
   // Handle validation dock node click - select and scroll to node
   const handleValidationNodeClick = useCallback(
@@ -911,19 +933,33 @@ export function Canvas({
           dedupedEdges.set(edge.id, { ...edge, selected: false });
         });
 
+        // Calculate next state for snapshot before applying changes
+        let nextNodes = nodes;
+        let nextEdges = edges;
+
         if (selectedNodes.length > 0) {
-          setNodes((nds) => nds.filter((node) => !nodeIds.has(node.id)));
-          setEdges((eds) =>
-            eds.filter((edge) => !nodeIds.has(edge.source) && !nodeIds.has(edge.target)),
+          nextNodes = nodes.filter((node) => !nodeIds.has(node.id));
+          nextEdges = edges.filter(
+            (edge) => !nodeIds.has(edge.source) && !nodeIds.has(edge.target),
           );
-          setSelectedNode(null);
         }
 
         if (selectedEdges.length > 0) {
-          setEdges((eds) => eds.filter((edge) => !selectedEdgeIds.has(edge.id)));
+          nextEdges = nextEdges.filter((edge) => !selectedEdgeIds.has(edge.id));
         }
 
+        // Apply the changes
+        if (selectedNodes.length > 0) {
+          setNodes(nextNodes);
+          setEdges(nextEdges);
+          setSelectedNode(null);
+        } else if (selectedEdges.length > 0) {
+          setEdges(nextEdges);
+        }
+
+        // Capture snapshot for undo/redo
         if (selectedNodes.length > 0 || selectedEdges.length > 0) {
+          onSnapshot?.(nextNodes, nextEdges);
           markDirty();
         }
       }
@@ -931,7 +967,7 @@ export function Canvas({
 
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
-  }, [nodes, edges, setNodes, setEdges, markDirty, mode]);
+  }, [nodes, edges, setNodes, setEdges, markDirty, mode, onSnapshot, toast]);
 
   // Panel width changes are handled by CSS transitions, no manual viewport translation needed
 
@@ -979,8 +1015,8 @@ export function Canvas({
             onClick={handleCanvasTap}
             onTouchEnd={handleCanvasTap}
           >
-            {/* Mobile placement indicator - shows when a component is selected */}
-            {mobilePlacementState.isActive && mobilePlacementState.componentName && (
+            {/* Placement indicator - shows when a component is selected from spotlight/sidebar */}
+            {isPlacementActive && placementState.componentName && (
               <div className="absolute top-[52px] left-[10px] z-50">
                 {/* Rotating border wrapper */}
                 <div
@@ -994,17 +1030,18 @@ export function Canvas({
                   {/* Inner pill */}
                   <div className="bg-background px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
                     <span className="text-xs font-medium text-foreground whitespace-nowrap">
-                      Tap to place:{' '}
+                      Click to place:{' '}
                       <span className="text-primary font-semibold">
-                        {mobilePlacementState.componentName}
+                        {placementState.componentName}
                       </span>
                     </span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        clearMobilePlacement();
+                        placementState.clearPlacement();
                       }}
                       className="hover:bg-muted rounded-full p-0.5 transition-colors"
+                      aria-label="Cancel placement"
                     >
                       <svg
                         className="h-3.5 w-3.5 text-muted-foreground"
@@ -1074,6 +1111,7 @@ export function Canvas({
               edgesUpdatable={mode === 'design'}
               deleteKeyCode={mode === 'design' ? ['Backspace', 'Delete'] : []}
               elementsSelectable
+              className={isPlacementActive ? '[&_.react-flow__pane]:!cursor-crosshair' : ''}
             >
               <Background
                 gap={16}
