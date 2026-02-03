@@ -11,6 +11,9 @@ export * from './platform-workflow-links';
 export * from './workflow-roles';
 export * from './integrations';
 export * from './workflow-schedules';
+export * from './human-input-requests';
+export * from './webhooks';
 
 export * from './terminal-records';
 export * from './agent-trace-events';
+export * from './node-io';

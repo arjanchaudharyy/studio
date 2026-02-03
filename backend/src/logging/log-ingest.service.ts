@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Kafka, Consumer } from 'kafkajs';
 
 import { LogStreamRepository } from '../trace/log-stream.repository';
@@ -46,21 +41,32 @@ export class LogIngestService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
+    if (this.kafkaBrokers.length === 0) {
+      this.logger.warn('No Kafka brokers configured, skipping log ingest service initialization');
+      return;
+    }
+
+    this.connectToKafka().catch((error) => {
+      this.logger.error('Failed to initialize Kafka log ingestion', error as Error);
+    });
+  }
+
+  private async connectToKafka(): Promise<void> {
     try {
       const kafka = new Kafka({
         clientId: this.kafkaClientId,
         brokers: this.kafkaBrokers,
-        requestTimeout: 30000, // 30 seconds
+        requestTimeout: 30000,
         retry: {
-          retries: 1,
+          retries: 10,
           initialRetryTime: 100,
           maxRetryTime: 30000,
         },
       });
-      this.consumer = kafka.consumer({ 
+      this.consumer = kafka.consumer({
         groupId: this.kafkaGroupId,
-        sessionTimeout: 30000, // 30 seconds
-        heartbeatInterval: 3000, // 3 seconds
+        sessionTimeout: 6000,
+        heartbeatInterval: 2000,
       });
       await this.consumer.connect();
       await this.consumer.subscribe({ topic: this.kafkaTopic, fromBeginning: true });
@@ -81,16 +87,18 @@ export class LogIngestService implements OnModuleInit, OnModuleDestroy {
         `Kafka log ingestion connected (${this.kafkaBrokers.join(', ')}) topic=${this.kafkaTopic}`,
       );
     } catch (error) {
-      this.logger.error('Failed to initialize Kafka log ingestion', error as Error);
-      throw error;
+      this.logger.error('Failed to connect to Kafka log ingestion', error as Error);
+      // We don't throw here to ensure the backend stays up even if ingestion fails initially
     }
   }
 
   async onModuleDestroy(): Promise<void> {
     if (this.consumer) {
+      this.logger.log('Disconnecting Kafka consumer...');
       await this.consumer.disconnect().catch((error) => {
         this.logger.error('Failed to disconnect Kafka consumer', error as Error);
       });
+      this.logger.log('Kafka consumer disconnected');
     }
   }
 

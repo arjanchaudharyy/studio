@@ -1,15 +1,28 @@
 import '../../components';
 import { Context } from '@temporalio/activity';
 import { ApplicationFailure } from '@temporalio/common';
+import * as crypto from 'node:crypto';
 import {
   componentRegistry,
   createExecutionContext,
-  runComponentWithRunner,
+  NotFoundError,
+  ValidationError,
+  TEMPORAL_SPILL_THRESHOLD_BYTES,
+  isSpilledDataMarker,
+  extractPorts,
   type IFileStorageService,
   type ISecretsService,
   type ITraceService,
+  type INodeIOService,
   type AgentTracePublisher,
+  type ComponentPortMetadata,
 } from '@shipsec/component-sdk';
+
+import {
+  maskSecretInputs,
+  maskSecretOutputs,
+  createLightweightSummary,
+} from '../utils/component-output';
 import { RedisTerminalStreamAdapter } from '../../adapters';
 import type {
   RunComponentActivityInput,
@@ -23,15 +36,52 @@ let globalStorage: IFileStorageService | undefined;
 let globalSecrets: ISecretsService | undefined;
 let globalArtifacts: ArtifactServiceFactory | undefined;
 let globalTrace: ITraceService | undefined;
+let globalNodeIO: INodeIOService | undefined;
 let globalLogs: WorkflowLogSink | undefined;
 let globalTerminal: RedisTerminalStreamAdapter | undefined;
 let globalAgentTracePublisher: AgentTracePublisher | undefined;
+
+const ERROR_LOG_LIMIT = 600;
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  const remaining = value.length - maxLength;
+  return `${value.slice(0, maxLength)}...(+${remaining} chars)`;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return String(error);
+}
+
+function truncateDetails(
+  details: Record<string, unknown> | undefined,
+  maxLength: number,
+): Record<string, unknown> | undefined {
+  if (!details) {
+    return undefined;
+  }
+  try {
+    const raw = JSON.stringify(details);
+    if (raw.length <= maxLength) {
+      return details;
+    }
+    return { truncated: true, preview: truncateText(raw, maxLength) };
+  } catch {
+    return { truncated: true, preview: truncateText(String(details), maxLength) };
+  }
+}
 
 export function initializeComponentActivityServices(options: {
   storage: IFileStorageService;
   secrets?: ISecretsService;
   artifacts?: ArtifactServiceFactory;
   trace: ITraceService;
+  nodeIO?: INodeIOService;
   logs?: WorkflowLogSink;
   terminalStream?: RedisTerminalStreamAdapter;
   agentTracePublisher?: AgentTracePublisher;
@@ -40,6 +90,7 @@ export function initializeComponentActivityServices(options: {
   globalSecrets = options.secrets;
   globalArtifacts = options.artifacts;
   globalTrace = options.trace;
+  globalNodeIO = options.nodeIO;
   globalLogs = options.logs;
   globalTerminal = options.terminalStream;
   globalAgentTracePublisher = options.agentTracePublisher;
@@ -67,90 +118,25 @@ export async function finalizeRunActivity(input: { runId: string }): Promise<voi
 export async function runComponentActivity(
   input: RunComponentActivityInput,
 ): Promise<RunComponentActivityOutput> {
-  const { action, params, warnings = [] } = input;
+  const { action, inputs, params, warnings = [] } = input;
   const activityInfo = Context.current().info;
-  console.log(`🎯 ACTIVITY CALLED - runComponentActivity:`, {
-    activityId: activityInfo.activityId,
-    attempt: activityInfo.attempt,
-    workflowId: activityInfo.workflowExecution?.workflowId ?? 'unknown',
-    runId: activityInfo.workflowExecution?.runId ?? 'unknown',
-    componentId: action.componentId,
-    ref: action.ref,
-    timestamp: new Date().toISOString()
-  });
-
-  console.log(`📋 Activity input details:`, {
-    componentId: action.componentId,
-    ref: action.ref,
-    hasParams: !!params,
-    paramKeys: params ? Object.keys(params) : [],
-    warningsCount: warnings.length
-  });
-
   const component = componentRegistry.get(action.componentId);
   if (!component) {
-    console.error(`❌ Component not found: ${action.componentId}`);
-    throw new Error(`Component not registered: ${action.componentId}`);
+    console.error(`[Activity] Component not found: ${action.componentId}`);
+    throw new NotFoundError(`Component not registered: ${action.componentId}`, {
+      resourceType: 'component',
+      resourceId: action.componentId,
+      details: { actionRef: action.ref },
+    });
   }
-
-  console.log(`✅ Component found: ${action.componentId}`);
 
   const nodeMetadata = input.metadata ?? {};
   const streamId = nodeMetadata.streamId ?? nodeMetadata.groupId ?? action.ref;
   const joinStrategy = nodeMetadata.joinStrategy;
   const triggeredBy = nodeMetadata.triggeredBy;
   const failure = nodeMetadata.failure;
+  const connectedToolNodeIds = nodeMetadata.connectedToolNodeIds;
   const correlationId = `${input.runId}:${action.ref}:${activityInfo.activityId}`;
-
-  const trace = globalTrace;
-  trace?.record({
-    type: 'NODE_STARTED',
-    runId: input.runId,
-    nodeRef: action.ref,
-    timestamp: new Date().toISOString(),
-    level: 'info',
-    context: {
-      runId: input.runId,
-      componentRef: action.ref,
-      activityId: activityInfo.activityId,
-      attempt: activityInfo.attempt,
-      correlationId,
-      streamId,
-      joinStrategy,
-      triggeredBy,
-      failure,
-    },
-  });
-
-  for (const warning of warnings) {
-    trace?.record({
-      type: 'NODE_PROGRESS',
-      runId: input.runId,
-      nodeRef: action.ref,
-      timestamp: new Date().toISOString(),
-      message: `Input '${warning.target}' mapped from ${warning.sourceRef}.${warning.sourceHandle} was undefined`,
-      level: 'warn',
-      data: warning,
-      context: {
-        runId: input.runId,
-        componentRef: action.ref,
-        activityId: activityInfo.activityId,
-        attempt: activityInfo.attempt,
-        correlationId,
-        streamId,
-        joinStrategy,
-        triggeredBy,
-        failure,
-      },
-    });
-  }
-
-  if (warnings.length > 0) {
-    const missing = warnings.map((warning) => `'${warning.target}'`).join(', ');
-    throw new Error(`Missing required inputs for ${action.ref}: ${missing}`);
-  }
-
-  const parsedParams = component.inputSchema.parse(params);
 
   const scopedArtifacts = globalArtifacts
     ? globalArtifacts({
@@ -176,7 +162,9 @@ export async function runComponentActivity(
       joinStrategy,
       triggeredBy,
       failure,
-    },
+      connectedToolNodeIds,
+      organizationId: input.organizationId ?? undefined,
+    } as any,
     storage: globalStorage,
     secrets: allowSecrets ? globalSecrets : undefined,
     artifacts: scopedArtifacts,
@@ -197,73 +185,397 @@ export async function runComponentActivity(
             .catch((error) => {
               console.error('[Logs] Failed to append log entry', error);
             });
-      }
+        }
       : undefined,
     terminalCollector: globalTerminal
       ? (chunk) => {
-          void globalTerminal
-            ?.append(chunk)
-            .catch((error) => {
-              console.error('[Terminal] Failed to append chunk', error);
-            });
+          void globalTerminal?.append(chunk).catch((error) => {
+            console.error('[Terminal] Failed to append chunk', error);
+          });
         }
       : undefined,
     agentTracePublisher: globalAgentTracePublisher,
   });
+
+  // Record node I/O start (using raw inputs/params from workflow)
+  await globalNodeIO?.recordStart({
+    runId: input.runId,
+    nodeRef: action.ref,
+    workflowId: input.workflowId,
+    organizationId: input.organizationId,
+    componentId: action.componentId,
+    inputs: maskSecretInputs(component, { ...inputs, ...params }) as Record<string, unknown>,
+  });
+
+  context.trace?.record({
+    type: 'NODE_STARTED',
+    timestamp: new Date().toISOString(),
+    level: 'info',
+  });
+
+  const warningsToReport = [...warnings];
+
+  // Resolve spilled inputs and params if necessary
+  const spilledObjectsCache = new Map<string, any>();
+  const resolvedParams = { ...params };
+  const resolvedInputs = { ...inputs };
+
+  async function unspill(obj: Record<string, any>, contextLabel: string) {
+    for (const [key, value] of Object.entries(obj)) {
+      if (isSpilledDataMarker(value)) {
+        if (!globalStorage) {
+          console.warn(
+            `[Activity] ${contextLabel} '${key}' is spilled but no storage service is available`,
+          );
+          continue;
+        }
+
+        try {
+          let fullData: any;
+          if (spilledObjectsCache.has(value.storageRef)) {
+            fullData = spilledObjectsCache.get(value.storageRef);
+          } else {
+            const content = await globalStorage.downloadFile(value.storageRef);
+            fullData = JSON.parse(content.buffer.toString('utf8'));
+            spilledObjectsCache.set(value.storageRef, fullData);
+          }
+
+          const handle = (value as any).__spilled_handle__;
+          if (handle && handle !== '__self__') {
+            if (
+              fullData &&
+              typeof fullData === 'object' &&
+              Object.prototype.hasOwnProperty.call(fullData, handle)
+            ) {
+              obj[key] = fullData[handle];
+            } else {
+              console.warn(
+                `[Activity] Spilled handle '${handle}' not found in downloaded data for ${contextLabel.toLowerCase()} '${key}'`,
+              );
+              obj[key] = undefined;
+              warningsToReport.push({
+                target: key,
+                sourceRef: 'spilled-storage',
+                sourceHandle: String(handle),
+              });
+            }
+          } else {
+            obj[key] = fullData;
+          }
+        } catch (err) {
+          console.error(
+            `[Activity] Failed to resolve spilled ${contextLabel.toLowerCase()} '${key}':`,
+            err,
+          );
+          throw ApplicationFailure.retryable(
+            `Failed to resolve spilled ${contextLabel.toLowerCase()} '${key}': ${err instanceof Error ? err.message : String(err)}`,
+            'SpillResolutionError',
+          );
+        }
+      }
+    }
+  }
+
+  await unspill(resolvedParams, 'Parameter');
+  await unspill(resolvedInputs, 'Input');
+
+  // Resolve secret references in inputOverrides
+  // When a user selects a secret from the store in the config panel,
+  // the secret ID is stored. We need to resolve it to the actual value.
+  const resolveSecretInputOverrides = async (
+    inputs: Record<string, unknown>,
+    inputOverrides: Record<string, unknown>,
+  ) => {
+    if (!globalSecrets) {
+      return;
+    }
+
+    // Get input port metadata to identify which inputs are secret-type
+    // For components with dynamic ports, we must resolve them first
+    let inputsSchema = component.inputs;
+    if (typeof component.resolvePorts === 'function') {
+      try {
+        const resolved = component.resolvePorts(resolvedParams);
+        if (resolved?.inputs) {
+          inputsSchema = resolved.inputs;
+        }
+      } catch (err) {
+        console.warn(`[Activity] Failed to resolve ports for secret check: ${err}`);
+      }
+    }
+
+    const inputPorts = inputsSchema ? extractPorts(inputsSchema) : [];
+
+    for (const [key, value] of Object.entries(inputOverrides)) {
+      if (typeof value !== 'string' || !value) {
+        continue;
+      }
+
+      const portMeta = inputPorts.find((p: ComponentPortMetadata) => p.id === key);
+      const isSecretPort =
+        portMeta?.editor === 'secret' ||
+        (portMeta?.connectionType?.kind === 'primitive' &&
+          portMeta?.connectionType?.name === 'secret');
+
+      if (!isSecretPort) {
+        continue;
+      }
+
+      // This is a secret reference, resolve it
+      try {
+        console.log(`[Activity] Resolving secret '${key}'...`);
+        const resolved = await globalSecrets.get(value);
+        if (resolved?.value) {
+          inputs[key] = resolved.value;
+          console.log(`[Activity] Successfully resolved secret reference for input '${key}'`);
+        } else {
+          console.warn(`[Activity] Secret '${value}' not found in store for input '${key}'`);
+        }
+      } catch (err) {
+        console.warn(`[Activity] Error resolving secret '${value}' for input '${key}': ${err}`);
+      }
+    }
+  };
+
+  // Resolve secret references for input overrides
+  await resolveSecretInputOverrides(resolvedInputs, input.inputOverrides ?? {});
+
+  // Also resolve secret references in params (for params with editor: 'secret')
+  const resolveSecretParams = async (
+    params: Record<string, unknown>,
+    rawParams: Record<string, unknown>,
+  ) => {
+    if (!globalSecrets || !component.parameters) {
+      return;
+    }
+
+    const paramPorts = extractPorts(component.parameters);
+
+    for (const [key, value] of Object.entries(rawParams)) {
+      if (typeof value !== 'string' || !value) {
+        continue;
+      }
+
+      const portMeta = paramPorts.find((p: ComponentPortMetadata) => p.id === key);
+      const isSecretParam =
+        portMeta?.editor === 'secret' ||
+        (portMeta?.connectionType?.kind === 'primitive' &&
+          portMeta?.connectionType?.name === 'secret');
+
+      if (!isSecretParam) {
+        continue;
+      }
+
+      try {
+        console.log(`[Activity] Resolving secret '${key}'...`);
+        const resolved = await globalSecrets.get(value);
+        if (resolved?.value) {
+          params[key] = resolved.value;
+          console.log(`[Activity] Successfully resolved secret reference for param '${key}'`);
+        } else {
+          console.warn(`[Activity] Secret '${value}' not found in store for param '${key}'`);
+        }
+      } catch (err) {
+        console.warn(`[Activity] Error resolving secret '${value}' for param '${key}': ${err}`);
+      }
+    }
+  };
+
+  await resolveSecretParams(resolvedParams, input.rawParams ?? {});
+
+  for (const warning of warningsToReport) {
+    context.trace?.record({
+      type: 'NODE_PROGRESS',
+      timestamp: new Date().toISOString(),
+      message: `Input '${warning.target}' mapped from ${warning.sourceRef}.${warning.sourceHandle} was undefined`,
+      level: 'warn',
+      data: warning,
+    });
+  }
+
+  if (warningsToReport.length > 0) {
+    const missing = warningsToReport.map((warning) => `'${warning.target}'`).join(', ');
+    throw new ValidationError(`Missing required inputs for ${action.ref}: ${missing}`, {
+      fieldErrors: Object.fromEntries(
+        warningsToReport.map((w) => [
+          w.target,
+          [`mapped from ${w.sourceRef}.${w.sourceHandle} was undefined`],
+        ]),
+      ),
+      details: { actionRef: action.ref, componentId: action.componentId },
+    });
+  }
+
+  // For components with dynamic ports (resolvePorts), resolve the actual input/output schemas
+  let inputsSchema = component.inputs;
+  let _outputsSchema = component.outputs;
+  if (typeof component.resolvePorts === 'function') {
+    const resolved = component.resolvePorts(params);
+    if (resolved?.inputs) {
+      inputsSchema = resolved.inputs;
+    }
+    if (resolved?.outputs) {
+      _outputsSchema = resolved.outputs;
+    }
+  }
+
+  const parsedInputs = inputsSchema.parse(resolvedInputs);
+  const parsedParams = component.parameters
+    ? component.parameters.parse(resolvedParams)
+    : resolvedParams;
 
   try {
     // Execute the component logic directly so that any
     // normalisation/parsing inside `execute` runs.
     // Docker/remote execution should be invoked from within
     // the component via `runComponentWithRunner`.
-    const output = await component.execute(parsedParams, context);
+    let output = await component.execute({ inputs: parsedInputs, params: parsedParams }, context);
 
-    trace?.record({
-      type: 'NODE_COMPLETED',
-      runId: input.runId,
-      nodeRef: action.ref,
-      timestamp: new Date().toISOString(),
-      outputSummary: output,
-      level: 'info',
-      context: {
+    // Check if component requested suspension (e.g. approval gate)
+    const isSuspended =
+      output &&
+      typeof output === 'object' &&
+      'pending' in output &&
+      (output as any).pending === true;
+
+    // Extract activeOutputPorts if component returned them (for conditional execution)
+    const activeOutputPorts =
+      output && typeof output === 'object' && 'activeOutputPorts' in output
+        ? ((output as any).activeOutputPorts as string[])
+        : undefined;
+
+    if (!isSuspended) {
+      // 1. Check for payload size and spill if necessary
+      if (output) {
+        try {
+          const outputStr = JSON.stringify(output);
+          const size = Buffer.byteLength(outputStr, 'utf8');
+
+          if (size > TEMPORAL_SPILL_THRESHOLD_BYTES && globalStorage) {
+            const fileId = crypto.randomUUID();
+
+            await globalStorage.uploadFile(
+              fileId,
+              'output.json',
+              Buffer.from(outputStr),
+              'application/json',
+            );
+
+            // Replace output with standardized spilled marker
+            output = {
+              __spilled__: true,
+              storageRef: fileId,
+              originalSize: size,
+            };
+          }
+        } catch (err) {
+          console.warn('[Activity] Failed to check/spill output size', err);
+          // Continue with original output - if it fails in Temporal, it fails.
+        }
+      }
+
+      // Record node I/O completion
+      await globalNodeIO?.recordCompletion({
         runId: input.runId,
-        componentRef: action.ref,
-        activityId: activityInfo.activityId,
-        attempt: activityInfo.attempt,
-        correlationId,
-        streamId,
-        joinStrategy,
-        triggeredBy,
-        failure,
-      },
-    });
+        nodeRef: action.ref,
+        componentId: action.componentId,
+        outputs: maskSecretOutputs(component, output) as Record<string, unknown>,
+        status: 'completed',
+      });
 
-    return { output };
+      // Clean up Node I/O recording - output has been recorded
+
+      context.trace?.record({
+        type: 'NODE_COMPLETED',
+        timestamp: new Date().toISOString(),
+        outputSummary: createLightweightSummary(component, output),
+        data: activeOutputPorts ? { activatedPorts: activeOutputPorts } : undefined,
+        level: 'info',
+      });
+    }
+
+    return { output, activeOutputPorts };
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    trace?.record({
+    const rawErrorMsg = getErrorMessage(error);
+    const errorMsg = truncateText(rawErrorMsg, ERROR_LOG_LIMIT);
+    console.error(`[Activity] Failed ${action.ref}: ${errorMsg}`);
+
+    // Extract error properties without using 'any'
+    let errorType: string | undefined;
+    let errorDetails: Record<string, unknown> | undefined;
+    let fieldErrors: Record<string, string[]> | undefined;
+    let isRetryable = false;
+
+    if (error instanceof Error) {
+      errorType = error.name;
+
+      // Check if it's a ComponentError (has type and retryable properties)
+      if ('type' in error && typeof (error as { type: unknown }).type === 'string') {
+        errorType = (error as { type: string }).type;
+      }
+
+      // Check if it's retryable
+      if (
+        'retryable' in error &&
+        typeof (error as { retryable: unknown }).retryable === 'boolean'
+      ) {
+        isRetryable = (error as { retryable: boolean }).retryable;
+      }
+
+      // Extract details if present
+      if (
+        'details' in error &&
+        typeof (error as { details: unknown }).details === 'object' &&
+        (error as { details: unknown }).details !== null
+      ) {
+        errorDetails = truncateDetails(
+          (error as { details: Record<string, unknown> }).details,
+          ERROR_LOG_LIMIT,
+        );
+      }
+
+      // Extract fieldErrors if it's a ValidationError
+      if (error instanceof ValidationError && error.fieldErrors) {
+        fieldErrors = error.fieldErrors;
+      }
+    }
+
+    const traceError: {
+      message: string;
+      type?: string;
+      stack?: string;
+      details?: Record<string, unknown>;
+      fieldErrors?: Record<string, string[]>;
+    } = {
+      message: errorMsg,
+      type: errorType || 'UnknownError',
+      stack:
+        error instanceof Error && error.stack
+          ? truncateText(error.stack, ERROR_LOG_LIMIT)
+          : undefined,
+      details: errorDetails,
+      fieldErrors,
+    };
+
+    context.trace?.record({
       type: 'NODE_FAILED',
-      runId: input.runId,
-      nodeRef: action.ref,
       timestamp: new Date().toISOString(),
       message: errorMsg,
-      error: errorMsg,
+      error: traceError,
       level: 'error',
-      context: {
-        runId: input.runId,
-        componentRef: action.ref,
-        activityId: activityInfo.activityId,
-        attempt: activityInfo.attempt,
-        correlationId,
-        streamId,
-        joinStrategy,
-        triggeredBy,
-        failure,
-      },
     });
 
-    const errorType =
-      error instanceof Error && error.name ? error.name : 'ComponentError';
+    // Record node I/O failure
+    await globalNodeIO?.recordCompletion({
+      runId: input.runId,
+      nodeRef: action.ref,
+      componentId: action.componentId,
+      outputs: {},
+      status: 'failed',
+      errorMessage: errorMsg,
+    });
+
+    const finalErrorType = errorType || 'ComponentError';
 
     const details = {
       componentId: action.componentId,
@@ -277,19 +589,11 @@ export async function runComponentActivity(
       stack: error instanceof Error ? error.stack : undefined,
     };
 
-    const isRetryable =
-      typeof error === 'object' &&
-      error !== null &&
-      'retryable' in error &&
-      typeof (error as any).retryable === 'boolean'
-        ? Boolean((error as any).retryable)
-        : false;
-
     if (isRetryable) {
-      throw ApplicationFailure.retryable(errorMsg, errorType, [details]);
+      throw ApplicationFailure.retryable(errorMsg, finalErrorType, [details]);
     }
 
-    throw ApplicationFailure.nonRetryable(errorMsg, errorType, [details]);
+    throw ApplicationFailure.nonRetryable(errorMsg, finalErrorType, [details]);
   } finally {
     // Do not finalize run here; lifecycle is managed by workflow orchestration.
   }

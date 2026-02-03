@@ -1,49 +1,50 @@
 import { randomUUID } from 'crypto';
-import { z, ZodTypeAny } from 'zod';
+import { z } from 'zod';
 import {
-  ToolLoopAgent as ToolLoopAgentImpl,
-  stepCountIs as stepCountIsImpl,
-  tool as toolImpl,
-  type Tool,
+  ToolLoopAgent,
+  stepCountIs,
+  type GenerateTextResult,
+  type JSONValue,
+  type ModelMessage,
+  type StepResult,
+  type ToolLoopAgentSettings,
+  type ToolResultPart,
+  type ToolSet,
 } from 'ai';
-import { createOpenAI as createOpenAIImpl } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI as createGoogleGenerativeAIImpl } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createMCPClient } from '@ai-sdk/mcp';
 import {
   componentRegistry,
-  ComponentDefinition,
+  ComponentRetryPolicy,
+  ConfigurationError,
+  ValidationError,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
   port,
-  type ExecutionContext,
-  type AgentTraceEvent,
+  param,
 } from '@shipsec/component-sdk';
-import { llmProviderContractName, LLMProviderSchema } from './chat-model-contract';
-import {
-  McpToolArgumentSchema,
-  McpToolDefinitionSchema,
-  mcpToolContractName,
-} from './mcp-tool-contract';
+import { LLMProviderSchema, llmProviderContractName } from '@shipsec/contracts';
+import { AgentStreamRecorder } from './agent-stream-recorder';
 
-
-// Define types for dependencies to enable dependency injection for testing
-export type ToolLoopAgentClass = typeof ToolLoopAgentImpl;
-export type StepCountIsFn = typeof stepCountIsImpl;
-export type ToolFn = typeof toolImpl;
-export type CreateOpenAIFn = typeof createOpenAIImpl;
-export type CreateGoogleGenerativeAIFn = typeof createGoogleGenerativeAIImpl;
-
-type ModelProvider = 'openai' | 'gemini' | 'openrouter';
+type ModelProvider = 'openai' | 'gemini' | 'openrouter' | 'zai-coding-plan';
 
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL ?? '';
 const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL ?? '';
-const OPENROUTER_BASE_URL =
-  process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
 
 const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
-const DEFAULT_OPENROUTER_MODEL = 'openrouter/auto';
+const DEFAULT_OPENROUTER_MODEL = 'openai/gpt-4o-mini';
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 1024;
 const DEFAULT_MEMORY_SIZE = 8;
 const DEFAULT_STEP_LIMIT = 4;
+const LOG_TRUNCATE_LIMIT = 2000;
+
+import { DEFAULT_GATEWAY_URL, getGatewaySessionToken } from './utils';
 
 const agentMessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant', 'tool']),
@@ -52,299 +53,176 @@ const agentMessageSchema = z.object({
 
 type AgentMessage = z.infer<typeof agentMessageSchema>;
 
-type CoreMessage = {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
-};
-
-const toolInvocationMetadataSchema = z.object({
-  toolId: z.string().optional(),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  source: z.string().optional(),
-  endpoint: z.string().optional(),
-});
-
-const toolInvocationSchema = z.object({
-  id: z.string(),
-  toolName: z.string(),
-  args: z.unknown(),
-  result: z.unknown().nullable(),
-  timestamp: z.string(),
-  metadata: toolInvocationMetadataSchema.optional(),
-});
-
 const conversationStateSchema = z.object({
   sessionId: z.string(),
   messages: z.array(agentMessageSchema).default([]),
-  toolInvocations: z.array(toolInvocationSchema).default([]),
 });
-
-const reasoningActionSchema = z.object({
-  toolCallId: z.string(),
-  toolName: z.string(),
-  args: z.unknown(),
-});
-
-const reasoningObservationSchema = z.object({
-  toolCallId: z.string(),
-  toolName: z.string(),
-  args: z.unknown(),
-  result: z.unknown(),
-});
-
-const reasoningStepSchema = z.object({
-  step: z.number().int(),
-  thought: z.string(),
-  finishReason: z.string(),
-  actions: z.array(reasoningActionSchema),
-  observations: z.array(reasoningObservationSchema),
-});
-
-const inputSchema = z.object({
-  userInput: z
-    .string()
-    .min(1, 'Input text cannot be empty')
-    .describe('Incoming user text for this agent turn.'),
-  conversationState: conversationStateSchema
-    .optional()
-    .describe('Optional prior conversation state to maintain memory across turns.'),
-  chatModel: LLMProviderSchema
-    .default({
-      provider: 'openai',
-      modelId: DEFAULT_OPENAI_MODEL,
-    })
-    .describe('Chat model configuration (provider, model ID, API key, base URL).'),
-  modelApiKey: z
-    .string()
-    .optional()
-    .describe('Optional API key override supplied via a Secret Loader node.'),
-  mcpTools: z
-    .array(McpToolDefinitionSchema)
-    .optional()
-    .describe('Normalized MCP tool definitions emitted by provider components.'),
-  systemPrompt: z
-    .string()
-    .default('')
-    .describe('Optional system instructions that anchor the agent behaviour.'),
-  temperature: z
-    .number()
-    .min(0)
-    .max(2)
-    .default(DEFAULT_TEMPERATURE)
-    .describe('Sampling temperature. Higher values are more creative, lower values are focused.'),
-  maxTokens: z
-    .number()
-    .int()
-    .min(64)
-    .max(1_000_000)
-    .default(DEFAULT_MAX_TOKENS)
-    .describe('Maximum number of tokens to generate on the final turn.'),
-  memorySize: z
-    .number()
-    .int()
-    .min(2)
-    .max(50)
-    .default(DEFAULT_MEMORY_SIZE)
-    .describe('How many recent messages (excluding the system prompt) to retain between turns.'),
-  stepLimit: z
-    .number()
-    .int()
-    .min(1)
-    .max(12)
-    .default(DEFAULT_STEP_LIMIT)
-    .describe('Maximum sequential reasoning/tool steps before the agent stops.'),
-});
-
-type Input = z.infer<typeof inputSchema>;
 
 type ConversationState = z.infer<typeof conversationStateSchema>;
-type ToolInvocationEntry = z.infer<typeof toolInvocationSchema>;
+type AgentTools = ToolSet;
+type AgentStepResult = StepResult<AgentTools>;
+type AgentGenerationResult = GenerateTextResult<AgentTools, never>;
+type ToolResultOutput = ToolResultPart['output'];
+interface AiSdkOverrides {
+  ToolLoopAgent?: typeof ToolLoopAgent;
+  stepCountIs?: typeof stepCountIs;
+  createOpenAI?: typeof createOpenAI;
+  createGoogleGenerativeAI?: typeof createGoogleGenerativeAI;
+  createMCPClient?: typeof createMCPClient;
+}
 
-type McpToolArgument = z.infer<typeof McpToolArgumentSchema>;
-
-type ReasoningStep = z.infer<typeof reasoningStepSchema>;
-
-type Output = {
-  responseText: string;
-  conversationState: ConversationState;
-  toolInvocations: ToolInvocationEntry[];
-  reasoningTrace: ReasoningStep[];
-  usage?: unknown;
-  rawResponse: unknown;
-  agentRunId: string;
-};
-
-const outputSchema = z.object({
-  responseText: z.string(),
-  conversationState: conversationStateSchema,
-  toolInvocations: z.array(toolInvocationSchema),
-  reasoningTrace: z.array(reasoningStepSchema),
-  usage: z.unknown().optional(),
-  rawResponse: z.unknown(),
-  agentRunId: z.string(),
+const inputSchema = inputs({
+  userInput: port(
+    z
+      .string()
+      .min(1, 'Input text cannot be empty')
+      .describe('Incoming user text for this agent turn.'),
+    {
+      label: 'User Input',
+      description: 'Incoming user text for this agent turn.',
+    },
+  ),
+  conversationState: port(
+    conversationStateSchema
+      .optional()
+      .describe('Optional prior conversation state to maintain memory across turns.'),
+    {
+      label: 'Conversation State',
+      description: 'Optional prior conversation state to maintain memory across turns.',
+      connectionType: { kind: 'primitive', name: 'json' },
+    },
+  ),
+  chatModel: port(
+    LLMProviderSchema()
+      .default({
+        provider: 'openai',
+        modelId: DEFAULT_OPENAI_MODEL,
+      })
+      .describe('Chat model configuration (provider, model ID, API key, base URL).'),
+    {
+      label: 'Chat Model',
+      description:
+        'Provider configuration. Example: {"provider":"gemini","modelId":"gemini-2.5-flash","apiKey":"gm-..."}',
+      connectionType: { kind: 'contract', name: llmProviderContractName, credential: true },
+    },
+  ),
+  modelApiKey: port(
+    z.string().optional().describe('Optional API key override supplied via a Secret Loader node.'),
+    {
+      label: 'Model API Key',
+      description: 'Optional override API key supplied via a Secret Loader output.',
+      editor: 'secret',
+      connectionType: { kind: 'primitive', name: 'secret' },
+    },
+  ),
+  tools: port(
+    z
+      .unknown()
+      .optional()
+      .describe('Anchor port for tool-mode nodes; data is not consumed by the agent.'),
+    {
+      label: 'Connected Tools',
+      description: 'Connect tool-mode nodes here to scope gateway tool discovery for this agent.',
+      allowAny: true,
+      reason: 'Tool-mode port acts as a graph anchor; payloads are not consumed by the agent.',
+      connectionType: { kind: 'contract', name: 'mcp.tool' },
+    },
+  ),
 });
 
-type AgentStreamPart =
-  | { type: 'message-start'; messageId: string; role: 'assistant' | 'user'; metadata?: Record<string, unknown> }
-  | { type: 'text-delta'; textDelta: string }
-  | { type: 'tool-input-available'; toolCallId: string; toolName: string; input: Record<string, unknown> }
-  | { type: 'tool-output-available'; toolCallId: string; toolName: string; output: unknown }
-  | { type: 'finish'; finishReason: string; responseText: string }
-  | { type: `data-${string}`; data: unknown };
+const parameterSchema = parameters({
+  systemPrompt: param(
+    z
+      .string()
+      .default('')
+      .describe('Optional system instructions that anchor the agent behaviour.'),
+    {
+      label: 'System Prompt',
+      editor: 'textarea',
+      rows: 3,
+      description: 'Optional system instructions that guide the model response.',
+    },
+  ),
+  temperature: param(
+    z
+      .number()
+      .min(0)
+      .max(2)
+      .default(DEFAULT_TEMPERATURE)
+      .describe('Sampling temperature. Higher values are more creative, lower values are focused.'),
+    {
+      label: 'Temperature',
+      editor: 'number',
+      min: 0,
+      max: 2,
+      description: 'Higher values increase creativity, lower values are focused.',
+    },
+  ),
+  maxTokens: param(
+    z
+      .number()
+      .int()
+      .min(64)
+      .max(1_000_000)
+      .default(DEFAULT_MAX_TOKENS)
+      .describe('Maximum number of tokens to generate on the final turn.'),
+    {
+      label: 'Max Tokens',
+      editor: 'number',
+      min: 64,
+      max: 1_000_000,
+      description: 'Maximum number of tokens to generate on the final turn.',
+    },
+  ),
+  memorySize: param(
+    z
+      .number()
+      .int()
+      .min(2)
+      .max(50)
+      .default(DEFAULT_MEMORY_SIZE)
+      .describe('How many recent messages (excluding the system prompt) to retain between turns.'),
+    {
+      label: 'Memory Size',
+      editor: 'number',
+      min: 2,
+      max: 50,
+      description: 'How many recent turns to keep in memory (excluding the system prompt).',
+    },
+  ),
+  stepLimit: param(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(12)
+      .default(DEFAULT_STEP_LIMIT)
+      .describe('Maximum sequential reasoning/tool steps before the agent stops.'),
+    {
+      label: 'Step Limit',
+      editor: 'number',
+      min: 1,
+      max: 12,
+      description: 'Maximum reasoning/tool steps before the agent stops automatically.',
+    },
+  ),
+});
 
-class AgentStreamRecorder {
-  private sequence = 0;
-  private activeTextId: string | null = null;
-
-  constructor(private readonly context: ExecutionContext, private readonly agentRunId: string) {}
-
-  emitMessageStart(role: 'assistant' | 'user' = 'assistant'): void {
-    this.emitPart({
-      type: 'message-start',
-      messageId: this.agentRunId,
-      role,
-    });
-  }
-
-  emitReasoningStep(step: ReasoningStep): void {
-    this.emitPart({
-      type: 'data-reasoning-step',
-      data: step,
-    });
-  }
-
-  emitToolInput(toolCallId: string, toolName: string, input: Record<string, unknown>): void {
-    this.emitPart({
-      type: 'tool-input-available',
-      toolCallId,
-      toolName,
-      input,
-    });
-  }
-
-  emitToolOutput(toolCallId: string, toolName: string, output: unknown): void {
-    this.emitPart({
-      type: 'tool-output-available',
-      toolCallId,
-      toolName,
-      output,
-    });
-  }
-
-  emitToolError(toolCallId: string, toolName: string, error: string): void {
-    this.emitPart({
-      type: 'data-tool-error',
-      data: { toolCallId, toolName, error },
-    });
-  }
-
-  private ensureTextStream(): string {
-    if (this.activeTextId) {
-      return this.activeTextId;
-    }
-    const textId = `${this.agentRunId}:text`;
-    this.emitPart({
-      type: 'data-text-start',
-      data: { id: textId },
-    });
-    this.activeTextId = textId;
-    return textId;
-  }
-
-  emitTextDelta(textDelta: string): void {
-    if (!textDelta.trim()) {
-      return;
-    }
-    const textId = this.ensureTextStream();
-    this.emitPart({
-      type: 'text-delta',
-      textDelta,
-    });
-  }
-
-  emitFinish(finishReason: string, responseText: string): void {
-    if (this.activeTextId) {
-      this.emitPart({
-        type: 'data-text-end',
-        data: { id: this.activeTextId },
-      });
-      this.activeTextId = null;
-    }
-    this.emitPart({
-      type: 'finish',
-      finishReason,
-      responseText,
-    });
-  }
-
-  private emitPart(part: AgentStreamPart): void {
-    const timestamp = new Date().toISOString();
-    const sequence = ++this.sequence;
-    const envelope: AgentTraceEvent = {
-      agentRunId: this.agentRunId,
-      workflowRunId: this.context.runId,
-      nodeRef: this.context.componentRef,
-      sequence,
-      timestamp,
-      part,
-    };
-
-    if (this.context.agentTracePublisher) {
-      void this.context.agentTracePublisher.publish(envelope);
-      return;
-    }
-
-    this.context.emitProgress({
-      level: 'info',
-      message: `[AgentTraceFallback] ${part.type}`,
-      data: envelope,
-    });
-  }
-}
-
-class MCPClient {
-  private readonly endpoint: string;
-  private readonly sessionId: string;
-  private readonly headers?: Record<string, string>;
-
-  constructor(options: { endpoint: string; sessionId: string; headers?: Record<string, string> }) {
-    this.endpoint = options.endpoint.replace(/\/+$/, '');
-    this.sessionId = options.sessionId;
-    this.headers = sanitizeHeaders(options.headers);
-  }
-
-  async execute(toolName: string, args: unknown): Promise<unknown> {
-    const payload = {
-      sessionId: this.sessionId,
-      toolName,
-      arguments: args ?? {},
-    };
-
-    const response = await fetch(this.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-MCP-Session': this.sessionId,
-        'X-MCP-Tool': toolName,
-        ...(this.headers ?? {}),
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '<no body>');
-      throw new Error(`MCP request failed (${response.status} ${response.statusText}): ${errorText}`);
-    }
-
-    const contentType = response.headers.get('content-type') ?? '';
-    if (contentType.includes('application/json')) {
-      return await response.json();
-    }
-
-    return await response.text();
-  }
-}
+const outputSchema = outputs({
+  responseText: port(z.string(), {
+    label: 'Agent Response',
+    description: 'Final assistant message produced by the agent.',
+  }),
+  conversationState: port(conversationStateSchema, {
+    label: 'Conversation State',
+    description: 'Updated conversation memory for subsequent agent turns.',
+    connectionType: { kind: 'primitive', name: 'json' },
+  }),
+  agentRunId: port(z.string(), {
+    label: 'Agent Run ID',
+    description: 'Unique identifier for streaming and replaying this agent session.',
+  }),
+});
 
 function ensureModelName(provider: ModelProvider, modelId?: string | null): string {
   const trimmed = modelId?.trim();
@@ -369,8 +247,9 @@ function resolveApiKey(provider: ModelProvider, overrideKey?: string | null): st
     return trimmed;
   }
 
-  throw new Error(
+  throw new ConfigurationError(
     `Model provider API key is not configured for "${provider}". Connect a Secret Loader node to the modelApiKey input or supply chatModel.apiKey.`,
+    { configKey: 'apiKey', details: { provider } },
   );
 }
 
@@ -391,7 +270,7 @@ function ensureSystemMessage(history: AgentMessage[], systemPrompt: string): Age
   }
 
   if (firstMessage.content !== systemPrompt.trim()) {
-    return [{ role: 'system', content: systemPrompt.trim() as string }, ...rest];
+    return [{ role: 'system', content: systemPrompt.trim() }, ...rest];
   }
 
   return history;
@@ -410,7 +289,9 @@ function trimConversation(history: AgentMessage[], memorySize: number): AgentMes
   return [...systemMessages.slice(0, 1), ...trimmedNonSystem];
 }
 
-function sanitizeHeaders(headers?: Record<string, string | undefined> | null): Record<string, string> | undefined {
+function sanitizeHeaders(
+  headers?: Record<string, string | undefined> | null,
+): Record<string, string> | undefined {
   if (!headers) {
     return undefined;
   }
@@ -427,683 +308,478 @@ function sanitizeHeaders(headers?: Record<string, string | undefined> | null): R
   return Object.keys(entries).length > 0 ? entries : undefined;
 }
 
-type RegisteredToolMetadata = z.infer<typeof toolInvocationMetadataSchema>;
-
-type RegisteredMcpTool = {
-  name: string;
-  tool: Tool<any, any>;
-  metadata: RegisteredToolMetadata;
-};
-
-type RegisterMcpToolParams = {
-  tools?: Array<z.infer<typeof McpToolDefinitionSchema>>;
-  sessionId: string;
-  toolFactory: ToolFn;
-  agentStream: AgentStreamRecorder;
-  logger?: {
-    warn?: (...args: unknown[]) => void;
-  };
-};
-
-function registerMcpTools({
-  tools,
-  sessionId,
-  toolFactory,
-  agentStream,
-  logger,
-}: RegisterMcpToolParams): RegisteredMcpTool[] {
-  if (!Array.isArray(tools) || tools.length === 0) {
-    return [];
+function normalizeMessageContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
   }
-
-  const seenIds = new Set<string>();
-  const usedNames = new Set<string>();
-  const registered: RegisteredMcpTool[] = [];
-
-  tools.forEach((tool, index) => {
-    if (!tool || typeof tool !== 'object') {
-      return;
-    }
-
-    if (seenIds.has(tool.id)) {
-      logger?.warn?.(
-        `[AIAgent] Skipping MCP tool "${tool.id}" because a duplicate id was detected.`,
-      );
-      return;
-    }
-    seenIds.add(tool.id);
-
-    const endpoint = typeof tool.endpoint === 'string' ? tool.endpoint.trim() : '';
-    if (!endpoint) {
-      logger?.warn?.(
-        `[AIAgent] Skipping MCP tool "${tool.id}" because the endpoint is missing or empty.`,
-      );
-      return;
-    }
-
-    const remoteToolName = (tool.metadata?.toolName ?? tool.id).trim() || tool.id;
-    const toolName = ensureUniqueToolName(remoteToolName, usedNames, index);
-
-    const client = new MCPClient({
-      endpoint,
-      sessionId,
-      headers: tool.headers,
-    });
-
-    const description =
-      tool.description ??
-      (tool.title ? `Invoke ${tool.title}` : `Invoke MCP tool ${remoteToolName}`);
-
-    const metadata: RegisteredToolMetadata = {
-      toolId: tool.id,
-      title: tool.title ?? remoteToolName,
-      description: tool.description,
-      source: tool.metadata?.source,
-      endpoint,
-    };
-
-    const registeredTool = toolFactory<Record<string, unknown>, unknown>({
-      type: 'dynamic',
-      description,
-      inputSchema: buildToolArgumentSchema(tool.arguments),
-      execute: async (args: Record<string, unknown>) => {
-        const invocationId = `${tool.id}-${randomUUID()}`;
-        const normalizedArgs = args ?? {};
-        agentStream.emitToolInput(invocationId, toolName, normalizedArgs);
-
-        try {
-          const result = await client.execute(remoteToolName, normalizedArgs);
-          agentStream.emitToolOutput(invocationId, toolName, result);
-          return result;
-        } catch (error) {
-          agentStream.emitToolError(
-            invocationId,
-            toolName,
-            error instanceof Error ? error.message : String(error),
-          );
-          throw error;
-        }
-      },
-    });
-
-    registered.push({
-      name: toolName,
-      tool: registeredTool,
-      metadata,
-    });
-  });
-
-  return registered;
+  return JSON.stringify(content ?? '');
 }
 
-function ensureUniqueToolName(baseName: string, usedNames: Set<string>, index: number): string {
-  const sanitized = sanitizeToolKey(baseName);
-  let candidate = sanitized.length > 0 ? sanitized : `mcp_tool_${index + 1}`;
-  let suffix = 2;
-
-  while (usedNames.has(candidate)) {
-    const prefix = sanitized.length > 0 ? sanitized : `mcp_tool_${index + 1}`;
-    candidate = `${prefix}_${suffix++}`;
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
   }
-
-  usedNames.add(candidate);
-  return candidate;
+  const remaining = value.length - maxLength;
+  return `${value.slice(0, maxLength)}...(+${remaining} chars)`;
 }
 
-function sanitizeToolKey(value: string): string {
-  return value
-    .trim()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-zA-Z0-9_-]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-    .toLowerCase();
-}
-
-function buildToolArgumentSchema(args?: McpToolArgument[]) {
-  if (!Array.isArray(args) || args.length === 0) {
-    return z.object({}).passthrough();
+function safeStringify(value: unknown, maxLength: number): string {
+  try {
+    return truncateText(JSON.stringify(value), maxLength);
+  } catch {
+    return truncateText(String(value), maxLength);
   }
-
-  const shape = args.reduce<Record<string, ZodTypeAny>>((acc, arg) => {
-    const key = arg.name.trim();
-    if (!key) {
-      return acc;
-    }
-
-    let field: ZodTypeAny;
-    switch (arg.type) {
-      case 'number':
-        field = z.number();
-        break;
-      case 'boolean':
-        field = z.boolean();
-        break;
-      case 'json':
-        field = z.any();
-        break;
-      case 'string':
-      default:
-        field = z.string();
-        break;
-    }
-
-    if (Array.isArray(arg.enum) && arg.enum.length > 0) {
-      const stringValues = arg.enum.filter((value): value is string => typeof value === 'string');
-      if (stringValues.length === arg.enum.length && stringValues.length > 0) {
-        const enumValues = stringValues as [string, ...string[]];
-        field = z.enum(enumValues);
-      }
-    }
-
-    if (arg.description) {
-      field = field.describe(arg.description);
-    }
-
-    if (!arg.required) {
-      field = field.optional();
-    }
-
-    acc[key] = field;
-    return acc;
-  }, {});
-
-  return z.object(shape).passthrough();
 }
 
-function mapStepToReasoning(step: any, index: number, sessionId: string): ReasoningStep {
-  const getArgs = (entity: any) =>
-    entity?.args !== undefined ? entity.args : entity?.input ?? null;
-  const getOutput = (entity: any) =>
-    entity?.result !== undefined ? entity.result : entity?.output ?? null;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function isJsonValue(value: unknown): value is JSONValue {
+  if (value === null) {
+    return true;
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+  if (isRecord(value)) {
+    return Object.values(value).every(isJsonValue);
+  }
+  return false;
+}
+
+function isToolResultOutput(value: unknown): value is ToolResultOutput {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const typeValue = value.type;
+  if (typeof typeValue !== 'string') {
+    return false;
+  }
+  return ['text', 'json', 'execution-denied', 'error-text', 'error-json', 'content'].includes(
+    typeValue,
+  );
+}
+
+function toToolResultOutput(value: unknown): ToolResultOutput {
+  if (isToolResultOutput(value)) {
+    return value;
+  }
+  if (isJsonValue(value)) {
+    return { type: 'json', value };
+  }
+  return { type: 'text', value: JSON.stringify(value) };
+}
+
+function toToolResultPart(content: unknown): ToolResultPart {
+  const record = isRecord(content) ? content : {};
+  const toolCallId =
+    typeof record.toolCallId === 'string' && record.toolCallId.trim().length > 0
+      ? record.toolCallId
+      : 'unknown';
+  const toolName =
+    typeof record.toolName === 'string' && record.toolName.trim().length > 0
+      ? record.toolName
+      : 'tool';
+  const rawOutput = record.output ?? record.result;
 
   return {
-    step: index + 1,
-    thought: typeof step?.text === 'string' ? step.text : JSON.stringify(step?.text ?? ''),
-    finishReason: typeof step?.finishReason === 'string' ? step.finishReason : 'other',
-    actions: Array.isArray(step?.toolCalls)
-      ? step.toolCalls.map((toolCall: any) => ({
-          toolCallId: toolCall?.toolCallId ?? `${sessionId}-tool-${index + 1}`,
-          toolName: toolCall?.toolName ?? 'tool',
-          args: getArgs(toolCall),
-        }))
-      : [],
-    observations: Array.isArray(step?.toolResults)
-      ? step.toolResults.map((toolResult: any) => ({
-          toolCallId: toolResult?.toolCallId ?? `${sessionId}-tool-${index + 1}`,
-          toolName: toolResult?.toolName ?? 'tool',
-          args: getArgs(toolResult),
-          result: getOutput(toolResult),
-        }))
-      : [],
+    type: 'tool-result',
+    toolCallId,
+    toolName,
+    output: toToolResultOutput(rawOutput),
   };
 }
 
-const definition: ComponentDefinition<Input, Output> = {
+function formatErrorForLog(error: unknown, maxLength: number): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: truncateText(error.message, maxLength),
+      stack: error.stack ? truncateText(error.stack, maxLength) : undefined,
+      cause:
+        'cause' in error
+          ? safeStringify((error as { cause?: unknown }).cause, maxLength)
+          : undefined,
+    };
+  }
+
+  if (isRecord(error)) {
+    const message =
+      typeof error.message === 'string' ? error.message : safeStringify(error, maxLength);
+    return {
+      name: typeof error.name === 'string' ? error.name : undefined,
+      message: truncateText(message, maxLength),
+      keys: Object.keys(error).slice(0, 12),
+    };
+  }
+
+  return { message: truncateText(String(error), maxLength) };
+}
+
+function getToolInput(entity: { input?: unknown } | null | undefined): unknown {
+  return entity?.input ?? null;
+}
+
+function getToolOutput(entity: { output?: unknown } | null | undefined): unknown {
+  return entity?.output ?? null;
+}
+
+function toModelMessages(messages: AgentMessage[]): ModelMessage[] {
+  const result: ModelMessage[] = [];
+  for (const message of messages) {
+    if (message.role === 'system') {
+      continue;
+    }
+
+    if (message.role === 'tool') {
+      result.push({
+        role: 'tool',
+        content: [toToolResultPart(message.content)],
+      });
+      continue;
+    }
+
+    if (message.role === 'user') {
+      result.push({
+        role: 'user',
+        content: normalizeMessageContent(message.content),
+      });
+      continue;
+    }
+
+    result.push({
+      role: 'assistant',
+      content: normalizeMessageContent(message.content),
+    });
+  }
+
+  return result;
+}
+
+interface RegisterGatewayToolsParams {
+  gatewayUrl: string;
+  sessionToken: string;
+  createClient?: typeof createMCPClient;
+}
+
+async function registerGatewayTools({
+  gatewayUrl,
+  sessionToken,
+  createClient = createMCPClient,
+}: RegisterGatewayToolsParams): Promise<{
+  tools: ToolSet;
+  close: () => Promise<void>;
+}> {
+  console.log(`[AGENT] Connecting to MCP gateway at ${gatewayUrl} to discover tools`);
+  const mcpClient = await createClient({
+    transport: {
+      type: 'http',
+      url: gatewayUrl,
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    },
+  });
+
+  const tools = await mcpClient.tools();
+  console.log(
+    `[AGENT] Discovered ${Object.keys(tools).length} tools from gateway: ${Object.keys(tools).join(', ') || 'none'}`,
+  );
+  return {
+    tools,
+    close: async () => {
+      await mcpClient.close();
+    },
+  };
+}
+
+const definition = defineComponent({
   id: 'core.ai.agent',
   label: 'AI SDK Agent',
   category: 'ai',
   runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema,
-  docs: `An AI SDK-powered agent that maintains conversation memory, calls MCP tools, and returns both the final answer and a reasoning trace.
+  retryPolicy: {
+    maxAttempts: 3,
+    initialIntervalSeconds: 2,
+    maximumIntervalSeconds: 30,
+    backoffCoefficient: 2,
+    nonRetryableErrorTypes: ['ValidationError', 'ConfigurationError', 'AuthenticationError'],
+  } satisfies ComponentRetryPolicy,
+  inputs: inputSchema,
+  outputs: outputSchema,
+  parameters: parameterSchema,
+  docs: `An AI SDK-powered agent that maintains conversation memory, calls MCP tools via the gateway, and streams progress events.
 
 How it behaves:
 - Memory → The agent maintains a conversation state object you can persist between turns.
 - Model → Connect a chat model configuration output into the Chat Model input or customise the defaults below.
-- MCP → Supply an MCP endpoint through the MCP input to expose your external tools.
+- MCP → Connect tool-mode nodes to the tools port; the gateway resolves the tool set for this agent.
 
 Typical workflow:
 1. Entry Point (or upstream Chat Model) → wire its text output into User Input.
-2. AI SDK Agent (this node) → loops with Think/Act/Observe, logging tool calls and keeping state.
-3. Downstream node (Console Log, Storage, etc.) → consume responseText or reasoningTrace.
+2. AI SDK Agent (this node) → loops with tool calling, logging tool calls as it goes.
+3. Downstream node (Console Log, Storage, etc.) → consume responseText.
 
 Loop the Conversation State output back into the next agent invocation to keep multi-turn context.`,
-  metadata: {
+  ui: {
     slug: 'ai-agent',
-    version: '1.0.0',
+    version: '1.1.0',
     type: 'process',
     category: 'ai',
-    description: 'AI SDK agent with conversation memory, MCP tool calling, and reasoning trace output.',
+    description: 'AI SDK agent with conversation memory and MCP tool calling via gateway.',
     icon: 'Bot',
     author: {
       name: 'ShipSecAI',
       type: 'shipsecai',
     },
-    inputs: [
-      {
-        id: 'userInput',
-        label: 'User Input',
-        dataType: port.text(),
-        required: true,
-        description: 'Incoming user text for this agent turn.',
-      },
-      {
-        id: 'chatModel',
-        label: 'Chat Model',
-        dataType: port.credential(llmProviderContractName),
-        required: false,
-        description: 'Provider configuration. Example: {"provider":"gemini","modelId":"gemini-2.5-flash","apiKey":"gm-..."}',
-      },
-      {
-        id: 'modelApiKey',
-        label: 'Model API Key',
-        dataType: port.secret(),
-        required: false,
-        description: 'Optional override API key supplied via a Secret Loader output.',
-      },
-      {
-        id: 'mcpTools',
-        label: 'MCP Tools',
-        dataType: port.list(port.contract(mcpToolContractName)),
-        required: false,
-        description: 'Connect outputs from MCP tool providers or mergers.',
-      },
-    ],
-    outputs: [
-      {
-        id: 'responseText',
-        label: 'Agent Response',
-        dataType: port.text(),
-        description: 'Final assistant message produced by the agent.',
-      },
-      {
-        id: 'conversationState',
-        label: 'Conversation State',
-        dataType: port.json(),
-        description: 'Updated conversation memory for subsequent agent turns.',
-      },
-      {
-        id: 'toolInvocations',
-        label: 'Tool Invocations',
-        dataType: port.json(),
-        description: 'Array of MCP tool calls executed during this run.',
-      },
-      {
-        id: 'reasoningTrace',
-        label: 'Reasoning Trace',
-        dataType: port.json(),
-        description: 'Sequence of Think → Act → Observe steps executed by the agent.',
-      },
-      {
-        id: 'agentRunId',
-        label: 'Agent Run ID',
-        dataType: port.text(),
-        description: 'Unique identifier for streaming and replaying this agent session.',
-      },
-    ],
-    parameters: [
-      {
-        id: 'systemPrompt',
-        label: 'System Instructions',
-        type: 'textarea',
-        required: false,
-        default: '',
-        rows: 4,
-        description: 'Optional system directive that guides the agent behaviour.',
-      },
-      {
-        id: 'temperature',
-        label: 'Temperature',
-        type: 'number',
-        required: false,
-        default: DEFAULT_TEMPERATURE,
-        min: 0,
-        max: 2,
-        description: 'Higher values increase creativity, lower values improve determinism.',
-      },
-      {
-        id: 'maxTokens',
-        label: 'Max Tokens',
-        type: 'number',
-        required: false,
-        default: DEFAULT_MAX_TOKENS,
-        min: 64,
-        max: 1_000_000,
-        description: 'Upper bound for tokens generated in the final response.',
-      },
-      {
-        id: 'memorySize',
-        label: 'Memory Size',
-        type: 'number',
-        required: false,
-        default: DEFAULT_MEMORY_SIZE,
-        min: 2,
-        max: 50,
-        description: 'How many recent turns to keep in memory (excluding the system prompt).',
-      },
-      {
-        id: 'stepLimit',
-        label: 'Step Limit',
-        type: 'number',
-        required: false,
-        default: DEFAULT_STEP_LIMIT,
-        min: 1,
-        max: 12,
-        description: 'Maximum reasoning/tool steps before the agent stops automatically.',
-      },
-    ],
   },
-  async execute(
-    params, 
-    context,
-    // Optional dependencies for testing - in production these will use the default implementations
-    dependencies?: {
-      ToolLoopAgent?: ToolLoopAgentClass;
-      stepCountIs?: StepCountIsFn;
-      tool?: ToolFn;
-      createOpenAI?: CreateOpenAIFn;
-      createGoogleGenerativeAI?: CreateGoogleGenerativeAIFn;
-    }
-  ) {
-    const {
-      userInput,
-      conversationState,
-      chatModel,
-      mcpTools,
-      systemPrompt,
-      temperature,
-      maxTokens,
-      memorySize,
-      stepLimit,
-    } = params;
+  async execute({ inputs, params }, context) {
+    const { userInput, conversationState, chatModel, modelApiKey } = inputs;
+    const { systemPrompt, temperature, maxTokens, memorySize, stepLimit } = params;
 
-    const debugLog = (...args: unknown[]) => context.logger.debug(`[AIAgent Debug] ${args.join(' ')}`);
     const agentRunId = `${context.runId}:${context.componentRef}:${randomUUID()}`;
-    const agentStream = new AgentStreamRecorder(context as ExecutionContext, agentRunId);
-    agentStream.emitMessageStart();
-    context.emitProgress({
-      level: 'info',
-      message: 'AI agent session started',
-      data: {
-        agentRunId,
-        agentStatus: 'started',
-      },
-    });
 
-    debugLog('Incoming params', {
-      userInput,
-      conversationState,
-      chatModel,
-      mcpTools,
-      systemPrompt,
-      temperature,
-      maxTokens,
-      memorySize,
-      stepLimit,
-    });
+    const agentStream = new AgentStreamRecorder(context, agentRunId);
+    const { connectedToolNodeIds, organizationId } = context.metadata;
+    const aiSdkOverrides = (context.metadata as { aiSdkOverrides?: AiSdkOverrides }).aiSdkOverrides;
+    const createMCPClientImpl = aiSdkOverrides?.createMCPClient ?? createMCPClient;
+    const ToolLoopAgentImpl = aiSdkOverrides?.ToolLoopAgent ?? ToolLoopAgent;
+    const stepCountIsImpl = aiSdkOverrides?.stepCountIs ?? stepCountIs;
+    const createOpenAIImpl = aiSdkOverrides?.createOpenAI ?? createOpenAI;
+    const createGoogleGenerativeAIImpl =
+      aiSdkOverrides?.createGoogleGenerativeAI ?? createGoogleGenerativeAI;
 
-    const trimmedInput = userInput.trim();
-    debugLog('Trimmed input', trimmedInput);
+    let discoveredTools: ToolSet = {};
+    let closeDiscovery: (() => Promise<void>) | undefined;
 
-    if (!trimmedInput) {
-      throw new Error('AI Agent requires a non-empty user input.');
+    if (connectedToolNodeIds && connectedToolNodeIds.length > 0) {
+      context.logger.info(
+        `Discovering tools from gateway for nodes: ${connectedToolNodeIds.join(', ')}`,
+      );
+      try {
+        const sessionToken = await getGatewaySessionToken(
+          context.runId,
+          organizationId ?? null,
+          connectedToolNodeIds,
+        );
+        const discoveryResult = await registerGatewayTools({
+          gatewayUrl: DEFAULT_GATEWAY_URL,
+          sessionToken,
+          createClient: createMCPClientImpl,
+        });
+        discoveredTools = discoveryResult.tools;
+        closeDiscovery = discoveryResult.close;
+      } catch (error) {
+        context.logger.error(`Failed to discover tools from gateway: ${error}`);
+      }
     }
 
-    const effectiveProvider = (chatModel?.provider ?? 'openai') as ModelProvider;
-    const effectiveModel = ensureModelName(effectiveProvider, chatModel?.modelId ?? null);
+    try {
+      agentStream.emitMessageStart();
+      context.emitProgress({
+        level: 'info',
+        message: 'AI agent session started',
+        data: {
+          agentRunId,
+          agentStatus: 'started',
+        },
+      });
 
-    let overrideApiKey = chatModel?.apiKey ?? null;
-    if (params.modelApiKey && params.modelApiKey.trim().length > 0) {
-      overrideApiKey = params.modelApiKey.trim();
-    }
+      const trimmedInput = userInput.trim();
 
-    const effectiveApiKey = resolveApiKey(effectiveProvider, overrideApiKey);
-    debugLog('Resolved model configuration', {
-      effectiveProvider,
-      effectiveModel,
-      hasExplicitApiKey: Boolean(chatModel?.apiKey) || Boolean(params.modelApiKey),
-      apiKeyProvided: Boolean(effectiveApiKey),
-    });
+      if (!trimmedInput) {
+        throw new ValidationError('AI Agent requires a non-empty user input.', {
+          fieldErrors: { userInput: ['Input cannot be empty'] },
+        });
+      }
 
-    const explicitBaseUrl = chatModel?.baseUrl?.trim();
-    const baseUrl =
-      explicitBaseUrl && explicitBaseUrl.length > 0
-        ? explicitBaseUrl
-        : effectiveProvider === 'gemini'
-          ? GEMINI_BASE_URL
-          : effectiveProvider === 'openrouter'
-            ? OPENROUTER_BASE_URL
-            : OPENAI_BASE_URL;
+      const effectiveProvider: ModelProvider = chatModel?.provider ?? 'openai';
+      const effectiveModel = ensureModelName(effectiveProvider, chatModel?.modelId ?? null);
 
-    debugLog('Resolved base URL', { explicitBaseUrl, baseUrl });
+      let overrideApiKey = chatModel?.apiKey ?? null;
+      if (modelApiKey && modelApiKey.trim().length > 0) {
+        overrideApiKey = modelApiKey.trim();
+      }
 
-    const sanitizedHeaders =
-      chatModel && (chatModel.provider === 'openai' || chatModel.provider === 'openrouter')
-        ? sanitizeHeaders(chatModel.headers)
-        : undefined;
-    debugLog('Sanitized headers', sanitizedHeaders);
+      const effectiveApiKey = resolveApiKey(effectiveProvider, overrideApiKey);
+      const explicitBaseUrl = chatModel?.baseUrl?.trim();
+      const baseUrl =
+        explicitBaseUrl && explicitBaseUrl.length > 0
+          ? explicitBaseUrl
+          : effectiveProvider === 'gemini'
+            ? GEMINI_BASE_URL
+            : effectiveProvider === 'openrouter'
+              ? OPENROUTER_BASE_URL
+              : OPENAI_BASE_URL;
 
-    const incomingState = conversationState;
-    debugLog('Incoming conversation state', incomingState);
+      const sanitizedHeaders =
+        chatModel && (chatModel.provider === 'openai' || chatModel.provider === 'openrouter')
+          ? sanitizeHeaders(chatModel.headers)
+          : undefined;
 
-    const sessionId = incomingState?.sessionId ?? randomUUID();
-    const existingMessages = Array.isArray(incomingState?.messages) ? incomingState!.messages : [];
-    const existingToolHistory = Array.isArray(incomingState?.toolInvocations)
-      ? incomingState!.toolInvocations
-      : [];
-    debugLog('Session details', {
-      sessionId,
-      existingMessagesCount: existingMessages.length,
-      existingToolHistoryCount: existingToolHistory.length,
-    });
+      const incomingState = conversationState;
 
-    let history: AgentMessage[] = ensureSystemMessage([...existingMessages], systemPrompt ?? '');
-    history = trimConversation(history, memorySize);
-    debugLog('History after ensuring system message and trimming', history);
+      const sessionId = incomingState?.sessionId ?? randomUUID();
+      const existingMessages = Array.isArray(incomingState?.messages) ? incomingState.messages : [];
 
-    const userMessage: AgentMessage = { role: 'user', content: trimmedInput };
-    const historyWithUser = trimConversation([...history, userMessage], memorySize);
-    debugLog('History with user message', historyWithUser);
+      let history: AgentMessage[] = ensureSystemMessage([...existingMessages], systemPrompt ?? '');
+      history = trimConversation(history, memorySize);
 
-    const toolFn = dependencies?.tool ?? toolImpl;
-    const toolMetadataByName = new Map<string, RegisteredToolMetadata>();
-    const registeredTools: Record<string, Tool<any, any>> = {};
+      const userMessage: AgentMessage = { role: 'user', content: trimmedInput };
+      const historyWithUser = trimConversation([...history, userMessage], memorySize);
 
-    const registeredMcpTools = registerMcpTools({
-      tools: mcpTools,
-      sessionId,
-      toolFactory: toolFn,
-      agentStream,
-      logger: context.logger,
-    });
-    for (const entry of registeredMcpTools) {
-      registeredTools[entry.name] = entry.tool;
-      toolMetadataByName.set(entry.name, entry.metadata);
-    }
+      const availableToolsCount = Object.keys(discoveredTools).length;
+      const toolsConfig = availableToolsCount > 0 ? discoveredTools : undefined;
 
-    const availableToolsCount = Object.keys(registeredTools).length;
-    const toolsConfig = availableToolsCount > 0 ? registeredTools : undefined;
-    debugLog('Tools configuration', {
-      availableToolsCount,
-      toolsConfigKeys: toolsConfig ? Object.keys(toolsConfig) : [],
-    });
-
-    const systemMessageEntry = historyWithUser.find((message) => message.role === 'system');
-    const resolvedSystemPrompt =
-      systemPrompt?.trim()?.length
+      const systemMessageEntry = historyWithUser.find((message) => message.role === 'system');
+      const resolvedSystemPrompt = systemPrompt?.trim()?.length
         ? systemPrompt.trim()
         : systemMessageEntry && typeof systemMessageEntry.content === 'string'
           ? systemMessageEntry.content
           : systemMessageEntry && systemMessageEntry.content !== undefined
             ? JSON.stringify(systemMessageEntry.content)
             : '';
-    debugLog('Resolved system prompt', resolvedSystemPrompt);
+      const messagesForModel = toModelMessages(historyWithUser);
 
-    const messagesForModel = historyWithUser
-      .filter((message) => message.role !== 'system')
-      .map((message) => ({
-        role: message.role,
-        content:
-          typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+      const openAIOptions = {
+        apiKey: effectiveApiKey,
+        ...(baseUrl ? { baseURL: baseUrl } : {}),
+        ...(sanitizedHeaders && Object.keys(sanitizedHeaders).length > 0
+          ? { headers: sanitizedHeaders }
+          : {}),
+      };
+      const isOpenRouter =
+        effectiveProvider === 'openrouter' ||
+        (typeof baseUrl === 'string' && baseUrl.includes('openrouter.ai'));
+      const openAIProvider = createOpenAIImpl({
+        ...openAIOptions,
+        ...(isOpenRouter ? { name: 'openrouter' } : {}),
+      });
+      const model =
+        effectiveProvider === 'gemini'
+          ? createGoogleGenerativeAIImpl({
+              apiKey: effectiveApiKey,
+              ...(baseUrl ? { baseURL: baseUrl } : {}),
+            })(effectiveModel)
+          : isOpenRouter
+            ? openAIProvider.chat(effectiveModel)
+            : openAIProvider(effectiveModel);
+      const agentSettings: ToolLoopAgentSettings<never, AgentTools> = {
+        id: `${sessionId}-agent`,
+        model,
+        instructions: resolvedSystemPrompt || undefined,
+        temperature,
+        maxOutputTokens: maxTokens,
+        stopWhen: stepCountIsImpl(stepLimit),
+        onStepFinish: (stepResult: AgentStepResult) => {
+          for (const call of stepResult.toolCalls) {
+            const input = getToolInput(call);
+            agentStream.emitToolInput(call.toolCallId, call.toolName, toRecord(input));
+          }
+
+          for (const result of stepResult.toolResults) {
+            const output = getToolOutput(result);
+            agentStream.emitToolOutput(result.toolCallId, result.toolName, output);
+          }
+        },
+        ...(toolsConfig ? { tools: toolsConfig } : {}),
+      };
+
+      const agent = new ToolLoopAgentImpl<never, AgentTools>(agentSettings);
+
+      context.logger.info(
+        `[AIAgent] Using ${effectiveProvider} model "${effectiveModel}" with ${availableToolsCount} connected tool(s).`,
+      );
+      context.emitProgress({
+        level: 'info',
+        message: 'AI agent reasoning in progress...',
+        data: {
+          agentRunId,
+          agentStatus: 'running',
+        },
+      });
+
+      let generationResult: AgentGenerationResult;
+      try {
+        generationResult = await agent.generate({
+          messages: messagesForModel,
+        });
+      } catch (genError) {
+        const errorSummary = formatErrorForLog(genError, LOG_TRUNCATE_LIMIT);
+        context.logger.error(
+          `[AIAgent] agent.generate() FAILED (truncated): ${safeStringify(
+            errorSummary,
+            LOG_TRUNCATE_LIMIT,
+          )}`,
+        );
+        throw genError;
+      }
+
+      const responseText = generationResult.text;
+
+      const toolMessages: AgentMessage[] = generationResult.toolResults.map((toolResult) => ({
+        role: 'tool',
+        content: {
+          toolCallId: toolResult.toolCallId,
+          toolName: toolResult.toolName,
+          input: getToolInput(toolResult),
+          output: getToolOutput(toolResult),
+        },
       }));
-    debugLog('Messages for model', messagesForModel);
 
-    const createGoogleGenerativeAI =
-      dependencies?.createGoogleGenerativeAI ?? createGoogleGenerativeAIImpl;
-    const createOpenAI = dependencies?.createOpenAI ?? createOpenAIImpl;
-    const openAIOptions = {
-      apiKey: effectiveApiKey,
-      ...(baseUrl ? { baseURL: baseUrl } : {}),
-      ...(sanitizedHeaders && Object.keys(sanitizedHeaders).length > 0
-        ? { headers: sanitizedHeaders }
-        : {}),
-    };
-    const model =
-      effectiveProvider === 'gemini'
-        ? createGoogleGenerativeAI({
-            apiKey: effectiveApiKey,
-            ...(baseUrl ? { baseURL: baseUrl } : {}),
-          })(effectiveModel)
-        : createOpenAI(openAIOptions)(effectiveModel);
-    debugLog('Model factory created', {
-      provider: effectiveProvider,
-      modelId: effectiveModel,
-      baseUrl,
-      headers: sanitizedHeaders,
-      temperature,
-      maxTokens,
-      stepLimit,
-    });
+      const assistantMessage: AgentMessage = {
+        role: 'assistant',
+        content: responseText,
+      };
 
-    const ToolLoopAgent = dependencies?.ToolLoopAgent ?? ToolLoopAgentImpl;
-    const stepCountIs = dependencies?.stepCountIs ?? stepCountIsImpl;
-    let streamedStepCount = 0;
-    const agent = new ToolLoopAgent({
-      id: `${sessionId}-agent`,
-      model,
-      instructions: resolvedSystemPrompt || undefined,
-      ...(toolsConfig ? { tools: toolsConfig } : {}),
-      temperature,
-      maxOutputTokens: maxTokens,
-      stopWhen: stepCountIs(stepLimit),
-      onStepFinish: (stepResult: unknown) => {
-        const mappedStep = mapStepToReasoning(stepResult, streamedStepCount, sessionId);
-        streamedStepCount += 1;
-        agentStream.emitReasoningStep(mappedStep);
-      },
-    });
-    debugLog('ToolLoopAgent instantiated', {
-      id: `${sessionId}-agent`,
-      temperature,
-      maxTokens,
-      stepLimit,
-      toolKeys: toolsConfig ? Object.keys(toolsConfig) : [],
-    });
+      let updatedMessages = trimConversation([...historyWithUser, ...toolMessages], memorySize);
+      updatedMessages = trimConversation([...updatedMessages, assistantMessage], memorySize);
 
-    context.logger.info(
-      `[AIAgent] Using ${effectiveProvider} model "${effectiveModel}" with ${availableToolsCount} connected tool(s).`,
-    );
-    context.emitProgress({
-      level: 'info',
-      message: 'AI agent reasoning in progress...',
-      data: {
+      const nextState: ConversationState = {
+        sessionId,
+        messages: updatedMessages,
+      };
+
+      agentStream.emitTextDelta(responseText);
+      agentStream.emitFinish(generationResult?.finishReason ?? 'stop', responseText);
+      context.emitProgress({
+        level: 'info',
+        message: 'AI agent completed.',
+        data: {
+          agentRunId,
+          agentStatus: 'completed',
+        },
+      });
+
+      return {
+        responseText,
+        conversationState: nextState,
         agentRunId,
-        agentStatus: 'running',
-      },
-    });
-    debugLog('Invoking ToolLoopAgent.generate with payload', {
-      messages: messagesForModel,
-    });
-
-    const generationResult = await agent.generate({
-      messages: messagesForModel as any,
-    });
-    debugLog('Generation result', generationResult);
-
-    const responseText =
-      typeof generationResult.text === 'string' ? generationResult.text : String(generationResult.text ?? '');
-    debugLog('Response text', responseText);
-
-    const currentTimestamp = new Date().toISOString();
-    debugLog('Current timestamp', currentTimestamp);
-
-    const getToolArgs = (entity: any) =>
-      entity?.args !== undefined ? entity.args : entity?.input ?? null;
-    const getToolOutput = (entity: any) =>
-      entity?.result !== undefined ? entity.result : entity?.output ?? null;
-
-    const reasoningTrace: ReasoningStep[] = Array.isArray(generationResult.steps)
-      ? generationResult.steps.map((step: any, index: number) => mapStepToReasoning(step, index, sessionId))
-      : [];
-    debugLog('Reasoning trace', reasoningTrace);
-
-    const toolLogEntries: ToolInvocationEntry[] = Array.isArray(generationResult.toolResults)
-      ? generationResult.toolResults.map((toolResult: any, index: number) => {
-          const toolName = toolResult?.toolName ?? 'tool';
-          return {
-            id: `${sessionId}-${toolResult?.toolCallId ?? index + 1}`,
-            toolName,
-            args: getToolArgs(toolResult),
-            result: getToolOutput(toolResult),
-            timestamp: currentTimestamp,
-            metadata: toolMetadataByName.get(toolName),
-          };
-        })
-      : [];
-    debugLog('Tool log entries', toolLogEntries);
-
-    const toolMessages: AgentMessage[] = Array.isArray(generationResult.toolResults)
-      ? generationResult.toolResults.map((toolResult: any) => ({
-          role: 'tool',
-          content: {
-            toolCallId: toolResult?.toolCallId ?? '',
-            toolName: toolResult?.toolName ?? 'tool',
-            args: getToolArgs(toolResult),
-            result: getToolOutput(toolResult),
-          },
-        }))
-      : [];
-    debugLog('Tool messages appended to history', toolMessages);
-
-    const assistantMessage: AgentMessage = {
-      role: 'assistant',
-      content: responseText,
-    };
-    debugLog('Assistant message', assistantMessage);
-
-    let updatedMessages = trimConversation([...historyWithUser, ...toolMessages], memorySize);
-    updatedMessages = trimConversation([...updatedMessages, assistantMessage], memorySize);
-    debugLog('Updated messages after trimming', updatedMessages);
-
-    const combinedToolHistory = [...existingToolHistory, ...toolLogEntries];
-    debugLog('Combined tool history', combinedToolHistory);
-
-    const nextState: ConversationState = {
-      sessionId,
-      messages: updatedMessages,
-      toolInvocations: combinedToolHistory,
-    };
-    debugLog('Next conversation state', nextState);
-
-    agentStream.emitTextDelta(responseText);
-    agentStream.emitFinish(generationResult.finishReason ?? 'stop', responseText);
-    context.emitProgress({
-      level: 'info',
-      message: 'AI agent completed.',
-      data: {
-        agentRunId,
-        agentStatus: 'completed',
-      },
-    });
-    debugLog('Final output payload', {
-      responseText,
-      conversationState: nextState,
-      toolInvocations: toolLogEntries,
-      reasoningTrace,
-      usage: generationResult.usage,
-    });
-
-    return {
-      responseText,
-      conversationState: nextState,
-      toolInvocations: toolLogEntries,
-      reasoningTrace,
-      usage: generationResult.usage,
-      rawResponse: generationResult,
-      agentRunId,
-    };
+      };
+    } finally {
+      if (closeDiscovery) {
+        await closeDiscovery();
+      }
+    }
   },
-};
+});
 
 componentRegistry.register(definition);
+
+// Create local type aliases for internal use (inferred types)
+type Input = (typeof inputSchema)['__inferred'];
+type Output = (typeof outputSchema)['__inferred'];
+type Params = (typeof parameterSchema)['__inferred'];
+
+// Export schema types for the registry
+export type AiAgentInput = typeof inputSchema;
+export type AiAgentOutput = typeof outputSchema;
+export type AiAgentParams = typeof parameterSchema;
+
+export type { Input as AiAgentInputData, Output as AiAgentOutputData, Params as AiAgentParamsData };

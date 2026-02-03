@@ -1,6 +1,6 @@
 import { and, eq, type SQL } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { ISecretsService } from '@shipsec/component-sdk';
+import { ISecretsService, ServiceError } from '@shipsec/component-sdk';
 import { SecretEncryption, parseMasterKey } from '@shipsec/shared';
 
 import * as schema from './schema';
@@ -20,7 +20,8 @@ export class SecretsAdapter implements ISecretsService {
     options?: { version?: number },
   ): Promise<{ value: string; version: number } | null> {
     // Check if key is a UUID (secret ID) or a name
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key);
+    const isUUID =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key);
 
     let secretId: string;
     if (isUUID) {
@@ -74,7 +75,10 @@ export class SecretsAdapter implements ISecretsService {
 
       return { value, version: options?.version ?? record.versionNumber };
     } catch (error) {
-      throw new Error(`Failed to decrypt secret '${key}': ${(error as Error).message}`);
+      throw new ServiceError(`Failed to decrypt secret '${key}'`, {
+        cause: error as Error,
+        details: { secretKey: key, keyId: record.keyId },
+      });
     }
   }
 

@@ -1,10 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DRIZZLE_TOKEN } from '../../database/database.module';
 import {
   workflowRunsTable,
+  humanInputRequests as humanInputRequestsTable,
   type WorkflowRunInsert,
   type WorkflowRunRecord,
 } from '../../database/schema';
@@ -16,6 +17,8 @@ interface CreateWorkflowRunInput {
   workflowVersionId: string;
   workflowVersion: number;
   temporalRunId?: string | null;
+  parentRunId?: string | null;
+  parentNodeRef?: string | null;
   totalActions: number;
   inputs: Record<string, unknown>;
   organizationId?: string | null;
@@ -47,6 +50,12 @@ export class WorkflowRunRepository {
       updatedAt: new Date(),
       organizationId: input.organizationId ?? null,
     };
+    if (input.parentRunId !== undefined) {
+      values.parentRunId = input.parentRunId ?? null;
+    }
+    if (input.parentNodeRef !== undefined) {
+      values.parentNodeRef = input.parentNodeRef ?? null;
+    }
 
     if (input.temporalRunId !== undefined) {
       values.temporalRunId = input.temporalRunId;
@@ -65,6 +74,12 @@ export class WorkflowRunRepository {
       updatedAt: new Date(),
       organizationId: input.organizationId ?? null,
     };
+    if (input.parentRunId !== undefined) {
+      updateValues.parentRunId = input.parentRunId ?? null;
+    }
+    if (input.parentNodeRef !== undefined) {
+      updateValues.parentNodeRef = input.parentNodeRef ?? null;
+    }
 
     if (input.temporalRunId !== undefined) {
       updateValues.temporalRunId = input.temporalRunId;
@@ -94,12 +109,14 @@ export class WorkflowRunRepository {
     return record;
   }
 
-  async list(options: {
-    workflowId?: string;
-    status?: string;
-    limit?: number;
-    organizationId?: string | null;
-  } = {}): Promise<WorkflowRunRecord[]> {
+  async list(
+    options: {
+      workflowId?: string;
+      status?: string;
+      limit?: number;
+      organizationId?: string | null;
+    } = {},
+  ): Promise<WorkflowRunRecord[]> {
     let condition: ReturnType<typeof eq> | undefined;
 
     if (options.workflowId) {
@@ -107,10 +124,7 @@ export class WorkflowRunRepository {
     }
 
     if (options.organizationId) {
-      const organizationCondition = eq(
-        workflowRunsTable.organizationId,
-        options.organizationId,
-      );
+      const organizationCondition = eq(workflowRunsTable.organizationId, options.organizationId);
       condition = condition ? and(condition, organizationCondition) : organizationCondition;
     }
 
@@ -120,6 +134,36 @@ export class WorkflowRunRepository {
     return await filteredQuery
       .orderBy(desc(workflowRunsTable.createdAt))
       .limit(options.limit ?? 50);
+  }
+
+  async listChildren(
+    parentRunId: string,
+    options: { organizationId?: string | null; limit?: number } = {},
+  ): Promise<WorkflowRunRecord[]> {
+    const conditions: SQL[] = [eq(workflowRunsTable.parentRunId, parentRunId)];
+    if (options.organizationId) {
+      conditions.push(eq(workflowRunsTable.organizationId, options.organizationId));
+    }
+
+    return this.db
+      .select()
+      .from(workflowRunsTable)
+      .where(and(...conditions))
+      .orderBy(desc(workflowRunsTable.createdAt))
+      .limit(options.limit ?? 200);
+  }
+
+  async hasPendingInputs(runId: string): Promise<boolean> {
+    const [result] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(humanInputRequestsTable)
+      .where(
+        and(
+          eq(humanInputRequestsTable.runId, runId),
+          eq(humanInputRequestsTable.status, 'pending'),
+        ),
+      );
+    return Number(result.count) > 0;
   }
 
   private buildRunFilter(runId: string, organizationId?: string | null) {

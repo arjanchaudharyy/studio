@@ -1,9 +1,9 @@
-import type { ExecutionTriggerType } from '@shipsec/shared'
+import type { ExecutionTriggerType } from '@shipsec/shared';
 
-type TriggerMeta = {
-  icon: string
-  variant: 'default' | 'secondary' | 'outline'
-  fallbackLabel: string
+interface TriggerMeta {
+  icon: string;
+  variant: 'default' | 'secondary' | 'outline';
+  fallbackLabel: string;
 }
 
 const TRIGGER_META: Record<ExecutionTriggerType, TriggerMeta> = {
@@ -22,23 +22,28 @@ const TRIGGER_META: Record<ExecutionTriggerType, TriggerMeta> = {
     variant: 'outline',
     fallbackLabel: 'API trigger',
   },
-}
+  webhook: {
+    icon: '🔗',
+    variant: 'default',
+    fallbackLabel: 'Webhook trigger',
+  },
+};
 
-export type TriggerDisplay = {
-  icon: string
-  label: string
-  variant: TriggerMeta['variant']
+export interface TriggerDisplay {
+  icon: string;
+  label: string;
+  variant: TriggerMeta['variant'];
 }
 
 export const getTriggerDisplay = (
   triggerType?: ExecutionTriggerType | null,
   label?: string | null,
 ): TriggerDisplay => {
-  const meta = (triggerType && TRIGGER_META[triggerType]) ?? TRIGGER_META.manual
-  const cleanLabel = label?.trim()
+  const meta = (triggerType && TRIGGER_META[triggerType]) ?? TRIGGER_META.manual;
+  const cleanLabel = label?.trim();
   return {
     icon: meta.icon,
     variant: meta.variant,
     label: cleanLabel && cleanLabel.length > 0 ? cleanLabel : meta.fallbackLabel,
-  }
-}
+  };
+};

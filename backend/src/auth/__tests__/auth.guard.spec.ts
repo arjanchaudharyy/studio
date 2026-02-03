@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 import type { ExecutionContext } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 
 import { AuthGuard, type RequestWithAuthContext } from '../auth.guard';
@@ -18,6 +19,9 @@ describe('AuthGuard', () => {
   let mockApiKeysService: {
     validateKey: ReturnType<typeof vi.fn>;
   };
+  let mockReflector: {
+    getAllAndOverride: ReturnType<typeof vi.fn>;
+  };
   let mockExecutionContext: ExecutionContext;
   let mockRequest: RequestWithAuthContext;
 
@@ -30,11 +34,15 @@ describe('AuthGuard', () => {
     mockApiKeysService = {
       validateKey: vi.fn(),
     };
+    mockReflector = {
+      getAllAndOverride: vi.fn(),
+    };
 
     // Create guard with mocked dependencies
     guard = new AuthGuard(
       mockAuthService as unknown as AuthService,
       mockApiKeysService as unknown as ApiKeysService,
+      mockReflector as unknown as Reflector,
     );
 
     // Setup mock request
@@ -50,6 +58,8 @@ describe('AuthGuard', () => {
       switchToHttp: vi.fn(() => ({
         getRequest: vi.fn(() => mockRequest),
       })),
+      getHandler: vi.fn(),
+      getClass: vi.fn(),
     } as unknown as ExecutionContext;
   });
 
@@ -59,6 +69,8 @@ describe('AuthGuard', () => {
         switchToHttp: vi.fn(() => ({
           getRequest: vi.fn(() => null),
         })),
+        getHandler: vi.fn(),
+        getClass: vi.fn(),
       } as unknown as ExecutionContext;
 
       const result = await guard.canActivate(contextWithoutRequest);
@@ -199,9 +211,7 @@ describe('AuthGuard', () => {
         return undefined;
       });
 
-      await expect(guard.canActivate(mockExecutionContext)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(guard.canActivate(mockExecutionContext)).rejects.toThrow(UnauthorizedException);
     });
 
     it('should return null when internal token not provided', async () => {
@@ -414,9 +424,7 @@ describe('AuthGuard', () => {
       (mockRequest.header as ReturnType<typeof vi.fn>).mockImplementation(() => undefined);
       mockAuthService.authenticate.mockRejectedValue(authError);
 
-      await expect(guard.canActivate(mockExecutionContext)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(guard.canActivate(mockExecutionContext)).rejects.toThrow(UnauthorizedException);
       expect(mockRequest.auth).toBeUndefined();
     });
 
@@ -565,5 +573,34 @@ describe('AuthGuard', () => {
       expect(mockRequest.auth?.provider).toBe('api-key');
     });
   });
-});
 
+  describe('Public decorator', () => {
+    it('should allow access to endpoints marked as public', async () => {
+      mockReflector.getAllAndOverride.mockReturnValue(true);
+
+      const result = await guard.canActivate(mockExecutionContext);
+
+      expect(result).toBe(true);
+      expect(mockAuthService.authenticate).not.toHaveBeenCalled();
+      expect(mockApiKeysService.validateKey).not.toHaveBeenCalled();
+      expect(mockRequest.auth).toBeUndefined();
+    });
+
+    it('should continue authentication for endpoints not marked as public', async () => {
+      mockReflector.getAllAndOverride.mockReturnValue(false);
+      mockAuthService.authenticate.mockResolvedValue({
+        userId: 'user-1',
+        organizationId: 'org-1',
+        roles: ['MEMBER'],
+        isAuthenticated: true,
+        provider: 'clerk',
+      });
+
+      const result = await guard.canActivate(mockExecutionContext);
+
+      expect(result).toBe(true);
+      expect(mockAuthService.authenticate).toHaveBeenCalled();
+      expect(mockRequest.auth?.userId).toBe('user-1');
+    });
+  });
+});

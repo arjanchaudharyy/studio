@@ -1,4 +1,5 @@
 import type { PreparedRunPayload } from '@shipsec/shared';
+import { ConfigurationError, ServiceError } from '@shipsec/component-sdk';
 
 import type { PrepareRunPayloadActivityInput } from '../types';
 
@@ -27,7 +28,12 @@ export async function prepareRunPayloadActivity(
 ): Promise<PreparedRunPayload> {
   const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
   if (!internalToken) {
-    throw new Error('INTERNAL_SERVICE_TOKEN env var must be set to call internal run endpoint');
+    throw new ConfigurationError(
+      'INTERNAL_SERVICE_TOKEN env var must be set to call internal run endpoint',
+      {
+        configKey: 'INTERNAL_SERVICE_TOKEN',
+      },
+    );
   }
 
   const baseUrl = normalizeBaseUrl(DEFAULT_API_BASE_URL);
@@ -53,14 +59,17 @@ export async function prepareRunPayloadActivity(
       nodeOverrides: input.nodeOverrides,
       trigger: input.trigger,
       runId: input.runId,
+      parentRunId: input.parentRunId,
+      parentNodeRef: input.parentNodeRef,
     }),
   });
 
   if (!response.ok) {
     const raw = await readErrorBody(response);
-    throw new Error(
-      `Failed to prepare run payload (${response.status} ${response.statusText}): ${raw}`,
-    );
+    throw new ServiceError(`Failed to prepare run payload: ${raw}`, {
+      statusCode: response.status,
+      details: { statusText: response.statusText, workflowId: input.workflowId },
+    });
   }
 
   return (await response.json()) as PreparedRunPayload;

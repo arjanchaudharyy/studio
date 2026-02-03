@@ -11,6 +11,7 @@ import type {
   ArtifactUploadResult,
   IArtifactService,
 } from '@shipsec/component-sdk';
+import { NotFoundError } from '@shipsec/component-sdk';
 import * as schema from './schema';
 
 export class ArtifactAdapter {
@@ -42,13 +43,9 @@ export class ArtifactAdapter {
         ? input.destinations
         : (['run'] as ArtifactDestination[]);
 
-    await this.minioClient.putObject(
-      this.bucketName,
-      fileId,
-      input.content,
-      input.content.length,
-      { 'Content-Type': input.mimeType },
-    );
+    await this.minioClient.putObject(this.bucketName, fileId, input.content, input.content.length, {
+      'Content-Type': input.mimeType,
+    });
 
     await this.db.insert(schema.files).values({
       id: fileId,
@@ -89,12 +86,20 @@ export class ArtifactAdapter {
   ): Promise<ArtifactDownloadResult> {
     const artifact = await this.findArtifact(artifactId, scope.organizationId);
     if (!artifact) {
-      throw new Error(`Artifact not found: ${artifactId}`);
+      throw new NotFoundError(`Artifact not found: ${artifactId}`, {
+        resourceType: 'artifact',
+        resourceId: artifactId,
+        details: { organizationId: scope.organizationId },
+      });
     }
 
     const fileRecord = await this.findFile(artifact.fileId, scope.organizationId);
     if (!fileRecord) {
-      throw new Error(`File metadata missing for artifact ${artifactId}`);
+      throw new NotFoundError(`File metadata missing for artifact ${artifactId}`, {
+        resourceType: 'file',
+        resourceId: artifact.fileId,
+        details: { artifactId, organizationId: scope.organizationId },
+      });
     }
 
     const stream = await this.minioClient.getObject(this.bucketName, fileRecord.storageKey);

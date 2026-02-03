@@ -31,6 +31,20 @@ export interface IFileStorageService {
     size: number;
     uploadedAt: Date;
   }>;
+
+  /**
+   * Upload a file
+   * @param fileId Unique identifier for the file (UUID)
+   * @param fileName Original name of the file
+   * @param buffer File content
+   * @param mimeType MIME type of the file
+   */
+  uploadFile(
+    fileId: string,
+    fileName: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): Promise<void>;
 }
 
 export interface ISecretsService {
@@ -112,6 +126,8 @@ export interface ExecutionFailureMetadata {
   reason: {
     message: string;
     name?: string;
+    type?: string;
+    details?: Record<string, unknown>;
   };
 }
 
@@ -125,17 +141,87 @@ export interface ExecutionContextMetadata {
   joinStrategy?: 'all' | 'any' | 'first';
   triggeredBy?: string;
   failure?: ExecutionFailureMetadata;
+  connectedToolNodeIds?: string[];
+  organizationId?: string | null;
+  // Internal/test-only overrides for AI SDK dependencies (kept optional for runtime)
+  aiSdkOverrides?: {
+    ToolLoopAgent?: unknown;
+    stepCountIs?: unknown;
+    createOpenAI?: unknown;
+    createGoogleGenerativeAI?: unknown;
+    createMCPClient?: unknown;
+  };
+}
+
+export interface TraceEventData {
+  activatedPorts?: string[];
+  approved?: boolean;
+  requestId?: string;
+  inputType?: string;
+  title?: string;
+  description?: string;
+  timeoutAt?: string;
+  [key: string]: unknown;
 }
 
 export interface TraceEvent {
-  type: 'NODE_STARTED' | 'NODE_COMPLETED' | 'NODE_FAILED' | 'NODE_PROGRESS';
+  type:
+    | 'NODE_STARTED'
+    | 'NODE_COMPLETED'
+    | 'NODE_FAILED'
+    | 'NODE_PROGRESS'
+    | 'AWAITING_INPUT'
+    | 'NODE_SKIPPED'
+    | 'HTTP_REQUEST_SENT'
+    | 'HTTP_RESPONSE_RECEIVED'
+    | 'HTTP_REQUEST_ERROR';
   runId: string;
   nodeRef: string;
   timestamp: string;
-  level: TraceEventLevel;
+  level?: TraceEventLevel;
   message?: string;
-  error?: string;
+  error?: string | {
+    message: string;
+    type?: string;
+    stack?: string;
+    details?: Record<string, unknown>;
+    fieldErrors?: Record<string, string[]>;
+  };
   outputSummary?: unknown;
-  data?: unknown;
+  data?: TraceEventData;
   context?: ExecutionContextMetadata;
+}
+
+/**
+ * Service interface for recording node inputs and outputs during workflow execution.
+ * This enables inspection and debugging of data flowing between nodes.
+ */
+export interface INodeIOService {
+  /**
+   * Record the start of a node execution (captures inputs)
+   */
+  recordStart(data: NodeIOStartEvent): Promise<void>;
+
+  /**
+   * Record the completion of a node execution (captures outputs)
+   */
+  recordCompletion(data: NodeIOCompletionEvent): Promise<void>;
+}
+
+export interface NodeIOStartEvent {
+  runId: string;
+  nodeRef: string;
+  workflowId?: string;
+  organizationId?: string | null;
+  componentId: string;
+  inputs?: Record<string, unknown>;
+}
+
+export interface NodeIOCompletionEvent {
+  runId: string;
+  nodeRef: string;
+  componentId?: string;
+  outputs: Record<string, unknown>;
+  status: 'completed' | 'failed' | 'skipped';
+  errorMessage?: string;
 }

@@ -16,7 +16,11 @@ import {
 
 // Import workflow functions (for type safety during client.start())
 // Note: Actual implementation runs in the worker
-import { shipsecWorkflowRun, testMinimalWorkflow, scheduleTriggerWorkflow } from '@shipsec/studio-worker/workflows';
+import {
+  shipsecWorkflowRun,
+  testMinimalWorkflow,
+  scheduleTriggerWorkflow,
+} from '@shipsec/studio-worker/workflows';
 import type { ExecutionTriggerMetadata, ScheduleOverlapPolicy } from '@shipsec/shared';
 
 export interface StartWorkflowOptions {
@@ -61,7 +65,7 @@ export interface CreateTemporalScheduleInput {
   dispatchArgs: ScheduleTriggerWorkflowArgs;
 }
 
-export interface UpdateTemporalScheduleInput extends CreateTemporalScheduleInput {}
+export type UpdateTemporalScheduleInput = CreateTemporalScheduleInput;
 
 export interface ScheduleTriggerWorkflowArgs {
   workflowId: string;
@@ -71,7 +75,10 @@ export interface ScheduleTriggerWorkflowArgs {
   scheduleId?: string;
   scheduleName?: string | null;
   runtimeInputs?: Record<string, unknown>;
-  nodeOverrides?: Record<string, Record<string, unknown>>;
+  nodeOverrides?: Record<
+    string,
+    { params?: Record<string, unknown>; inputOverrides?: Record<string, unknown> }
+  >;
   trigger?: ExecutionTriggerMetadata;
 }
 
@@ -149,9 +156,7 @@ export class TemporalService implements OnModuleDestroy {
 
   async describeWorkflow(ref: WorkflowRunReference): Promise<WorkflowRunStatus> {
     const handle = await this.getWorkflowHandle(ref);
-    this.logger.log(
-      `Describing workflow ${handle.workflowId} (runId=${ref.runId ?? 'latest'})`,
-    );
+    this.logger.log(`Describing workflow ${handle.workflowId} (runId=${ref.runId ?? 'latest'})`);
     const description = await handle.describe();
     return {
       workflowId: description.workflowId,
@@ -175,12 +180,38 @@ export class TemporalService implements OnModuleDestroy {
 
   async cancelWorkflow(ref: WorkflowRunReference): Promise<void> {
     const handle = await this.getWorkflowHandle(ref);
-    this.logger.warn(
-      `Terminating workflow ${handle.workflowId} (runId=${ref.runId ?? 'latest'})`,
-    );
+    this.logger.warn(`Terminating workflow ${handle.workflowId} (runId=${ref.runId ?? 'latest'})`);
     // Use terminate() for immediate stop - shows as TERMINATED status
     // cancel() requires workflow cooperation and may show as FAILED if not handled
     await handle.terminate('User requested stop');
+  }
+
+  /**
+   * Send a signal to a running workflow
+   */
+  async signalWorkflow(input: {
+    workflowId: string;
+    signalName: string;
+    args: any;
+  }): Promise<void> {
+    const handle = await this.getWorkflowHandle({ workflowId: input.workflowId });
+    this.logger.log(
+      `Sending signal ${input.signalName} to workflow ${input.workflowId} with args: ${JSON.stringify(input.args)}`,
+    );
+    await handle.signal(input.signalName, input.args);
+  }
+
+  /**
+   * Query a running workflow for state
+   */
+  async queryWorkflow<T = unknown>(input: {
+    workflowId: string;
+    queryType: string;
+    args?: unknown[];
+  }): Promise<T> {
+    const handle = await this.getWorkflowHandle({ workflowId: input.workflowId });
+    this.logger.debug(`Querying workflow ${input.workflowId} with query '${input.queryType}'`);
+    return handle.query(input.queryType, ...(input.args ?? []));
   }
 
   private async getWorkflowHandle(ref: WorkflowRunReference): Promise<WorkflowHandle<any>> {
@@ -199,9 +230,7 @@ export class TemporalService implements OnModuleDestroy {
 
     this.clientPromise = (async () => {
       try {
-        this.logger.log(
-          `Connecting to Temporal at ${this.address} (namespace=${this.namespace})`,
-        );
+        this.logger.log(`Connecting to Temporal at ${this.address} (namespace=${this.namespace})`);
         const connection = await Connection.connect({ address: this.address });
         await this.ensureNamespace(connection);
         this.connection = connection;
@@ -216,9 +245,9 @@ export class TemporalService implements OnModuleDestroy {
       } catch (error) {
         this.clientPromise = undefined;
         this.logger.error(
-          `Failed to connect to Temporal: ${error instanceof Error ? error.message : String(
-            error,
-          )}`,
+          `Failed to connect to Temporal: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
         );
         throw error;
       }
@@ -269,7 +298,8 @@ export class TemporalService implements OnModuleDestroy {
         if (arg && typeof arg === 'object') {
           const payload = arg as Record<string, unknown>;
           const runId = typeof payload.runId === 'string' ? payload.runId : undefined;
-          const workflowId = typeof payload.workflowId === 'string' ? payload.workflowId : undefined;
+          const workflowId =
+            typeof payload.workflowId === 'string' ? payload.workflowId : undefined;
           const definition = payload.definition as { actions?: unknown[] } | undefined;
           const actionCount =
             definition && Array.isArray(definition.actions) ? definition.actions.length : undefined;
@@ -409,5 +439,4 @@ export class TemporalService implements OnModuleDestroy {
         return TemporalScheduleOverlapPolicy.SKIP;
     }
   }
-
 }

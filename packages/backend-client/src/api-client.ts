@@ -96,6 +96,12 @@ export class ShipSecApiClient {
     });
   }
 
+  async getWorkflowRuntimeInputs(workflowId: string) {
+    return this.client.GET('/api/v1/workflows/{id}/runtime-inputs', {
+      params: { path: { id: workflowId } },
+    });
+  }
+
   async createWorkflow(workflow: CreateWorkflowPayload) {
     return this.client.POST('/api/v1/workflows', {
       body: workflow,
@@ -235,6 +241,27 @@ export class ShipSecApiClient {
   async getWorkflowRunArtifacts(runId: string) {
     return this.client.GET('/api/v1/workflows/runs/{runId}/artifacts', {
       params: { path: { runId } },
+    });
+  }
+
+  async listWorkflowRunChildren(runId: string) {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/children', {
+      params: { path: { runId } },
+    });
+  }
+
+  async listWorkflowRunNodeIO(runId: string) {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/node-io', {
+      params: { path: { runId } },
+    });
+  }
+
+  async getWorkflowNodeIO(runId: string, nodeRef: string, options?: { full?: boolean }) {
+    return this.client.GET('/api/v1/workflows/runs/{runId}/node-io/{nodeRef}', {
+      params: {
+        path: { runId, nodeRef },
+        query: options?.full !== undefined ? { full: options.full } : undefined,
+      },
     });
   }
 
@@ -543,6 +570,89 @@ export class ShipSecApiClient {
     return this.client.DELETE('/api/v1/integrations/connections/{id}', {
       params: { path: { id } },
       body: payload,
+    });
+  }
+
+  // ===== Human Inputs =====
+
+  async listHumanInputs(options?: {
+    status?: 'pending' | 'resolved' | 'expired' | 'cancelled';
+    inputType?: 'approval' | 'form' | 'selection' | 'review' | 'acknowledge';
+    workflowId?: string;
+    runId?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    return this.client.GET('/api/v1/human-inputs', {
+      params: {
+        query: options,
+      },
+    });
+  }
+
+  async getHumanInput(id: string) {
+    return this.client.GET('/api/v1/human-inputs/{id}', {
+      params: { path: { id } },
+    });
+  }
+
+  async resolveHumanInput(id: string, payload: components['schemas']['ResolveHumanInputDto']) {
+    return this.client.POST('/api/v1/human-inputs/{id}/resolve', {
+      params: { path: { id } },
+      body: payload,
+    });
+  }
+
+  async resolveHumanInputByToken(
+    token: string, 
+    payload: components['schemas']['ResolveByTokenDto']
+  ) {
+    return this.client.POST('/api/v1/human-inputs/resolve/{token}', {
+      params: { path: { token } },
+      body: payload,
+    });
+  }
+
+  // ===== Webhook Configurations =====
+
+  async listWebhookConfigurations() {
+    return this.client.GET('/api/v1/webhooks/configurations');
+  }
+
+  async getWebhookConfiguration(id: string) {
+    return this.client.GET('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+    });
+  }
+
+  async createWebhookConfiguration(payload: components['schemas']['CreateWebhookRequestDto']) {
+    return this.client.POST('/api/v1/webhooks/configurations', {
+      body: payload,
+    });
+  }
+
+  async updateWebhookConfiguration(id: string, payload: components['schemas']['UpdateWebhookRequestDto']) {
+    return this.client.PUT('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+      body: payload,
+    });
+  }
+
+  async testWebhookScript(payload: components['schemas']['TestWebhookScriptRequestDto']) {
+    return this.client.POST('/api/v1/webhooks/configurations/test-script', {
+      body: payload,
+    });
+  }
+
+  async deleteWebhookConfiguration(id: string) {
+    return this.client.DELETE('/api/v1/webhooks/configurations/{id}', {
+      params: { path: { id } },
+      });
+  }
+
+  async listDeliveries(id: string) {
+    return this.client.GET('/api/v1/webhooks/configurations/{id}/deliveries', {
+      params: { path: { id } },
     });
   }
 }

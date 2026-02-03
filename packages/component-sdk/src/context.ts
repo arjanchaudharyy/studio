@@ -22,13 +22,17 @@ import type {
   LogEventInput,
   TerminalChunkInput,
   AgentTracePublisher,
+  IScopedTraceService,
+  TraceEventInput,
 } from './types';
 import type {
   IFileStorageService,
   ISecretsService,
   IArtifactService,
   ITraceService,
+  TraceEvent,
 } from './interfaces';
+import { createHttpClient } from './http/instrumented-fetch';
 
 export interface CreateContextOptions {
   runId: string;
@@ -141,7 +145,10 @@ export function createExecutionContext(options: CreateContextOptions): Execution
     terminalCollector,
     metadata,
     agentTracePublisher,
+    http: undefined as unknown as ExecutionContext['http'],
   };
+
+  (context as ExecutionContext).http = createHttpClient(context);
 
   // Override logger methods to use logCollector instead of trace.record
   if (logCollector) {
@@ -209,15 +216,9 @@ function createMetadata(
   metadata?: Partial<Omit<ExecutionContextMetadata, 'runId' | 'componentRef'>>,
 ): ExecutionContextMetadata {
   const scoped: ExecutionContextMetadata = {
+    ...metadata,
     runId,
     componentRef,
-    activityId: metadata?.activityId,
-    attempt: metadata?.attempt,
-    correlationId: metadata?.correlationId,
-    streamId: metadata?.streamId,
-    joinStrategy: metadata?.joinStrategy,
-    triggeredBy: metadata?.triggeredBy,
-    failure: metadata?.failure,
   };
 
   return Object.freeze(scoped);
@@ -226,15 +227,16 @@ function createMetadata(
 function createScopedTrace(
   trace: ITraceService,
   metadata: ExecutionContextMetadata,
-): ITraceService {
+): IScopedTraceService {
   return {
-    record(event) {
-      const enriched = {
+    record(event: TraceEventInput) {
+      const enriched: TraceEvent = {
+        timestamp: new Date().toISOString(),
         ...event,
         runId: metadata.runId,
         nodeRef: metadata.componentRef,
         context: metadata,
-      };
+      } as TraceEvent;
 
       trace.record(enriched);
     },

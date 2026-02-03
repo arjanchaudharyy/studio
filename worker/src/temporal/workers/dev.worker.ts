@@ -9,7 +9,7 @@ import { Client } from 'minio';
 import { Worker, NativeConnection } from '@temporalio/worker';
 import { status as grpcStatus } from '@grpc/grpc-js';
 import Long from 'long';
-import { isGrpcServiceError, Client as TemporalClient } from '@temporalio/client';
+import { isGrpcServiceError } from '@temporalio/client';
 import { config } from 'dotenv';
 import {
   runComponentActivity,
@@ -17,9 +17,38 @@ import {
   finalizeRunActivity,
   initializeComponentActivityServices,
 } from '../activities/run-component.activity';
+import {
+  createHumanInputRequestActivity,
+  cancelHumanInputRequestActivity,
+  initializeHumanInputActivity,
+  expireHumanInputRequestActivity,
+} from '../activities/human-input.activity';
 import { prepareRunPayloadActivity } from '../activities/run-dispatcher.activity';
-import { ArtifactAdapter, FileStorageAdapter, SecretsAdapter, RedisTerminalStreamAdapter, KafkaLogAdapter, KafkaTraceAdapter, KafkaAgentTracePublisher } from '../../adapters';
+import { recordTraceEventActivity, initializeTraceActivity } from '../activities/trace.activity';
+import {
+  registerComponentToolActivity,
+  registerLocalMcpActivity,
+  registerRemoteMcpActivity,
+  cleanupLocalMcpActivity,
+  prepareAndRegisterToolActivity,
+  areAllToolsReadyActivity,
+} from '../activities/mcp.activity';
+
+// ... (existing imports)
+
+import {
+  ArtifactAdapter,
+  FileStorageAdapter,
+  SecretsAdapter,
+  RedisTerminalStreamAdapter,
+  KafkaLogAdapter,
+  KafkaTraceAdapter,
+  KafkaAgentTracePublisher,
+  KafkaNodeIOAdapter,
+} from '../../adapters';
+import { ConfigurationError } from '@shipsec/component-sdk';
 import * as schema from '../../adapters/schema';
+import { logHeartbeat } from '../../utils/debug-logger';
 
 // Load environment variables from .env file
 config({ path: join(dirname(fileURLToPath(import.meta.url)), '../../..', '.env') });
@@ -60,7 +89,9 @@ async function main() {
   // Initialize database connection for worker
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error('DATABASE_URL is not set');
+    throw new ConfigurationError('DATABASE_URL is not set', {
+      configKey: 'DATABASE_URL',
+    });
   }
   const pool = new Pool({ connectionString });
   const db = drizzle(pool, { schema });
@@ -91,11 +122,16 @@ async function main() {
 
   const kafkaBrokerEnv = process.env.LOG_KAFKA_BROKERS;
   const kafkaBrokers = kafkaBrokerEnv
-    ? kafkaBrokerEnv.split(',').map((broker) => broker.trim()).filter(Boolean)
+    ? kafkaBrokerEnv
+        .split(',')
+        .map((broker) => broker.trim())
+        .filter(Boolean)
     : [];
 
   if (kafkaBrokers.length === 0) {
-    throw new Error('LOG_KAFKA_BROKERS must be configured for workflow logging');
+    throw new ConfigurationError('LOG_KAFKA_BROKERS must be configured for workflow logging', {
+      configKey: 'LOG_KAFKA_BROKERS',
+    });
   }
 
   const traceAdapter = new KafkaTraceAdapter({
@@ -109,6 +145,15 @@ async function main() {
     topic: process.env.AGENT_TRACE_KAFKA_TOPIC ?? 'telemetry.agent-trace',
     clientId: process.env.AGENT_TRACE_KAFKA_CLIENT_ID ?? 'shipsec-worker-agent-trace',
   });
+
+  const nodeIOAdapter = new KafkaNodeIOAdapter(
+    {
+      brokers: kafkaBrokers,
+      topic: process.env.NODE_IO_KAFKA_TOPIC ?? 'telemetry.node-io',
+      clientId: process.env.NODE_IO_KAFKA_CLIENT_ID ?? 'shipsec-worker-node-io',
+    },
+    storageAdapter,
+  );
 
   let logAdapter: KafkaLogAdapter;
   try {
@@ -142,11 +187,25 @@ async function main() {
   initializeComponentActivityServices({
     storage: storageAdapter,
     trace: traceAdapter,
+    nodeIO: nodeIOAdapter,
     logs: logAdapter,
     secrets: secretsAdapter,
     artifacts: artifactAdapter.factory(),
     terminalStream,
     agentTracePublisher,
+  });
+
+  // Initialize human input activity with database, trace and backend URL
+  const backendUrl = process.env.BACKEND_URL ?? 'http://localhost:3211';
+  initializeHumanInputActivity({
+    database: db,
+    trace: traceAdapter,
+    baseUrl: backendUrl,
+  });
+
+  // Initialize trace activity
+  initializeTraceActivity({
+    trace: traceAdapter,
   });
 
   console.log(`✅ Service adapters initialized`);
@@ -158,6 +217,13 @@ async function main() {
       setRunMetadataActivity,
       finalizeRunActivity,
       prepareRunPayloadActivity,
+      createHumanInputRequestActivity,
+      cancelHumanInputRequestActivity,
+      recordTraceEventActivity,
+      registerComponentToolActivity,
+      registerLocalMcpActivity,
+      registerRemoteMcpActivity,
+      cleanupLocalMcpActivity,
     }).join(', ')}`,
   );
 
@@ -186,6 +252,16 @@ async function main() {
       setRunMetadataActivity,
       finalizeRunActivity,
       prepareRunPayloadActivity,
+      createHumanInputRequestActivity,
+      cancelHumanInputRequestActivity,
+      expireHumanInputRequestActivity,
+      recordTraceEventActivity,
+      registerComponentToolActivity,
+      registerLocalMcpActivity,
+      registerRemoteMcpActivity,
+      cleanupLocalMcpActivity,
+      prepareAndRegisterToolActivity,
+      areAllToolsReadyActivity,
     },
     bundlerOptions: {
       ignoreModules: ['child_process'],
@@ -211,7 +287,9 @@ async function main() {
           if (config?.module?.rules && Array.isArray(config.module.rules)) {
             config.module.rules = config.module.rules.map((rule: any) => {
               const usesSwc =
-                typeof rule?.use === 'object' && rule.use?.loader && /swc-loader/.test(String(rule.use.loader));
+                typeof rule?.use === 'object' &&
+                rule.use?.loader &&
+                /swc-loader/.test(String(rule.use.loader));
               const isTsRule = rule && rule.test && rule.test.toString() === /\.ts$/.toString();
               if (usesSwc || isTsRule) {
                 return {
@@ -230,8 +308,11 @@ async function main() {
               return rule;
             });
           }
-        } catch (err) {
-          console.warn('Failed to apply webpackConfigHook override; falling back to default SWC loader', err);
+        } catch (_err) {
+          console.warn(
+            'Failed to apply webpackConfigHook override; falling back to default SWC loader',
+            _err,
+          );
         }
         return config;
       },
@@ -261,18 +342,10 @@ async function main() {
 
   console.log(`⏳ Worker is now running and waiting for tasks...`);
 
-  // Set up periodic status logging
+  // Set up periodic heartbeat logging (file-based only)
   setInterval(() => {
-    console.log(`💓 Worker heartbeat - Still polling on queue: ${taskQueue} (${new Date().toISOString()})`);
-
-    // Log worker stats to see if we're receiving any tasks
-    console.log(`📊 Worker stats check:`, {
-      taskQueue,
-      namespace,
-      timestamp: new Date().toISOString(),
-      workerBuildId: worker.options.buildId || 'default'
-    });
-  }, 15000); // Log every 15 seconds for better debugging
+    logHeartbeat(taskQueue);
+  }, 15000);
 
   console.log(`🚀 Starting worker.run() - this will block and listen for tasks...`);
   await worker.run();
@@ -283,7 +356,7 @@ main().catch((error) => {
     error: error.message,
     stack: error.stack,
     code: error.code,
-    details: error.details
+    details: error.details,
   });
   process.exit(1);
 });

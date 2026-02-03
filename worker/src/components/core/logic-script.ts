@@ -1,114 +1,118 @@
 import { z } from 'zod';
 import {
   componentRegistry,
-  ComponentDefinition,
-  port,
+  ContainerError,
+  runComponentWithRunner,
+  type DockerRunnerConfig,
+  withPortMeta,
+  coerceBooleanFromText,
+  coerceNumberFromText,
+  defineComponent,
+  inputs,
+  outputs,
+  parameters,
+  param,
 } from '@shipsec/component-sdk';
-import { spawn } from 'child_process';
 
 const variableConfigSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(['string', 'number', 'boolean', 'json', 'secret', 'list']).default('json'),
+  type: z
+    .enum([
+      'string',
+      'number',
+      'boolean',
+      'json',
+      'secret',
+      'list',
+      'list-text',
+      'list-number',
+      'list-boolean',
+      'list-json',
+    ])
+    .default('json'),
 });
 
-const parameterSchema = z.object({
-  code: z.string().default(`function script(input: Input): Output {
+const parameterSchema = parameters({
+  code: param(
+    z.string().default(`function script(input: Input): Output {
   // Your logic here
   return {};
 }`),
-  variables: z.array(variableConfigSchema).optional().default([]),
-  returns: z.array(variableConfigSchema).optional().default([]),
+    {
+      label: 'Script Code',
+      editor: 'textarea',
+      rows: 15,
+      description: 'Define a function named `script`. Supports async/await and fetch().',
+    },
+  ),
+  variables: param(z.array(variableConfigSchema).optional().default([]), {
+    label: 'Input Variables',
+    editor: 'variable-list',
+    description: 'Define input variables that will be available in your script.',
+  }),
+  returns: param(z.array(variableConfigSchema).optional().default([]), {
+    label: 'Output Variables',
+    editor: 'variable-list',
+    description: 'Define output variables your script should return.',
+  }),
 });
 
-const inputSchema = parameterSchema.passthrough();
+// Dynamic inputs/outputs - schemas are defined in resolvePorts based on parameters
+// For dynamic outputs, we create a base schema and catchall is added in resolvePorts
+const inputSchema = inputs({});
+const baseOutputSchema = outputs({});
 
-type Input = z.infer<typeof inputSchema>;
-type Output = Record<string, unknown>;
-
-const mapTypeToPort = (type: string, id: string, label: string) => {
+const mapTypeToSchema = (type: string, label: string) => {
   switch (type) {
-    case 'string': return { id, label, dataType: port.text(), required: true };
-    case 'number': return { id, label, dataType: port.number(), required: true };
-    case 'boolean': return { id, label, dataType: port.boolean(), required: true };
-    case 'secret': return { id, label, dataType: port.secret(), required: true };
-    case 'list': return { id, label, dataType: port.list(port.text()), required: true };
-    default: return { id, label, dataType: port.json(), required: true };
+    case 'string':
+      return withPortMeta(z.string(), { label });
+    case 'number':
+      return withPortMeta(coerceNumberFromText(), { label });
+    case 'boolean':
+      return withPortMeta(coerceBooleanFromText(), { label });
+    case 'secret':
+      return withPortMeta(z.unknown(), {
+        label,
+        editor: 'secret',
+        allowAny: true,
+        reason: 'Script inputs may receive secrets as strings or JSON objects.',
+        connectionType: { kind: 'primitive', name: 'secret' },
+      });
+    case 'list':
+    case 'list-text':
+      return withPortMeta(z.array(z.string()), {
+        label,
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'text' } },
+      });
+    case 'list-number':
+      return withPortMeta(z.array(z.number()), {
+        label,
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'number' } },
+      });
+    case 'list-boolean':
+      return withPortMeta(z.array(z.boolean()), {
+        label,
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'boolean' } },
+      });
+    case 'list-json':
+      return withPortMeta(z.array(z.unknown()), {
+        label,
+        allowAny: true,
+        reason: 'Script inputs can accept arrays of arbitrary JSON objects.',
+        connectionType: { kind: 'list', element: { kind: 'primitive', name: 'json' } },
+      });
+    default:
+      return withPortMeta(z.unknown(), {
+        label,
+        allowAny: true,
+        reason: 'Script inputs can accept arbitrary JSON payloads.',
+        connectionType: { kind: 'primitive', name: 'json' },
+      });
   }
 };
 
-const definition: ComponentDefinition<Input, Output> = {
-  id: 'core.logic.script',
-  label: 'Script / Logic',
-  category: 'transform',
-  runner: { kind: 'inline' },
-  inputSchema,
-  outputSchema: z.record(z.string(), z.unknown()),
-  docs: 'Execute custom TypeScript code in a secure Docker container. Supports fetch(), async/await, and modern JS.',
-  metadata: {
-    slug: 'logic-script',
-    version: '1.0.0',
-    type: 'process',
-    category: 'transform',
-    description: 'Execute custom TypeScript in a secure Docker sandbox.',
-    icon: 'Code',
-    author: { name: 'ShipSecAI', type: 'shipsecai' },
-    isLatest: true,
-    deprecated: false,
-    inputs: [],
-    outputs: [],
-    parameters: [
-      {
-        id: 'variables',
-        label: 'Input Variables',
-        type: 'json',
-        default: [],
-        description: 'Define input variables that will be available in your script.',
-      },
-      {
-        id: 'returns',
-        label: 'Output Variables',
-        type: 'json',
-        default: [],
-        description: 'Define output variables your script should return.',
-      },
-      {
-        id: 'code',
-        label: 'Script Code',
-        type: 'textarea',
-        rows: 15,
-        default: 'export async function script(input: Input): Promise<Output> {\n  // Your logic here\n  return {};\n}',
-        description: 'Define a function named `script`. Supports async/await and fetch().',
-        required: true,
-      },
-    ],
-  },
-  resolvePorts(params: any) {
-    const inputs: any[] = [];
-    const outputs: any[] = [];
-    if (Array.isArray(params.variables)) {
-      params.variables.forEach((v: any) => { if (v.name) inputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
-    }
-    if (Array.isArray(params.returns)) {
-      params.returns.forEach((v: any) => { if (v.name) outputs.push(mapTypeToPort(v.type || 'json', v.name, v.name)); });
-    }
-    return { inputs, outputs };
-  },
-  async execute(params, context) {
-    const { code, variables = [], returns = [] } = params;
-    
-    // Bun runs TS natively!
-    const userCode = code;
-
-    // 1. Prepare Inputs
-    const inputValues: Record<string, any> = {};
-    variables.forEach((v) => {
-      if (v.name && params[v.name] !== undefined) {
-        inputValues[v.name] = params[v.name];
-      }
-    });
-
-    // 2. Prepare the Plugin
-    const pluginCode = `
+// Bun plugin for HTTP imports (allows import from URLs)
+const pluginCode = `
 import { plugin } from "bun";
 const rx_any = /./;
 const rx_http = /^https?:\\/\\//;
@@ -153,26 +157,58 @@ plugin({
 });
 `;
 
-    // 3. Harness to run the user script
-    let processedUserCode = userCode;
-    // Regex matches optional 'async', then 'function script', but only if NOT preceded by 'export '
-    const exportRegex = /^(?!\s*export\s+)(.*?\s*(?:async\s+)?function\s+script\b)/m;
-    if (exportRegex.test(processedUserCode)) {
-      processedUserCode = processedUserCode.replace(exportRegex, (match) => `export ${match.trimStart()}`);
-    }
-
-    const harnessCode = `
-import { script } from "./user_script.ts";
-const INPUTS = JSON.parse(process.env.SHIPSEC_INPUTS || '{}');
+// Harness code that runs the user script
+// Output is written to the file at SHIPSEC_OUTPUT_PATH (mounted from host)
+const harnessCode = `
+import { readFileSync, writeFileSync } from "node:fs";
 
 async function run() {
   try {
-    const result = await script(INPUTS);
-    console.log('---RESULT_START---');
-    console.log(JSON.stringify(result));
-    console.log('---RESULT_END---');
+    console.log('[Script] Starting execution...');
+    
+    // Read the combined payload from the mounted input file
+    const inputPath = process.env.SHIPSEC_INPUT_PATH || '/shipsec-output/input.json';
+    const payload = JSON.parse(readFileSync(inputPath, 'utf8'));
+    
+    // 1. Write user script to file so it can be imported
+    if (!payload.code) {
+      throw new Error("No script code provided in payload");
+    }
+    writeFileSync("./user_script.ts", payload.code);
+
+    // 2. Prepare inputs matching the variables definition
+    const inputValues = {};
+    if (Array.isArray(payload.variables)) {
+      payload.variables.forEach(v => {
+        if (v.name && payload[v.name] !== undefined) {
+          inputValues[v.name] = payload[v.name];
+        }
+      });
+    }
+
+    // 3. Import and execute the user script
+    // @ts-ignore
+    const { script } = await import("./user_script.ts");
+    const result = await script(inputValues);
+    
+    console.log('[Script] Execution completed, writing output...');
+    const OUTPUT_PATH = process.env.SHIPSEC_OUTPUT_PATH || '/shipsec-output/result.json';
+    const OUTPUT_DIR = OUTPUT_PATH.substring(0, OUTPUT_PATH.lastIndexOf('/'));
+    
+    try {
+      const { mkdirSync, writeFileSync, existsSync } = await import("node:fs");
+      if (!existsSync(OUTPUT_DIR)) {
+        mkdirSync(OUTPUT_DIR, { recursive: true });
+      }
+      writeFileSync(OUTPUT_PATH, JSON.stringify(result || {}));
+      console.log('[Script] Output written to', OUTPUT_PATH);
+    } catch (writeErr) {
+      console.error('[Script] Failed to write output:', writeErr.message);
+      throw writeErr;
+    }
   } catch (err) {
     console.error('Runtime Error:', err.message);
+    if (err.stack) console.error(err.stack);
     process.exit(1);
   }
 }
@@ -180,80 +216,145 @@ async function run() {
 run();
 `;
 
-    // 4. Encode to Base64
-    const pluginB64 = Buffer.from(pluginCode).toString('base64');
-    const userB64 = Buffer.from(processedUserCode).toString('base64');
-    const harnessB64 = Buffer.from(harnessCode).toString('base64');
+// Base64 encode the static code
+const pluginB64 = Buffer.from(pluginCode).toString('base64');
+const harnessB64 = Buffer.from(harnessCode).toString('base64');
 
-    // 5. Execute in Docker
-    return new Promise((resolve, reject) => {
-      context.logger.info('[Script] Starting container with HTTP Loader...');
-      
-      const dockerProcess = spawn('docker', [
-        'run', '--rm', '-i',
-        '--name', `shipsec-script-${context.runId}-${Date.now()}`,
-        '--label', 'shipsec-managed=true',
-        '--memory', '256m',
-        '--cpus', '0.5',
-        '-e', `SHIPSEC_INPUTS=${JSON.stringify(inputValues)}`,
-        'oven/bun:alpine',
-        'sh', '-c', 
-        `echo "${pluginB64}" | base64 -d > plugin.ts && ` +
-        `echo "${userB64}" | base64 -d > user_script.ts && ` +
-        `echo "${harnessB64}" | base64 -d > harness.ts && ` +
-        `bun run --preload ./plugin.ts harness.ts`
-      ]);
-
-      let stdout = '';
-      let stderr = '';
-
-      const timeout = setTimeout(() => {
-        dockerProcess.kill();
-        reject(new Error('Script execution timed out (30s)'));
-      }, 30000);
-
-      dockerProcess.stdout.on('data', (data) => {
-        const str = data.toString();
-        stdout += str;
-        const logs = str.replace(/---RESULT_START---[\s\S]*---RESULT_END---/, '').trim();
-        if (logs) context.logger.info('[Script Output]', { output: logs });
-      });
-
-      dockerProcess.stderr.on('data', (data) => {
-        const str = data.toString();
-        stderr += str;
-        context.logger.error('[Script Error]', { output: str.trim() });
-      });
-
-      dockerProcess.on('close', (code) => {
-        clearTimeout(timeout);
-        if (code !== 0) {
-          return reject(new Error(`Script failed with exit code ${code}. ${stderr}`));
-        }
-
-        const match = stdout.match(/---RESULT_START---([\s\S]*)---RESULT_END---/);
-        if (!match) {
-          return reject(new Error('Script finished but no result was returned.'));
-        }
-
-        try {
-          const result = JSON.parse(match[1].trim());
-          const finalOutput: Record<string, unknown> = {};
-          returns.forEach((r) => {
-            if (result && r.name && result[r.name] !== undefined) {
-              finalOutput[r.name] = result[r.name];
-            } else {
-              finalOutput[r.name] = null;
-            }
-          });
-          resolve(finalOutput);
-        } catch (err) {
-          reject(new Error('Failed to parse script result.'));
-        }
-      });
-    });
-  },
+// Docker runner configuration - will be customized per execution
+const baseRunner: DockerRunnerConfig = {
+  kind: 'docker',
+  image: 'oven/bun:alpine',
+  entrypoint: 'sh',
+  command: ['-c', ''], // Will be set dynamically in execute()
+  env: {},
+  network: 'bridge', // Need network access for fetch() and HTTP imports
+  timeoutSeconds: 60,
+  stdinJson: false, // Inputs are passed via mounted file now
 };
+
+const definition = defineComponent({
+  id: 'core.logic.script',
+  label: 'Script / Logic',
+  category: 'transform',
+  runner: baseRunner,
+  inputs: inputSchema,
+  outputs: baseOutputSchema,
+  parameters: parameterSchema,
+  docs: 'Execute custom TypeScript code in a secure Docker container. Supports fetch(), async/await, and modern JS.',
+  ui: {
+    slug: 'logic-script',
+    version: '1.0.0',
+    type: 'process',
+    category: 'transform',
+    description: 'Execute custom TypeScript in a secure Docker sandbox.',
+    icon: 'Code',
+    author: { name: 'ShipSecAI', type: 'shipsecai' },
+    isLatest: true,
+    deprecated: false,
+  },
+  resolvePorts(params: z.infer<typeof parameterSchema>) {
+    const inputShape: Record<string, z.ZodTypeAny> = {};
+    const outputShape: Record<string, z.ZodTypeAny> = {};
+    if (Array.isArray(params.variables)) {
+      params.variables.forEach((v: any) => {
+        if (!v?.name) return;
+        inputShape[v.name] = mapTypeToSchema(v.type || 'json', v.name);
+      });
+    }
+    if (Array.isArray(params.returns)) {
+      params.returns.forEach((v: any) => {
+        if (!v?.name) return;
+        outputShape[v.name] = mapTypeToSchema(v.type || 'json', v.name);
+      });
+    }
+    return {
+      inputs: inputs(inputShape),
+      outputs: outputs(outputShape),
+    };
+  },
+  async execute({ inputs, params }, context) {
+    const { code, variables = [], returns = [] } = params;
+
+    // 1. Prepare Inputs from connected ports (keep for logging purposes)
+    const inputValues: Record<string, any> = {};
+    variables.forEach((v) => {
+      if (v.name && inputs[v.name] !== undefined) {
+        inputValues[v.name] = inputs[v.name];
+      }
+    });
+
+    // 2. Process user code - ensure it has 'export' keyword
+    let processedUserCode = code;
+    const exportRegex = /^(?!\s*export\s+)(.*?\s*(?:async\s+)?function\s+script\b)/m;
+    if (exportRegex.test(processedUserCode)) {
+      processedUserCode = processedUserCode.replace(
+        exportRegex,
+        (match) => `export ${match.trimStart()}`,
+      );
+    }
+
+    // 3. Build the shell command that sets up base harness files
+    // The heavy payload (code and inputs) is passed via stdin
+    const shellCommand = [
+      `echo "${pluginB64}" | base64 -d > plugin.ts`,
+      `echo "${harnessB64}" | base64 -d > harness.ts`,
+      `bun run --preload ./plugin.ts harness.ts`,
+    ].join(' && ');
+
+    // 4. Configure the runner for this execution
+    const runnerConfig: DockerRunnerConfig = {
+      ...baseRunner,
+      command: ['-c', shellCommand],
+      env: {
+        // No SHIPSEC_INPUTS here to avoid E2BIG
+      },
+    };
+
+    console.log('[LogicScript] Starting execution (inputs via mounted file)');
+    context.emitProgress({
+      message: 'Starting script execution in Docker...',
+      level: 'info',
+      data: { inputCount: Object.keys(params).length, returnsCount: variables.length },
+    });
+
+    // 5. Execute using the Docker runner
+    // We pass enriched payload containing the processed code to runComponentWithRunner
+    // They will be written to the mounted input.json file in the container
+    const runnerPayload = { ...params, ...inputs, code: processedUserCode } as Record<
+      string,
+      unknown
+    >;
+    const result = await runComponentWithRunner<typeof runnerPayload, Record<string, unknown>>(
+      runnerConfig,
+      async () => {
+        throw new ContainerError('Docker runner should handle this execution', {
+          details: { reason: 'fallback_triggered' },
+        });
+      },
+      runnerPayload,
+      context,
+    );
+
+    // 7. Map results to declared outputs
+    const finalOutput: Record<string, unknown> = {};
+    returns.forEach((r) => {
+      if (result && r.name && result[r.name] !== undefined) {
+        finalOutput[r.name] = result[r.name];
+      } else {
+        finalOutput[r.name] = null;
+      }
+    });
+
+    console.log('[LogicScript] Execution completed with outputs:', finalOutput);
+    context.emitProgress({
+      message: 'Script execution completed',
+      level: 'info',
+      data: { outputCount: Object.keys(finalOutput).length },
+    });
+
+    return finalOutput;
+  },
+});
 
 componentRegistry.register(definition);
 

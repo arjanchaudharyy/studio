@@ -5,9 +5,12 @@ import type {
   IFileStorageService,
   ISecretsService,
   ITraceService,
+  TraceEvent,
   ExecutionContextMetadata,
   TraceEventLevel,
+  TraceEventData,
 } from './interfaces';
+import type { HttpInstrumentationOptions, HttpRequestInput } from './http/types';
 
 export type { ExecutionContextMetadata } from './interfaces';
 
@@ -26,13 +29,18 @@ export interface DockerRunnerConfig {
   env?: Record<string, string>;
   network?: 'none' | 'bridge' | 'host'; // Network mode (default: none for security)
   platform?: string; // Optional platform to run under (e.g., 'linux/amd64')
+  containerName?: string; // Optional container name for --name flag
   volumes?: Array<{
     source: string; // host path
     target: string; // container path
     readOnly?: boolean;
   }>; // Optional volume mounts
   timeoutSeconds?: number;
+  stdinJson?: boolean; // Whether to write params as JSON to container's stdin (default: true)
+  detached?: boolean; // If true, start container and return immediately without waiting for exit
+  ports?: Record<string, number>; // Port mapping host (e.g., "0.0.0.0:8080" or "127.0.0.1:8080") -> container port
 }
+
 
 export interface RemoteRunnerConfig {
   kind: 'remote';
@@ -67,7 +75,7 @@ export interface Logger {
 export interface ProgressEventInput {
   message: string;
   level?: TraceEventLevel;
-  data?: unknown;
+  data?: TraceEventData;
 }
 
 export interface LogEventInput {
@@ -93,63 +101,161 @@ export interface AgentTraceEvent {
   sequence: number;
   timestamp: string;
   part: AgentTracePart;
+  [key: string]: unknown;
 }
 
 export interface AgentTracePublisher {
   publish(event: AgentTraceEvent): Promise<void> | void;
 }
 
-export type PrimitivePortTypeName =
-  | 'any'
-  | 'text'
-  | 'secret'
-  | 'number'
-  | 'boolean'
-  | 'file'
-  | 'json';
+export type PortBindingType = 'credential' | 'action' | 'config';
 
-export type PrimitiveCoercionSource = Exclude<
-  PrimitivePortTypeName,
-  'secret' | 'file'
->;
-
-export interface PrimitivePortType {
-  kind: 'primitive';
-  name: PrimitivePortTypeName;
-  coercion?: {
-    from?: PrimitiveCoercionSource[];
-  };
-}
-
-export interface ListPortType {
-  kind: 'list';
-  element: PrimitivePortType | ContractPortType;
-}
-
-export interface MapPortType {
-  kind: 'map';
-  value: PrimitivePortType;
-}
-
-export interface ContractPortType {
-  kind: 'contract';
-  name: string;
+export interface ConnectionType {
+  kind: 'primitive' | 'contract' | 'list' | 'map' | 'any';
+  name?: string;
+  element?: ConnectionType;
   credential?: boolean;
 }
 
-export type PortDataType =
-  | PrimitivePortType
-  | ListPortType
-  | MapPortType
-  | ContractPortType;
+declare const PortBrand: unique symbol;
+declare const ParamBrand: unique symbol;
+declare const InputsBrand: unique symbol;
+declare const OutputsBrand: unique symbol;
+declare const ParametersBrand: unique symbol;
+declare const DynamicInputsBrand: unique symbol;
+declare const DynamicOutputsBrand: unique symbol;
+
+export type PortSchema<T extends z.ZodTypeAny = z.ZodTypeAny> = T & {
+  readonly [PortBrand]: true;
+};
+
+export type ParamSchema<T extends z.ZodTypeAny = z.ZodTypeAny> = T & {
+  readonly [ParamBrand]: true;
+};
+
+/**
+ * Branded input schema that stores the inferred type for type-safe component definitions.
+ *
+ * The inferred type is stored in the `__inferred` property for easy extraction.
+ *
+ * @example
+ * ```ts
+ * const inputSchema = inputs({
+ *   text: port(z.string()),
+ *   count: port(z.number()),
+ * });
+ *
+ * type InputType = InferredInputs<typeof inputSchema>;
+ * // Result: { text: string; count: number; }
+ * ```
+ */
+export type InputsSchema<Shape extends Record<string, any> = Record<string, any>> =
+  z.ZodObject<Shape> & {
+    readonly [InputsBrand]: true;
+    readonly __inferred: z.infer<z.ZodObject<Shape>>;
+  };
+
+/**
+ * Marker for input schemas that are dynamically resolved via resolvePorts().
+ *
+ * Use this for components whose inputs change based on parameter values.
+ * The actual port schema is provided by the resolvePorts() method at runtime.
+ *
+ * @example
+ * ```ts
+ * const inputSchema = dynamicInputs();
+ *
+ * defineComponent({
+ *   inputs: inputSchema,
+ *   resolvePorts(params) {
+ *     return {
+ *       inputs: inputs({ dynamicPort: port(z.string()) }),
+ *     };
+ *   },
+ * });
+ * ```
+ */
+export type DynamicInputsSchema = InputsSchema<{}> & {
+  readonly [DynamicInputsBrand]: true;
+};
+
+/**
+ * Branded output schema that stores the inferred type for type-safe component definitions.
+ *
+ * @example
+ * ```ts
+ * const outputSchema = outputs({
+ *   result: port(z.string()),
+ * });
+ *
+ * type OutputType = InferredOutputs<typeof outputSchema>;
+ * // Result: { result: string; }
+ * ```
+ */
+export type OutputsSchema<Shape extends Record<string, any> = Record<string, any>> =
+  z.ZodObject<Shape> & {
+    readonly [OutputsBrand]: true;
+    readonly __inferred: z.infer<z.ZodObject<Shape>>;
+  };
+
+/**
+ * Marker for output schemas that are dynamically resolved via resolvePorts().
+ *
+ * Use this for components whose outputs change based on parameter values.
+ * The actual port schema is provided by the resolvePorts() method at runtime.
+ *
+ * @example
+ * ```ts
+ * const outputSchema = dynamicOutputs();
+ *
+ * defineComponent({
+ *   outputs: outputSchema,
+ *   resolvePorts(params) {
+ *     return {
+ *       outputs: outputs({ result: port(z.string()) }),
+ *     };
+ *   },
+ * });
+ * ```
+ */
+export type DynamicOutputsSchema = OutputsSchema<{}> & {
+  readonly [DynamicOutputsBrand]: true;
+};
+
+/**
+ * Branded parameter schema that stores the inferred type for type-safe component definitions.
+ *
+ * @example
+ * ```ts
+ * const paramSchema = parameters({
+ *   mode: param(z.enum(['upper', 'lower'])),
+ * });
+ *
+ * type ParamType = InferredParams<typeof paramSchema>;
+ * // Result: { mode: 'upper' | 'lower'; }
+ * ```
+ */
+export type ParametersSchema<Shape extends Record<string, any> = Record<string, any>> =
+  z.ZodObject<Shape> & {
+    readonly [ParametersBrand]: true;
+    readonly __inferred: z.infer<z.ZodObject<Shape>>;
+  };
 
 export interface ComponentPortMetadata {
   id: string;
   label: string;
-  dataType: PortDataType;
+  connectionType: ConnectionType;
+  bindingType?: PortBindingType;
+  editor?: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multi-select' | 'json' | 'secret';
   required?: boolean;
   description?: string;
   valuePriority?: 'manual-first' | 'connection-first';
+  /** True if this port controls conditional execution (branching) */
+  isBranching?: boolean;
+  /** Custom color for branching ports: 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'slate' */
+  branchColor?: 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'slate';
+  /** True if this port should be hidden from the UI */
+  hidden?: boolean;
 }
 
 export type ComponentParameterType =
@@ -161,7 +267,10 @@ export type ComponentParameterType =
   | 'multi-select'
   | 'json'
   | 'secret'
-  | 'artifact';
+  | 'artifact'
+  | 'variable-list'
+  | 'form-fields'
+  | 'selection-options';
 
 export interface ComponentParameterOption {
   label: string;
@@ -174,6 +283,7 @@ export interface ComponentParameterMetadata {
   type: ComponentParameterType;
   required?: boolean;
   default?: unknown;
+  exposeToTool?: boolean;
   placeholder?: string;
   description?: string;
   helpText?: string;
@@ -181,6 +291,8 @@ export interface ComponentParameterMetadata {
   min?: number;
   max?: number;
   rows?: number;
+  /** Conditional visibility: parameter is shown only when all conditions are met */
+  visibleWhen?: Record<string, unknown>;
 }
 
 export type ComponentAuthorType = 'shipsecai' | 'community';
@@ -196,9 +308,11 @@ export type ComponentCategory =
   | 'input'
   | 'transform'
   | 'ai'
+  | 'mcp'
   | 'security'
   | 'it_ops'
   | 'notification'
+  | 'manual_action'
   | 'output';
 
 export type ComponentUiType =
@@ -207,6 +321,25 @@ export type ComponentUiType =
   | 'scan'
   | 'process'
   | 'output';
+
+/**
+ * Configuration for exposing a component as an agent-callable tool.
+ */
+export interface AgentToolConfig {
+  /** Whether this component can be used as an agent tool */
+  enabled: boolean;
+  /**
+   * Tool name exposed to the agent. Defaults to component slug with underscores.
+   * Should be descriptive and follow snake_case convention.
+   * @example 'check_ip_reputation', 'query_cloudtrail'
+   */
+  toolName?: string;
+  /**
+   * Description of what the tool does, shown to the agent.
+   * Should clearly explain the tool's purpose and when to use it.
+   */
+  toolDescription?: string;
+}
 
 export interface ComponentUiMetadata {
   slug: string;
@@ -222,18 +355,21 @@ export interface ComponentUiMetadata {
   isLatest?: boolean;
   deprecated?: boolean;
   example?: string;
-  inputs?: ComponentPortMetadata[];
-  outputs?: ComponentPortMetadata[];
-  parameters?: ComponentParameterMetadata[];
   examples?: string[];
   /** UI-only component - should not be included in workflow execution */
   uiOnly?: boolean;
+  /**
+   * Configuration for exposing this component as an agent-callable tool.
+   * When enabled, the component can be used in tool mode within workflows,
+   * allowing AI agents to invoke it via the MCP gateway.
+   */
+  agentTool?: AgentToolConfig;
 }
 
 export interface ExecutionContext {
   runId: string;
   componentRef: string;
-    logger: Logger;
+  logger: Logger;
   emitProgress: (progress: ProgressEventInput | string) => void;
   logCollector?: (entry: LogEventInput) => void;
   terminalCollector?: (chunk: TerminalChunkInput) => void;
@@ -244,24 +380,124 @@ export interface ExecutionContext {
   storage?: IFileStorageService;
   secrets?: ISecretsService;
   artifacts?: IArtifactService;
-  trace?: ITraceService;
+  trace?: IScopedTraceService;
+
+  http: {
+    fetch: (
+      input: HttpRequestInput,
+      init?: RequestInit,
+      options?: HttpInstrumentationOptions,
+    ) => Promise<Response>;
+    toCurl: (input: HttpRequestInput, init?: RequestInit) => string;
+  };
 }
 
-export interface ComponentDefinition<I = unknown, O = unknown, P = Record<string, unknown>> {
+export type TraceEventInput = Omit<
+  TraceEvent,
+  'runId' | 'nodeRef' | 'timestamp' | 'context'
+> & {
+  runId?: string;
+  nodeRef?: string;
+  timestamp?: string;
+  context?: ExecutionContextMetadata;
+};
+
+export interface IScopedTraceService {
+  /**
+   * Record a trace event. runId, nodeRef, and context are automatically injected.
+   */
+  record(event: TraceEventInput): void;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Retry Policy Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Per-error-type retry configuration
+ */
+export interface ErrorTypePolicy {
+  /** Should this error type be retried? */
+  retryable?: boolean;
+
+  /** Override retry delay for this specific error (milliseconds) */
+  retryDelayMs?: number;
+}
+
+/**
+ * Component retry policy configuration.
+ * Maps to Temporal's retry options for workflow activities.
+ */
+export interface ComponentRetryPolicy {
+  /** Max retry attempts (0 = unlimited, 1 = no retry, undefined = use default) */
+  maxAttempts?: number;
+
+  /** Initial delay before first retry (seconds) */
+  initialIntervalSeconds?: number;
+
+  /** Max delay between retries (seconds) */
+  maximumIntervalSeconds?: number;
+
+  /** Exponential backoff multiplier (2.0 = double each time) */
+  backoffCoefficient?: number;
+
+  /** Error types that should NOT be retried (overrides default) */
+  nonRetryableErrorTypes?: string[];
+
+  /** Per-error type configuration (overrides defaults) */
+  errorTypePolicies?: Record<string, ErrorTypePolicy>;
+}
+
+/**
+ * Default retry policy applied when a component doesn't specify one.
+ */
+export const DEFAULT_RETRY_POLICY: ComponentRetryPolicy = {
+  maxAttempts: 3,
+  initialIntervalSeconds: 1,
+  maximumIntervalSeconds: 60,
+  backoffCoefficient: 2.0,
+  nonRetryableErrorTypes: [
+    'AuthenticationError',
+    'NotFoundError',
+    'ValidationError',
+    'ConfigurationError',
+    'PermissionError',
+    'ContainerError',
+  ],
+};
+
+export interface ComponentDefinition<
+  IShape extends Record<string, any> = Record<string, any>,
+  OShape extends Record<string, any> = Record<string, any>,
+  PShape extends Record<string, any> = Record<string, any>,
+  I = z.infer<z.ZodObject<IShape>>,
+  O = z.infer<z.ZodObject<OShape>>,
+  P = z.infer<z.ZodObject<PShape>>
+> {
   id: string;
   label: string;
   category: ComponentCategory;
   runner: RunnerConfig;
-  inputSchema: z.ZodType<I>;
-  outputSchema: z.ZodType<O>;
+  inputs: InputsSchema<IShape>;
+  outputs: OutputsSchema<OShape>;
+  parameters?: ParametersSchema<PShape>;
   docs?: string;
-  metadata?: ComponentUiMetadata;
+  ui?: ComponentUiMetadata;
   requiresSecrets?: boolean;
-  execute: (params: I, context: ExecutionContext) => Promise<O>;
+
+  /** Retry policy for this component (optional, uses default if not specified) */
+  retryPolicy?: ComponentRetryPolicy;
+
+  execute: (payload: ExecutionPayload<I, P>, context: ExecutionContext) => Promise<O>;
   resolvePorts?: (
     params: P,
   ) => {
-    inputs?: ComponentPortMetadata[];
-    outputs?: ComponentPortMetadata[];
+    inputs?: InputsSchema<any>;
+    outputs?: OutputsSchema<any>;
   };
+}
+
+export interface ExecutionPayload<I, P> {
+  inputs: I;
+  params: P;
 }

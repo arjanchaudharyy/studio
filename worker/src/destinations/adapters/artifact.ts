@@ -1,7 +1,12 @@
-import type { DestinationAdapterRegistration, DestinationSaveInput, DestinationSaveResult } from '../registry';
+import type {
+  DestinationAdapterRegistration,
+  DestinationSaveInput,
+  DestinationSaveResult,
+} from '../registry';
 import type { ArtifactDestination } from '@shipsec/shared';
+import { ConfigurationError } from '@shipsec/component-sdk';
 
-interface ArtifactAdapterConfig {
+interface _ArtifactAdapterConfig {
   destinations?: ArtifactDestination[];
 }
 
@@ -29,12 +34,14 @@ export const artifactDestinationAdapter: DestinationAdapterRegistration = {
     return {
       async save(input: DestinationSaveInput, context): Promise<DestinationSaveResult> {
         if (!context.artifacts) {
-          throw new Error(
+          throw new ConfigurationError(
             'Artifact service is not available in this execution context. Enable artifact storage to use this destination.',
+            { configKey: 'artifacts' },
           );
         }
 
-        const normalized = destinations.length > 0 ? destinations : (['run'] as ArtifactDestination[]);
+        const normalized =
+          destinations.length > 0 ? destinations : (['run'] as ArtifactDestination[]);
 
         const upload = await context.artifacts.upload({
           name: input.fileName,

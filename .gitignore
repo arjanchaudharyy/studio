@@ -13,9 +13,12 @@ build/
 # Environment variables
 .env
 .env.local
+docker/.env
 .env.development.local
 .env.test.local
 .env.production.local
+.env.eng-104
+.env.eng-104
 
 # Logs
 logs/
@@ -30,7 +33,7 @@ lerna-debug.log*
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
-.claude/
+CLAUDE.md
 .idea/
 .DS_Store
 *.suo
