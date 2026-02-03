@@ -195,9 +195,9 @@ services:
       - EVENT_KAFKA_TOPIC=telemetry.events
       - EVENT_KAFKA_CLIENT_ID=shipsec-backend-events
       - EVENT_KAFKA_GROUP_ID=shipsec-event-ingestor
-      - AUTH_PROVIDER=local
-      - CLERK_PUBLISHABLE_KEY=
-      - CLERK_SECRET_KEY=
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-local}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY:-}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
       # Set to 'true' to disable analytics
       - DISABLE_ANALYTICS=${DISABLE_ANALYTICS:-false}
       # Secret encryption key (32-byte hex string)
@@ -224,19 +224,21 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3211}
         VITE_BACKEND_URL: ${VITE_BACKEND_URL:-http://localhost:3211}
-        VITE_AUTH_PROVIDER: ${VITE_AUTH_PROVIDER:-local}
-        VITE_DEFAULT_ORG_ID: ${VITE_DEFAULT_ORG_ID:-local-dev}
+        VITE_AUTH_PROVIDER: ${VITE_AUTH_PROVIDER:-clerk}
+        VITE_DEFAULT_ORG_ID: ${VITE_DEFAULT_ORG_ID:-}
         VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
         VITE_GIT_SHA: ${GIT_SHA:-unknown}
         VITE_PUBLIC_POSTHOG_KEY: ${VITE_PUBLIC_POSTHOG_KEY:-}
         VITE_PUBLIC_POSTHOG_HOST: ${VITE_PUBLIC_POSTHOG_HOST:-}
     container_name: shipsec-frontend
+    # NOTE: Auth defaults to Clerk intentionally - production requires Clerk authentication.
+    # Set VITE_AUTH_PROVIDER=local in .env only for local development without Clerk.
     environment:
-      - VITE_API_URL=http://localhost:3211
-      - VITE_BACKEND_URL=http://localhost:3211
-      - VITE_AUTH_PROVIDER=clerk
-      - VITE_DEFAULT_ORG_ID=local-dev
-      - VITE_CLERK_PUBLISHABLE_KEY=
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3211}
+      - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://localhost:3211}
+      - VITE_AUTH_PROVIDER=${VITE_AUTH_PROVIDER:-clerk}
+      - VITE_DEFAULT_ORG_ID=${VITE_DEFAULT_ORG_ID:-}
+      - VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY:-}
     ports:
       - '8090:8080'
     depends_on:
